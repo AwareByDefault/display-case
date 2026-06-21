@@ -500,6 +500,24 @@ describe('checkStructure', () => {
     expect(only(await run(dir), 'atom-purity')).toHaveLength(0)
   })
 
+  test('atom-purity: a commented-out or string-literal import is not a dependency', async () => {
+    const dir = await setup({
+      'display-case.config.ts': config({ 'atom-purity': true }),
+      // The scanner ignores these; the old regex would have treated them as a
+      // real import of `Icon` and falsely flagged the atom.
+      'Button.tsx':
+        `// import { Icon } from './icon'\n` +
+        `const sample = "import { Icon } from './icon'"\n` +
+        `export const Button = () => sample\n`,
+      'Button.case.tsx': caseFile(
+        `defineCases('Button', {}, { level: 'atom' })`,
+      ),
+      'icon.tsx': 'export const Icon = null\n',
+      'icon.case.tsx': caseFile(`defineCases('Icon', {}, { level: 'atom' })`),
+    })
+    expect(only(await run(dir), 'atom-purity')).toHaveLength(0)
+  })
+
   test('no-downward-dependency: flags a molecule importing an organism', async () => {
     const dir = await setup({
       'display-case.config.ts': config({ 'no-downward-dependency': true }),

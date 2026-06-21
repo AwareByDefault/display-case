@@ -4,6 +4,16 @@ Non-obvious decisions, debugging notes, and architectural context for the Displa
 
 ---
 
+## 2026-06-21: Import-graph rules use Bun's scanner; no native AST for keyed-cases
+
+**What changed.** The composition (import-graph) structure rules previously parsed each component's imports with a regex (`IMPORT_RE`), which also matched **commented-out** and **string-literal** imports and counted (erased) **type-only** ones — any of which could conjure a phantom composition dependency and a false `atom-purity`/`no-downward-dependency` finding. `parseImports` now first asks **`Bun.Transpiler().scan(code)`** for the authoritative set of real runtime import paths (Bun's parser ignores comments/strings and drops type-only), then keeps only the regex matches whose source is in that set; the regex still contributes the **named bindings** scan doesn't expose. Bun-native, zero new dependency. Regression test: `atom-purity: a commented-out or string-literal import is not a dependency` (fails on the old regex, passes now).
+
+**`scan()` gotchas.** It returns `{ kind, path }` per import — **no named specifiers** (so the regex is still needed for names) — and it **throws** on a few JSX shapes (notably `key` after a `{...spread}`). `parseImports` wraps it in try/catch and falls back to the regex alone when it throws.
+
+**Why `interactive-cases-keyed` stays regex (Bun has no usable JSX AST).** Investigated whether Bun could replace that rule's hand-rolled JSX scan: it can't, cleanly. `Bun.Transpiler` exposes only `scan`/`scanImports` (imports/exports — no JSX tree) and `transform`/`transformSync`. `transformSync` *does* lower JSX so `key` becomes a positional arg (`jsxDEV(Type, props, key, …)`), but it (a) prints a stderr **warning** on `key`-after-spread and **falls back to the classic runtime** (where `key` is back inside props), so the signal isn't uniform, and (b) `scan` itself throws on that same shape. No runtime dependency parses TSX either (deps are MDX/markdown-oriented; `typescript` is dev-only and absent for consumers). So the only real AST route remains the deferred `ts.createSourceFile` path below, with its dependency trade-off — the regex stands.
+
+---
+
 ## 2026-06-21: Display Case naming realignment — primer + placard, and a NUL-byte trap
 
 **The two renames (museum metaphor, made consistent).** The whole-collection long-form reading surface was the "placard"; it is now the **primer** (an introductory text that primes a reader before the cases). The per-component usage-doc sibling was `<component>.prompt.md`; it is now `<component>.placard.md` (a *placard* is the label beside one exhibit — and `*.prompt.md` collided with the unrelated GitHub Copilot "prompt files" convention). Net mapping: each case → a **placard** (`*.placard.md`); the collection → a **primer** (`primer.mdx`, `/primer`, `/render/primer`). Rule ids moved too: `placard-present-and-used` → `primer-present-and-used`; `case-prompt-coverage` → `case-placard-coverage`; `no-orphaned-prompt-doc` → `no-orphaned-placard-doc`; marker `no-prompt` → `no-placard`; manifest field `promptDoc` → `placardDoc`; authoring skill `display-case-author-prompt-doc` → `display-case-author-placard-doc`. Full record: archived change `2026-06-21-display-case-rename-primer-and-placard`.

@@ -567,14 +567,42 @@ interface ParsedImport {
 
 const IMPORT_RE = /import\s+(type\s+)?([\s\S]*?)\s+from\s*['"]([^'"]+)['"]/g
 
-/** Parse import statements for source + named bindings (skips bare side-effect imports). */
+// Reused across files. Bun's transpiler resolves which imports are *real* —
+// ignoring commented-out and string-literal imports, and dropping (erased)
+// type-only ones — so a composition dependency can't be conjured by a comment.
+const IMPORT_SCANNER = new Bun.Transpiler({ loader: 'tsx' })
+
+/** The set of genuine runtime import paths Bun's parser sees, or null if the
+ *  file has syntax the scanner rejects (then the regex stands alone). */
+function realImportPaths(code: string): Set<string> | null {
+  try {
+    return new Set(
+      IMPORT_SCANNER.scan(code)
+        .imports.filter((i) => i.kind === 'import-statement')
+        .map((i) => i.path),
+    )
+  } catch {
+    // Bun's scanner throws on a few JSX shapes (e.g. `key` after a spread). Fall
+    // back to the regex alone rather than dropping the file's imports entirely.
+    return null
+  }
+}
+
+/** Parse import statements for source + named bindings (skips bare side-effect
+ *  imports). Bun's transpiler supplies the authoritative set of real imports; the
+ *  regex contributes the named bindings it doesn't expose. */
 function parseImports(code: string): ParsedImport[] {
+  const real = realImportPaths(code)
   const out: ParsedImport[] = []
   IMPORT_RE.lastIndex = 0
   for (let m = IMPORT_RE.exec(code); m; m = IMPORT_RE.exec(code)) {
     const typeOnly = Boolean(m[1])
     const clause = m[2]
     const source = m[3]
+    // When the scanner ran, trust it: keep only statements it confirmed are real
+    // runtime imports (this drops type-only, commented, and string-literal
+    // matches). When it threw, `real` is null and every regex match is kept.
+    if (real && !real.has(source)) continue
     const names: string[] = []
     const braced = clause.match(/\{([^}]*)\}/)
     if (braced) {
