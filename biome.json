@@ -97,6 +97,10 @@
       "plugins": ["./tools/lint/e2e-locators.grit"]
     },
     {
+      "includes": ["src/ui/**"],
+      "plugins": ["./tools/lint/no-custom-svg.grit"]
+    },
+    {
       "includes": ["src/providers/**"],
       "linter": {
         "rules": {

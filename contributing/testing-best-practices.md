@@ -75,7 +75,7 @@ These drive the same `/render/<component>/<case>` endpoint the browse iframe use
 
 ## 6. e2e locator discipline
 
-**6.1** Drive the chrome **only** through `data-testid` attributes. Use `getByTestId` exclusively. Never `getByText`, `getByRole`, `text=`, `:has-text(`, CSS, or any other selector. Text and roles change with copy, layout, and i18n; test ids are an explicit contract that does not. The `getByText`/`getByRole` half of this rule is **enforced** by a Biome GritQL plugin scoped to `e2e/**` ([`tools/lint/e2e-locators.grit`](../tools/lint/e2e-locators.grit), suppress with `// biome-ignore`); the rest (`text=`, `:has-text(`, hardcoded testid literals) is convention, not linted — hold the line in review.
+**6.1** Drive the chrome **only** through `data-testid` attributes. Use `getByTestId` exclusively. Never `getByText`, `getByRole`, `text=`, `:has-text(`, CSS, or any other selector. Text and roles change with copy, layout, and i18n; test ids are an explicit contract that does not. The `getByText`/`getByRole` half of this rule is **enforced** by a Biome GritQL plugin scoped to `e2e/**` ([`tools/lint/e2e-locators.grit`](../tools/lint/e2e-locators.grit), suppress with `// biome-ignore lint/plugin: <reason>`); the rest (`text=`, `:has-text(`, hardcoded testid literals) is convention, not linted — hold the line in review.
 
 **6.2** Every test id comes from [`src/ui/test-ids.ts`](../src/ui/test-ids.ts) (`DcTestIds`). Specs import that module and pass its constants/builders to `getByTestId` — never a hardcoded string literal. A renamed id then becomes a compile-time error in both the chrome and the specs, not a silent runtime break.
 

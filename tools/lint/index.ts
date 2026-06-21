@@ -1,11 +1,14 @@
 #!/usr/bin/env bun
 /**
- * Runs Display Case's custom lint checks — the project-specific rules that
- * Biome and `tsc` can't express. Each check is a standalone script in this
- * directory (also runnable on its own); this runner spawns them, passes
- * `--fix` through, and aggregates the result.
+ * Runs Display Case's custom *script* lint checks — project-specific rules that
+ * need to scan non-JS files or string content (so they don't fit a Biome GritQL
+ * plugin). Currently just `spec-purity`; each is a standalone script in this
+ * directory (also runnable on its own). This runner spawns them, passes `--fix`
+ * through, and aggregates the result.
  *
- * Biome (`bun run lint`), `tsc` (`bun run typecheck`), and Display Case's own
+ * The AST-pattern rules (e2e locators, no inline <svg>) are Biome GritQL plugins
+ * under this directory instead — they run inside `biome check`. Biome
+ * (`bun run lint`), `tsc` (`bun run typecheck`), and Display Case's own
  * structure/tokens/ssr phases (`bun run check`) are the rest of the gate — see
  * contributing/linting-best-practices.md.
  *
@@ -14,7 +17,7 @@
  */
 import { resolve } from 'node:path'
 
-const CHECKS = ['spec-purity', 'no-custom-svg'] as const
+const CHECKS = ['spec-purity'] as const
 
 const FIX = process.argv.includes('--fix')
 const here = import.meta.dir
@@ -39,4 +42,5 @@ if (failed.length > 0) {
   )
   process.exit(1)
 }
-console.log(`\nlint:checks passed (${CHECKS.length} checks)`)
+const n = CHECKS.length
+console.log(`\nlint:checks passed (${n} check${n === 1 ? '' : 's'})`)

@@ -1,0 +1,20 @@
+// Biome GritQL plugin — no inline <svg> in the browse chrome.
+//
+// The Vitrine design system is "Unicode glyphs only. No icon font, no SVG, no
+// emoji." Inline <svg> breaks that identity and the snapshot/SSR determinism the
+// glyph approach guarantees. AST name-matching, so `<svgPath>` / `<Svg>` are not
+// matched. Scoped to `src/ui/**` via the matching override in biome.json; runs
+// inside `biome check`.
+//
+// Suppress a deliberate exception with `// biome-ignore lint/plugin: <reason>`
+// (in JSX, place it immediately before the element).
+language js
+
+or {
+  `<svg $props />` as $el where {
+    register_diagnostic(span=$el, message="inline <svg> — the Vitrine chrome uses Unicode glyphs, not SVG")
+  },
+  `<svg $props>$children</svg>` as $el where {
+    register_diagnostic(span=$el, message="inline <svg> — the Vitrine chrome uses Unicode glyphs, not SVG")
+  }
+}
