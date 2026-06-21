@@ -51,6 +51,12 @@ clean.
   bun.lock must move together. `a11y` needs no baselines (axe is DOM-rule-based),
   so it runs on the plain runner with `playwright install --with-deps chromium`,
   like `e2e`.
+- **`visual` is opt-out of the default local run.** Committed baselines are
+  Linux-recorded, so a bare `display-case check .` on a contributor's macOS would
+  report false diffs. The config sets `check.defaultPhases.visual = false`, so
+  the default run skips it locally; CI passes `--visual` explicitly (and runs in
+  the matching container), so the gate is unaffected. The husky hooks never ran
+  visual, so the local gate is unchanged either way.
 - **`bun run lint`, not `lint:fix`.** CI must *verify*, failing on unformatted or
   unlinted code, rather than silently auto-fixing it (which would make CI pass on
   a tree that the author never cleaned). The pre-commit hook uses `lint:fix` for

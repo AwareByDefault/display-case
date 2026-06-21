@@ -14,6 +14,15 @@ export default defineConfig({
   // scripts/record-baselines.ts and contributing/testing-best-practices.md — so
   // they don't drift on macOS↔Linux font-rendering differences.
   baselineDir: './test/visual-baselines',
+  check: {
+    // The committed baselines are Linux-recorded, so a bare `display-case check .`
+    // on a developer's (likely non-Linux) machine would report dozens of false
+    // pixel diffs. Opt `visual` out of the *default* run so local checks stay
+    // green; it still runs when asked explicitly (`--visual`) and in CI, where
+    // the visual job passes `--visual` inside the matching Linux container.
+    // Record/refresh baselines with `bun run baselines:record` (also in-container).
+    defaultPhases: { visual: false },
+  },
   // The Primer "wall text": a long-form reading page with embedded live
   // specimens, authored in MDX and dogfooding the design system's own components.
   primer: './src/ui/design-system/primer.mdx',

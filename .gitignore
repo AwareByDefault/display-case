@@ -21,6 +21,10 @@ playwright-report/
 # Display Case codegen + bundle cache and local visual-regression baselines
 .display-case/
 
+# Visual-regression diff images: written next to a committed baseline on a local
+# mismatch (e.g. running --visual off-platform). Never commit these.
+*.diff.png
+
 # Display Case published builds (`display-case publish` output)
 dist-showcase/
 dist/

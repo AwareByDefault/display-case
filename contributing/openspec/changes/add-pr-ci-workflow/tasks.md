@@ -7,6 +7,8 @@
 - [ ] 1.5 Add the `e2e` job: `bun install --frozen-lockfile`, `bunx playwright install --with-deps chromium`, `bun run e2e`; upload `playwright-report/` + `test-results/` as an artifact on failure.
 - [ ] 1.6 Add the `a11y` job: `fetch-depth: 0`, install + `playwright install --with-deps chromium`, `display-case check . --a11y --changed` with `DISPLAY_CASE_BASE_REF` = the PR base sha; upload the a11y report.
 - [ ] 1.7 Add the `visual` job in the pinned Playwright container (`mcr.microsoft.com/playwright:v1.61.0-noble`): `fetch-depth: 0`, mark the workspace a git safe.directory, install, `display-case check . --visual --changed`; upload `*.diff.png` on failure.
+- [ ] 1.8 Opt `visual` out of the default local run (`check.defaultPhases.visual = false`) so a bare `display-case check .` off-platform doesn't false-diff Linux baselines; gitignore stray `*.diff.png`.
+- [ ] 1.9 Add the `update-baselines` workflow (`workflow_dispatch`, same container) to re-record baselines and commit them back to a chosen branch — the CI counterpart to `bun run baselines:record`.
 
 ## 2. Verify
 

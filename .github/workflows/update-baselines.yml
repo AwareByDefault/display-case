@@ -1,0 +1,59 @@
+name: Update visual baselines
+
+# Refresh the committed visual baselines (test/visual-baselines) from the current
+# renders, in the SAME Linux Playwright image the `visual` CI job diffs in, and
+# commit them back to the branch. Run this after an intentional visual change
+# when you can't (or would rather not) record locally with `bun run
+# baselines:record`. Manual only — never on push/PR.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch to record on and commit the refreshed baselines to.
+        required: true
+        default: main
+      only:
+        description: Optional component ids/globs to limit the refresh (comma-separated). Blank = all.
+        required: false
+
+# A new run for the same branch supersedes an in-flight one.
+concurrency:
+  group: update-baselines-${{ github.event.inputs.ref }}
+  cancel-in-progress: true
+
+jobs:
+  record:
+    name: Record & commit baselines
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    # Must match .github/workflows/ci.yml's `visual` job image and the
+    # `playwright` version in bun.lock, or the recorded baselines won't match
+    # what CI diffs against.
+    container:
+      image: mcr.microsoft.com/playwright:v1.61.0-noble
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref }}
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      # `--update` (re)records baselines; with no `--changed`/`--only` it refreshes
+      # every case. An `only` input narrows it. No browser install — the image
+      # ships the matching browsers.
+      - name: Record baselines
+        run: bun src/cli.ts check . --visual --update ${{ github.event.inputs.only && format('--only={0}', github.event.inputs.only) || '' }}
+      - name: Commit refreshed baselines
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add test/visual-baselines
+          if git diff --cached --quiet; then
+            echo "No baseline changes to commit."
+          else
+            git commit -m "Update visual baselines [skip ci]"
+            git push origin HEAD:${{ github.event.inputs.ref }}
+          fi

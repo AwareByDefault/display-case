@@ -133,6 +133,15 @@ install`s unzip (bun's installer needs it; the image lacks it) and uses an
 anonymous `node_modules` volume so the container's Linux install never clobbers
 the host's.
 
+- **Gotcha — committed baselines + a bare `check .` off-platform.** Because the
+  baselines are Linux-recorded, running the visual phase on macOS reports dozens
+  of false diffs (and writes `*.diff.png`, now gitignored). So the config opts
+  `visual` out of the *default* phase set (`check.defaultPhases.visual = false`):
+  a bare `display-case check .` skips it locally, but `--visual` and the CI job
+  (which passes `--visual` in the matching container) still run it. The husky
+  hooks never ran visual anyway (pre-commit is static + `bun test`; pre-push is
+  e2e), so the local gate is unchanged.
+
 ---
 
 ## 2026-06-21: Component CSS is server-inlined (the Vitrine stylesheet), not runtime-injected

@@ -176,6 +176,11 @@ Pass `--update` to (re)record every baseline from the current renders. Do this a
 display-case check . --visual --update
 ```
 
+When baselines are committed and diffed in CI (Linux), record them in that same environment so they match — this repo provides two paths:
+
+- **Locally** — `bun run baselines:record` records inside the pinned Playwright Docker image (`scripts/record-baselines.ts`). Requires Docker. Review the diff and commit the PNGs.
+- **From CI** — run the **Update visual baselines** workflow (`.github/workflows/update-baselines.yml`) via *Actions → Run workflow*. Pick the branch, optionally an `only` filter, and it records in the CI container and commits the refreshed baselines back to that branch (`[skip ci]`). Use this when you don't have Docker locally.
+
 ### Where baselines live
 
 By default baselines are written to the gitignored cache at `.display-case/baselines/`, organized as `<component>/<case>.<theme>.png`. These are local-only and will be recorded fresh on a clean checkout.
@@ -199,6 +204,12 @@ export default defineConfig({
 > developer's machine — otherwise every CI run reports false changes. This repo
 > records them in the pinned Playwright Docker image via `bun run
 > baselines:record`; see [contributing/testing-best-practices.md](../contributing/testing-best-practices.md).
+>
+> Because of this, a repo with committed (Linux) baselines should opt `visual`
+> out of the **default** run so a bare `display-case check .` on a contributor's
+> machine doesn't report off-platform false diffs. Set
+> [`check.defaultPhases`](configuration.md)`: { visual: false }`; the phase still
+> runs when asked explicitly (`--visual`) and in CI. This repo does exactly that.
 
 ## Change-scoped checks
 
