@@ -49,6 +49,17 @@
         "noNestedTernary": "error",
         "noNonNullAssertion": "error",
         "noParameterAssign": "error",
+        "noRestrictedImports": {
+          "level": "error",
+          "options": {
+            "paths": {
+              "playwright": "Optional visual toolchain — import lazily via `await import()` inside src/providers/ only, so browsing/manifest/render stay dependency-light.",
+              "@axe-core/playwright": "Optional visual toolchain — import lazily via `await import()` inside src/providers/ only.",
+              "pixelmatch": "Optional visual toolchain — import lazily via `await import()` inside src/providers/ only.",
+              "pngjs": "Optional visual toolchain — import lazily via `await import()` inside src/providers/ only."
+            }
+          }
+        },
         "useConsistentBuiltinInstantiation": "error",
         "useImportType": "error",
         "useNamingConvention": {
@@ -81,6 +92,16 @@
     }
   },
   "overrides": [
+    {
+      "includes": ["src/providers/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": "off"
+          }
+        }
+      }
+    },
     {
       "includes": ["**/*.d.ts", "**/playwright.config.ts"],
       "linter": {

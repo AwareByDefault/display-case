@@ -4,12 +4,13 @@ The authoritative reference for this repo's linting: how it's gated, how to run 
 what every check enforces, and how to add a new one. Other docs link here rather
 than restating it.
 
-This is a single-package repo (`display-case`). The realistic quality gate is
-**Biome** (format + lint), **`tsc --noEmit`** (types), this project's **own static
-checks** via `display-case check --structure --tokens --ssr`, plus the **OpenSpec**
-spec checks that travel with `contributing/openspec/specs/**`. There is no custom
-multi-check lint runner driving over a dozen packages — that machinery belonged to
-the monorepo this package came from and does not exist here.
+This is a single-package repo (`display-case`). The quality gate is **Biome**
+(format + lint), **`tsc --noEmit`** (types), this project's **own static checks**
+via `display-case check --structure --tokens --ssr`, and a small set of
+**project-specific custom checks** under [`tools/lint/`](../tools/lint/) for rules
+Biome and `tsc` can't express (run together via `bun run lint:checks`). The
+sprawling multi-package lint runner of the monorepo this came from is gone; what
+remains is a lean set scoped to one package.
 
 ---
 
@@ -20,13 +21,13 @@ Quality gates run through **git hooks (husky)**, not a separate CI lint job.
 - **`.husky/pre-commit`** — on commits that touch code (not docs/specs only), runs
   the static, browser-free gate:
   ```bash
-  bunx biome check --write .                          # format + lint, auto-fix + re-stage
-  tsc --noEmit                                         # types
-  bun test                                             # unit tests
-  display-case check . --structure --tokens --ssr      # this project's own static checks
+  bun run lint:fix     # biome (format+lint, auto-fix) + custom checks (tools/lint)
+  bun run typecheck    # tsc --noEmit
+  bun run check        # display-case --structure --tokens --ssr (this project's own checks)
+  bun test             # unit tests
   ```
-  Unfixable Biome errors, type errors, failing tests, or a non-zero
-  `display-case check` abort the commit.
+  Unfixable Biome errors, a failing custom check, type errors, a non-zero
+  `display-case check`, or failing tests abort the commit.
 - **`.husky/pre-push`** — runs the browser-backed end-to-end suite:
   ```bash
   bun run e2e
@@ -51,10 +52,11 @@ step on the default branch, not a parallel PR workflow.
 ## 2. Running it
 
 ```bash
-bunx biome check --write .                         # format + lint, fixes in place
-bunx biome check .                                 # check only, no mutation (verify / CI)
-tsc --noEmit                                        # type-check (one tsconfig)
-display-case check . --structure --tokens --ssr     # the project's static gate, no browser
+bun run lint                                        # biome (check) + custom checks
+bun run lint:fix                                   # biome (--write) + custom checks (--fix); matches pre-commit
+bun run lint:checks                                # just the custom checks (tools/lint)
+bun run typecheck                                  # tsc --noEmit (one tsconfig)
+bun run check                                      # display-case --structure --tokens --ssr (no browser)
 display-case check .                               # everything, including a11y + visual (needs Chromium)
 ```
 
@@ -76,12 +78,18 @@ display-case check .                               # everything, including a11y 
 | `display-case --tokens` | Every `var(--token)` in the package resolves to a custom property the package defines (in `globalStyles` or an inline `style` object) — catches foreign/typo'd token names that silently fall back. Static parse, no browser. | package source (component CSS/TSX **and** case files) | `allow: unknown-token` on the line or the line above, or the config's `tokens.allow` list. Detail: [../docs/testing.md](../docs/testing.md) — *Token conformance* |
 | `display-case --ssr` | Every case renders on the server (`renderToString`, no browser) — keeps a case's render pure, so browser-only APIs stay in effects/handlers. A `browserOnly` case is counted, not flagged. | all discovered cases | declare the component `browserOnly` in its case meta. Detail: [../docs/testing.md](../docs/testing.md) |
 | `types` | `tsc --noEmit` — one tsconfig for the whole package | all `.ts`/`.tsx` | — |
-| `spec-purity` | No implementation-detail terms; bullet `GIVEN/WHEN/THEN`, not bolded | `contributing/openspec/specs/**/spec.md` | `<!-- allow: <reason> -->` |
-| `spec-validate` | OpenSpec structural validity: required sections, ≥1 scenario per requirement, no stray `## ADDED/MODIFIED Requirements` headers | `contributing/openspec/specs/**` (via OpenSpec) | — |
+| `e2e-locator-discipline` | e2e specs drive the chrome only via `getByTestId(DcTestIds.*)` — no `getByText`/`getByRole`/`text=`/`:has-text(`, no hardcoded testid literals (see [testing-best-practices.md](testing-best-practices.md) §6) | `e2e/**/*.ts` | `// allow: locator-discipline` on the line |
+| `spec-purity` | No implementation/tool names in a behavior spec; bullet `GIVEN/WHEN/THEN`, not bolded (`--fix` converts bolded keywords) | `contributing/openspec/specs/**/spec.md` | `<!-- allow: <reason> -->` on the line |
+| `no-custom-svg` | No inline `<svg>` in the browse chrome — the Vitrine design system is "Unicode glyphs only" | `src/ui/**` | `allow: custom-svg` on the line or the line above |
 
-`spec-purity` vs `spec-validate`: purity owns the **project-specific** conventions
-OpenSpec doesn't know about (forbidden terms, bullet scenario format); validate owns
-**structural** validity. They're complementary, not redundant.
+The three custom checks live in [`tools/lint/`](../tools/lint/); each is a
+standalone script and all run together via `bun run lint:checks`.
+
+> **OpenSpec structural validity** (required sections, ≥1 scenario per requirement)
+> is the OpenSpec CLI's job (`openspec validate`), not duplicated here. The CLI
+> isn't a repo dependency, so it isn't wired into the default gate; run it ad hoc
+> if you have it installed. `spec-purity` owns only the project-specific
+> conventions the CLI doesn't know (forbidden terms, bullet scenario format).
 
 ### What `biome.json` enforces
 
@@ -97,6 +105,12 @@ effective rule set a contributor sees:
   `useConsistentBuiltinInstantiation` — **error**.
 - `useImportType` — **error** (type-only imports must use `import type`).
 - `useNamingConvention` — **error** (object-literal property names exempted).
+- `noRestrictedImports` — **error** for the optional visual toolchain
+  (`playwright`, `@axe-core/playwright`, `pixelmatch`, `pngjs`): these must be
+  loaded **lazily** via `await import()` so browsing/manifest/render stay
+  dependency-light. `src/providers/**` is exempted (the lazy leaves that may
+  statically import them). This is the Biome-expressed form of the monorepo's
+  `import-boundaries` check — see [coding-best-practices.md](coding-best-practices.md) §6.
 - Imports are auto-organized (assist `organizeImports`).
 
 Formatting: 2-space indent, 80-col width, single quotes (double in JSX), trailing
@@ -110,17 +124,24 @@ commas, no semicolons, always-parenthesized arrows.
 
 ## 4. Adding a new check
 
-Most rules belong in one of two places — neither is a new bespoke runner:
+Pick the cheapest home that fits — in this order:
 
-1. **A Biome rule.** Prefer tightening `biome.json` over a custom check whenever the
-   rule is expressible as a Biome rule — one config line covers the whole package
-   with no maintenance, and it's already wired into the hook.
-2. **A Display Case structure rule.** Rules about the showcase (coverage, catalog
+1. **A Biome rule.** Prefer tightening `biome.json` over anything custom whenever
+   the rule is expressible as a Biome rule (e.g. `noRestrictedImports` for the lazy
+   toolchain) — one config line covers the whole package with no maintenance, and
+   it's already wired into the hook.
+2. **A Display Case structure rule.** Rules about the *showcase* (coverage, catalog
    integrity, case content, composition) extend the structure phase in
    [src/structure-check.ts](../src/structure-check.ts). Add the rule there, give it a
    stable `<rule-id>` (so `// display-case: allow-<rule-id>` works), assign a
    severity (`error`/`warn`), and add a unit test next to it
-   (`structure-check.test.ts`) — checks are infra that can silently rot.
+   (`structure-check.test.ts`).
+3. **A custom check in [`tools/lint/`](../tools/lint/).** For a cross-cutting rule
+   over files the above don't cover (the `e2e/` specs, the OpenSpec specs, chrome
+   source) and that Biome can't express. Write `tools/lint/<name>.ts` — scan with
+   `Bun.Glob`, print `path:line: message` to stderr, `process.exit(1)` on any
+   violation, and honor a `// allow: <reason>` (or `<!-- allow: -->`) escape — then
+   add `'<name>'` to the `CHECKS` array in [tools/lint/index.ts](../tools/lint/index.ts).
 
 A new rule that is fundamentally about TypeScript types belongs in the type system
 (`tsc --noEmit`), not a separate scanner.
@@ -133,7 +154,7 @@ A new rule that is fundamentally about TypeScript types belongs in the type syst
   these checks enforce (import-type discipline, default-export policy, SSR-pure
   render).
 - [testing-best-practices.md](testing-best-practices.md) — test conventions and the
-  e2e locator discipline (locator rules live there, not in a lint check).
+  e2e locator discipline that the `e2e-locator-discipline` check enforces.
 - [../docs/testing.md](../docs/testing.md) — the product reference for
   `display-case check`: the full structure rule list, token conformance, SSR, and
   the a11y/visual phases, with every per-rule escape.
