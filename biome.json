@@ -93,6 +93,10 @@
   },
   "overrides": [
     {
+      "includes": ["e2e/**"],
+      "plugins": ["./tools/lint/e2e-locators.grit"]
+    },
+    {
       "includes": ["src/providers/**"],
       "linter": {
         "rules": {

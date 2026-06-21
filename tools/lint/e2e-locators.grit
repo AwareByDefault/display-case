@@ -1,0 +1,18 @@
+// Biome GritQL plugin — e2e locator discipline (the call-based half).
+//
+// Forbids `.getByText()` / `.getByRole()` in the Playwright suite: specs must
+// drive the browse chrome through `getByTestId(DcTestIds.*)`, an explicit
+// contract that survives copy/layout/i18n changes. Scoped to `e2e/**` via the
+// matching override in biome.json. See contributing/testing-best-practices.md §6.
+//
+// Suppress a deliberate exception with a `// biome-ignore` comment on the line.
+language js
+
+or {
+  `$o.getByText($_)` where {
+    register_diagnostic(span=$o, message="Drive the chrome via getByTestId(DcTestIds.*) — never getByText(). See contributing/testing-best-practices.md §6.")
+  },
+  `$o.getByRole($_)` where {
+    register_diagnostic(span=$o, message="Drive the chrome via getByTestId(DcTestIds.*) — never getByRole(). See contributing/testing-best-practices.md §6.")
+  }
+}

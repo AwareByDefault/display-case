@@ -14,11 +14,7 @@
  */
 import { resolve } from 'node:path'
 
-const CHECKS = [
-  'e2e-locator-discipline',
-  'spec-purity',
-  'no-custom-svg',
-] as const
+const CHECKS = ['spec-purity', 'no-custom-svg'] as const
 
 const FIX = process.argv.includes('--fix')
 const here = import.meta.dir

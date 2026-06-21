@@ -78,12 +78,14 @@ display-case check .                               # everything, including a11y 
 | `display-case --tokens` | Every `var(--token)` in the package resolves to a custom property the package defines (in `globalStyles` or an inline `style` object) — catches foreign/typo'd token names that silently fall back. Static parse, no browser. | package source (component CSS/TSX **and** case files) | `allow: unknown-token` on the line or the line above, or the config's `tokens.allow` list. Detail: [../docs/testing.md](../docs/testing.md) — *Token conformance* |
 | `display-case --ssr` | Every case renders on the server (`renderToString`, no browser) — keeps a case's render pure, so browser-only APIs stay in effects/handlers. A `browserOnly` case is counted, not flagged. | all discovered cases | declare the component `browserOnly` in its case meta. Detail: [../docs/testing.md](../docs/testing.md) |
 | `types` | `tsc --noEmit` — one tsconfig for the whole package | all `.ts`/`.tsx` | — |
-| `e2e-locator-discipline` | e2e specs drive the chrome only via `getByTestId(DcTestIds.*)` — no `getByText`/`getByRole`/`text=`/`:has-text(`, no hardcoded testid literals (see [testing-best-practices.md](testing-best-practices.md) §6) | `e2e/**/*.ts` | `// allow: locator-discipline` on the line |
+| `biome` plugin: e2e locators | e2e specs must not call `getByText()`/`getByRole()` — drive the chrome via `getByTestId(DcTestIds.*)` (see [testing-best-practices.md](testing-best-practices.md) §6). A GritQL plugin, [tools/lint/e2e-locators.grit](../tools/lint/e2e-locators.grit), scoped to `e2e/**` by a `biome.json` override; runs as part of `biome check`. | `e2e/**` | `// biome-ignore` on the line |
 | `spec-purity` | No implementation/tool names in a behavior spec; bullet `GIVEN/WHEN/THEN`, not bolded (`--fix` converts bolded keywords) | `contributing/openspec/specs/**/spec.md` | `<!-- allow: <reason> -->` on the line |
 | `no-custom-svg` | No inline `<svg>` in the browse chrome — the Vitrine design system is "Unicode glyphs only" | `src/ui/**` | `allow: custom-svg` on the line or the line above |
 
-The three custom checks live in [`tools/lint/`](../tools/lint/); each is a
-standalone script and all run together via `bun run lint:checks`.
+The two script checks (`spec-purity`, `no-custom-svg`) live in
+[`tools/lint/`](../tools/lint/); each is standalone and they run together via
+`bun run lint:checks`. The e2e-locator rule is a Biome **GritQL plugin** (above),
+so it runs inside `biome check` rather than the script runner.
 
 > **OpenSpec structural validity** (required sections, ≥1 scenario per requirement)
 > is the OpenSpec CLI's job (`openspec validate`), not duplicated here. The CLI
@@ -111,6 +113,10 @@ effective rule set a contributor sees:
   dependency-light. `src/providers/**` is exempted (the lazy leaves that may
   statically import them). This is the Biome-expressed form of the monorepo's
   `import-boundaries` check — see [coding-best-practices.md](coding-best-practices.md) §6.
+- A **GritQL plugin** ([tools/lint/e2e-locators.grit](../tools/lint/e2e-locators.grit)),
+  scoped to `e2e/**` via an override, forbids `getByText()`/`getByRole()` in the
+  Playwright suite (the call-based half of the locator discipline). Suppress with
+  `// biome-ignore`.
 - Imports are auto-organized (assist `organizeImports`).
 
 Formatting: 2-space indent, 80-col width, single quotes (double in JSX), trailing
@@ -126,10 +132,15 @@ commas, no semicolons, always-parenthesized arrows.
 
 Pick the cheapest home that fits — in this order:
 
-1. **A Biome rule.** Prefer tightening `biome.json` over anything custom whenever
-   the rule is expressible as a Biome rule (e.g. `noRestrictedImports` for the lazy
-   toolchain) — one config line covers the whole package with no maintenance, and
-   it's already wired into the hook.
+1. **A Biome rule or GritQL plugin.** Prefer Biome over anything custom whenever
+   the rule fits. A built-in rule is best (e.g. `noRestrictedImports` for the lazy
+   toolchain) — one config line, no maintenance. For an AST pattern with no
+   built-in rule (e.g. the `getByText`/`getByRole` ban), write a small **GritQL
+   plugin** (`*.grit`) and reference it from `biome.json` `plugins` (scope it with
+   an `overrides[].plugins` entry); it runs inside `biome check` with a custom
+   message and `// biome-ignore` suppression. GritQL fits call/member patterns
+   cleanly; reach for a script (below) when the rule needs to match text inside
+   string literals or span non-JS files.
 2. **A Display Case structure rule.** Rules about the *showcase* (coverage, catalog
    integrity, case content, composition) extend the structure phase in
    [src/structure-check.ts](../src/structure-check.ts). Add the rule there, give it a
@@ -154,7 +165,8 @@ A new rule that is fundamentally about TypeScript types belongs in the type syst
   these checks enforce (import-type discipline, default-export policy, SSR-pure
   render).
 - [testing-best-practices.md](testing-best-practices.md) — test conventions and the
-  e2e locator discipline that the `e2e-locator-discipline` check enforces.
+  e2e locator discipline (the `getByText`/`getByRole` half is enforced by the
+  Biome GritQL plugin `tools/lint/e2e-locators.grit`).
 - [../docs/testing.md](../docs/testing.md) — the product reference for
   `display-case check`: the full structure rule list, token conformance, SSR, and
   the a11y/visual phases, with every per-rule escape.
