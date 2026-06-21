@@ -1,8 +1,8 @@
 # Theming
 
-> Nav: [Quick start](quick-start.md) · [Writing cases](writing-cases.md) · [Hierarchy](hierarchy.md) · [Tweaks](tweaks.md) · **Theming** · [Documentation panel](documentation-panel.md) · [Writing placard docs](writing-placard-docs.md) · [Testing](testing.md) · [CLI](cli.md) · [AI agents](ai-agents.md) · [Configuration](configuration.md)
+> Nav: [Quick start](quick-start.md) · [Writing cases](writing-cases.md) · [Hierarchy](hierarchy.md) · [Tweaks](tweaks.md) · **Theming** · [Style engines](style-engines.md) · [Documentation panel](documentation-panel.md) · [Writing placard docs](writing-placard-docs.md) · [Testing](testing.md) · [CLI](cli.md) · [AI agents](ai-agents.md) · [Configuration](configuration.md)
 
-Components render in an isolated document so what you see (and what the check runner screenshots) is exactly the component, with no showcase chrome leaking in. Theming is controlled in three places: global styles, an optional decorator, and per-render URL parameters.
+Components render in an isolated document so what you see (and what the check runner screenshots) is exactly the component, with no showcase chrome leaking in. Theming is controlled in three places: global styles, an optional decorator, and per-render URL parameters. (For components styled by a runtime CSS-in-JS library like emotion/MUI, see [Render-time styling](#render-time-styling-css-in-js--mui) below.)
 
 ## Global styles
 
@@ -58,6 +58,26 @@ export default defineConfig({
 ```
 
 The decorator accepts `{ children }` plus the active case's `level`, `sourcePath`, and `area` — so beyond cross-cutting context it can wrap page/flow cases in app chrome (nav/header/footer). It wraps the rendered case (and the viewport-width wrapper, if any) inside React `StrictMode`. Use it for cross-cutting context that every component needs; prefer per-case composition for anything component-specific. See [Configuration › decorator](configuration.md#decorator) for the full signature and the per-area chrome pattern.
+
+## Render-time styling (CSS-in-JS / MUI)
+
+Global styles and the decorator cover static CSS and providers. But **Material UI**
+(and any emotion / styled-components library) emits its CSS *while a component
+renders* — so server rendering keeps the markup but loses the styling, giving an
+unstyled snapshot and a flash on first paint.
+
+A **style engine** fixes that: it collects the render-time CSS during the server
+render and delivers it before scripting. Configure it alongside the decorator —
+the engine handles the server-side extraction, the decorator provides the
+`ThemeProvider` your components need:
+
+```ts
+styleEngines: [emotionEngine],
+decorator: ({ children }) => <ThemeProvider theme={theme}>{children}</ThemeProvider>,
+```
+
+See [Style engines](style-engines.md) for the full emotion/MUI recipe and the
+contract for other libraries.
 
 ## Viewport width
 

@@ -419,6 +419,40 @@ export interface CheckConfig {
   }
 }
 
+// ── Style engines (render-time CSS-in-JS) ───────────────────────────────────────
+
+/**
+ * Collects the styling a single server render emits and returns it as document
+ * `<head>` markup. One collector instance serves exactly one render, so its
+ * store is isolated — one case's render-time styling never leaks into another's
+ * document. See {@link StyleEngine}.
+ */
+export interface StyleCollector {
+  /**
+   * Wrap the tree about to be rendered in whatever provider the styling library
+   * needs, so its render-time styling accumulates in this collector's isolated
+   * store (e.g. an emotion `CacheProvider` over a fresh cache).
+   */
+  wrap(node: ReactNode): ReactNode
+  /**
+   * Given the already-rendered markup, return the `<head>` markup (e.g.
+   * `<style data-…>…</style>` tags) carrying the styling that render used — placed
+   * verbatim, after the document's static styles, before scripting. Return `''`
+   * when the render produced none. MUST be idempotent: the tree renders inside
+   * `StrictMode` and may render twice.
+   */
+  collect(renderedHtml: string): string
+}
+
+/**
+ * A factory invoked once per server render to produce an isolated
+ * {@link StyleCollector}. Configure one or more on
+ * {@link DisplayCaseConfig.styleEngines} to deliver render-time (CSS-in-JS)
+ * styling — emotion/Material UI, styled-components, and peers — before scripting.
+ * Pair with `decorator` for the client-side provider. See `docs/style-engines.md`.
+ */
+export type StyleEngine = () => StyleCollector
+
 // ── Config ─────────────────────────────────────────────────────────────────────
 
 export interface DisplayCaseConfig {
@@ -456,6 +490,17 @@ export interface DisplayCaseConfig {
     sourcePath?: string
     area?: string
   }>
+  /**
+   * Engines that collect render-time (CSS-in-JS) styling — emotion/Material UI,
+   * styled-components, and peers — during the pre-scripting server render and
+   * deliver it in the isolated render and primer documents before scripting, so
+   * those surfaces are styled without executing scripts (no flash, styled
+   * snapshots). Applied in array order (the first is outermost). Each is a
+   * factory invoked once per render for an isolated style store. Pair with
+   * `decorator` for the client-side provider. Omit for none (documents are then
+   * byte-identical to their engine-free form). See `docs/style-engines.md`.
+   */
+  styleEngines?: StyleEngine[]
   /**
    * Where visual-regression baselines are stored, relative to the consumer
    * package. Defaults to the gitignored cache at `.display-case/baselines`.

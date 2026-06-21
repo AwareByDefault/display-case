@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react'
 import { StrictMode } from 'react'
-import { renderToString } from 'react-dom/server'
+import type { DisplayCaseConfig } from '../index'
 import { PrimerRoot } from '../ui/primer'
+import { renderWithStyles } from './collect-styles'
 
 /**
  * Server-side primer rendering — the sibling of {@link makeCaseRenderer} for
@@ -21,19 +22,27 @@ export interface PrimerHtmlResult {
    *  falls back to client rendering — the same isolation a single case gets. */
   browserOnly: boolean
   error?: string
+  /** Render-time (CSS-in-JS) styling collected by the configured style engines,
+   *  as `<head>` markup. `''` (or absent) when no engine produced styling. */
+  headStyles?: string
 }
 
 export function makePrimerRenderer(
   Content: MDXContent,
+  config: DisplayCaseConfig,
 ): () => PrimerHtmlResult {
   return function renderPrimerToHtml(): PrimerHtmlResult {
     try {
-      const html = renderToString(
+      // Apply any configured style engines around the primer tree, exactly as the
+      // case renderer does, so a specimen's render-time CSS-in-JS styling is
+      // delivered before scripting too.
+      const { html, headStyles } = renderWithStyles(
         <StrictMode>
           <PrimerRoot content={Content} />
         </StrictMode>,
+        config.styleEngines,
       )
-      return { html, browserOnly: false }
+      return { html, browserOnly: false, headStyles }
     } catch (err) {
       return {
         html: '',

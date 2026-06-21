@@ -1,6 +1,6 @@
 # Configuration
 
-> Nav: [Quick start](quick-start.md) · [Writing cases](writing-cases.md) · [Hierarchy](hierarchy.md) · [Tweaks](tweaks.md) · [Theming](theming.md) · [Documentation panel](documentation-panel.md) · [Writing placard docs](writing-placard-docs.md) · [Testing](testing.md) · [CLI](cli.md) · [AI agents](ai-agents.md) · **Configuration**
+> Nav: [Quick start](quick-start.md) · [Writing cases](writing-cases.md) · [Hierarchy](hierarchy.md) · [Tweaks](tweaks.md) · [Theming](theming.md) · [Style engines](style-engines.md) · [Documentation panel](documentation-panel.md) · [Writing placard docs](writing-placard-docs.md) · [Testing](testing.md) · [CLI](cli.md) · [AI agents](ai-agents.md) · **Configuration**
 
 Display Case is configured by a single `display-case.config.ts` (or `.tsx`) file at the root of the package it showcases. The file must **default-export** `defineConfig(...)`; if it does not, the CLI errors. `defineConfig` is an identity helper that exists purely to give the config file full type-checking and inference.
 
@@ -30,6 +30,7 @@ The CLI looks for `display-case.config.ts` then `display-case.config.tsx` in the
 | `landing` | `'primer' \| 'cases'` | no | `'primer'` | Which view the chrome lands on at `/` when a Primer is configured. Ignored without a Primer. See [`landing`](#landing). |
 | `globalStyles` | `string[]` | no | none | CSS entrypoints (relative to the package) injected into previews. |
 | `decorator` | `ComponentType<{ children, level?, sourcePath?, area? }>` | no | none | Wrapper rendered around every case; also receives the active case's `level`, `sourcePath`, and `area` so it can wrap page/flow cases in app chrome. |
+| `styleEngines` | `StyleEngine[]` | no | none | Engines that collect render-time (CSS-in-JS) styling — emotion/MUI, styled-components — during the server render and deliver it before scripting. Pair with `decorator`. See [`styleEngines`](#styleengines) and [Style engines](style-engines.md). |
 | `baselineDir` | `string` | no | `.display-case/baselines` | Where visual-regression baselines are stored. |
 | `tokens` | `{ allow?: string[] }` | no | none | Design-token conformance options for `--tokens`. `allow` lists custom-property names the package may reference but does not itself define (e.g. host-app-provided tokens). See [Testing](testing.md#token-conformance). |
 | `providers` | `{ driver?, diff? }` | no | built-in | Override the visual-regression backend. When unset, the built-in Playwright/axe driver and pixelmatch/pngjs diff are loaded lazily. See [`providers`](#providers). |
@@ -155,6 +156,35 @@ vocabulary or folder layout. Tag a case via `meta.area` (see
 `sourcePath` — whichever suits the package. Chrome that itself renders router
 `<Link>`s (e.g. a nav bar) needs a router in context; if your nav uses a router,
 provide a tiny in-memory router inside the chrome so the links resolve.
+
+### `styleEngines`
+
+For components styled by a **runtime CSS-in-JS** library — emotion (and therefore
+**Material UI**), styled-components, and peers — that emit their CSS as a side
+effect of rendering. A style engine collects that styling during the server
+render and delivers it in the isolated `/render` and Primer documents **before
+scripting**, so those surfaces are styled without executing scripts (no flash, and
+chrome-free snapshots come back styled).
+
+```ts
+styleEngines: [emotionEngine]
+```
+
+Each engine is a factory invoked **once per render** for an isolated style store:
+
+```ts
+type StyleEngine = () => StyleCollector
+interface StyleCollector {
+  wrap(node: ReactNode): ReactNode      // provide the library's store (e.g. emotion CacheProvider)
+  collect(renderedHtml: string): string // return the <head> style markup that render used
+}
+```
+
+`styleEngines` (the server-side extractor) pairs with [`decorator`](#decorator)
+(the client/SSR provider, e.g. a MUI `ThemeProvider`). Omit `styleEngines`
+entirely and the documents are byte-identical to their engine-free form. The full
+recipe — emotion/MUI flagship, styled-components, and when to use `globalStyles`
+instead — is in [Style engines](style-engines.md).
 
 ### `baselineDir`
 

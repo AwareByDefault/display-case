@@ -84,11 +84,13 @@ function documentFor(loaded: Loaded, path: string, url: URL): string {
   if (path === '/render/primer') {
     let markup = ''
     let ssr = false
+    let headStyles: string | undefined
     if (renderPrimer) {
       const r = renderPrimer()
       if (!r.browserOnly) {
         markup = r.html
         ssr = true
+        headStyles = r.headStyles
       }
     }
     return primerDoc({
@@ -98,6 +100,7 @@ function documentFor(loaded: Loaded, path: string, url: URL): string {
       theme,
       markup,
       ssr,
+      headStyles,
       assets,
     })
   }
@@ -106,6 +109,7 @@ function documentFor(loaded: Loaded, path: string, url: URL): string {
     const rs = parseRenderState(url)
     let markup = ''
     let ssr = false
+    let headStyles: string | undefined
     if (rs.componentId && rs.caseId) {
       const r = renderCase({
         componentId: rs.componentId,
@@ -116,6 +120,7 @@ function documentFor(loaded: Loaded, path: string, url: URL): string {
       if (!r.browserOnly) {
         markup = r.html
         ssr = true
+        headStyles = r.headStyles
       }
     }
     return renderDoc({
@@ -126,6 +131,7 @@ function documentFor(loaded: Loaded, path: string, url: URL): string {
       fit: rs.fit,
       markup,
       ssr,
+      headStyles,
       assets,
     })
   }

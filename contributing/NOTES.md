@@ -4,6 +4,51 @@ Non-obvious decisions, debugging notes, and architectural context for the Displa
 
 ---
 
+## 2026-06-21: Style engines — render-time CSS-in-JS (emotion/MUI) delivered before scripting
+
+`globalStyles` and the Vitrine stylesheet are *static* CSS, read from disk and
+inlined into the document `<style>`. **Runtime CSS-in-JS** (emotion — hence
+Material UI — styled-components, …) is different: it emits CSS *while a component
+renders*, which `renderToString` discards. The `styleEngines` seam is the dynamic
+counterpart that captures it. Things a future agent needs to know:
+
+- **The seam is `src/render/collect-styles.ts` (`renderWithStyles`)**, called by
+  both `ssr-render.tsx` and `ssr-primer.tsx`. It wraps the tree in each engine's
+  provider, `renderToString`s, then concatenates each engine's `collect(html)`
+  into a `headStyles` string. The case/primer result objects carry `headStyles?`;
+  the dev (`server.ts`) and prod (`documents.ts`) document builders inject it.
+
+- **Per-render factory, not a shared object.** `StyleEngine` is `() => StyleCollector`
+  — invoked **once per render**. The SSR module is built once and reused across
+  every request, so a shared emotion cache would collect case A's styling into
+  case B's document. A fresh collector per render is what guarantees isolation.
+  (`ssr-render.test.tsx` asserts distinct per-render instance ids.)
+
+- **`headStyles` is a DISCRETE `<head>` tag, NOT folded into the base `<style>`.**
+  This is load-bearing: emotion tags its output `<style data-emotion="css …">`,
+  and the client runtime keys on `data-emotion` to *adopt* the server styles
+  instead of re-injecting. Concatenating that CSS into our big `<style>` would
+  strip the markers and bring back the flash + duplication. The builders place it
+  as `</style>${headStyles}</head>` (after the static block, before `</head>`).
+
+- **`styleEngines` (server) pairs with `decorator` (client + server).** The engine
+  only does server-side extraction — it can't run on the client. The matching
+  provider (MUI `ThemeProvider`, or a custom-key `CacheProvider`) goes in the
+  `decorator`, which already wraps both the SSR and client trees. For emotion's
+  *default* key (`css`) the client cache adopts automatically, so MUI needs no
+  client engine code — that's why it's the clean flagship.
+
+- **Inert when unused.** No engines ⇒ `headStyles` is `''` ⇒ documents are
+  byte-identical to before (a `documents.test.ts` case asserts `doc({})` equals
+  `doc({ headStyles: '' })`). `browserOnly` cases short-circuit before any engine
+  runs and emit no `headStyles`.
+
+- **No runtime dependency.** Display Case ships the `StyleEngine`/`StyleCollector`
+  *types* only; the emotion/styled-components wiring is consumer code (a ~8-line
+  recipe in `docs/style-engines.md`), kept out of the tool's deps on purpose.
+
+---
+
 ## 2026-06-21: Component CSS is server-inlined (the Vitrine stylesheet), not runtime-injected
 
 **What changed.** The design-system components used to paint by calling

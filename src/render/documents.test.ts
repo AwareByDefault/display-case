@@ -123,6 +123,19 @@ describe('renderDoc', () => {
     expect(doc({ ssr: true })).toContain('data-ssr="1"')
     expect(doc({ ssr: false })).toContain('data-ssr="0"')
   })
+
+  test('omitting headStyles is byte-identical to passing empty (inert when unused)', () => {
+    expect(doc({})).toBe(doc({ headStyles: '' }))
+  })
+
+  test('style-engine output is a discrete tag after the static <style> block', () => {
+    const tag = '<style data-emotion="css 1ab2">.x{}</style>'
+    const html = doc({ headStyles: tag })
+    expect(html).toContain(tag)
+    // Placed after the base block closes, before the head closes — not folded
+    // into the static <style> (so emotion's data-emotion adoption markers survive).
+    expect(html).toContain(`</style>${tag}</head>`)
+  })
 })
 
 describe('primerDoc', () => {
@@ -152,5 +165,20 @@ describe('primerDoc', () => {
     expect(html).toContain('.glob{}')
     expect(html).toContain('.vit{}')
     expect(html).toContain('data-ssr="1"')
+  })
+
+  test('style-engine output is a discrete tag after the static <style> block', () => {
+    const tag = '<style data-emotion="css 9zz">.y{}</style>'
+    const html = primerDoc({
+      tokensCss: '.tok{}',
+      globalCss: '.glob{}',
+      vitrineCss: '.vit{}',
+      theme: 'dark',
+      markup: '<article>primer</article>',
+      ssr: true,
+      headStyles: tag,
+      assets,
+    })
+    expect(html).toContain(`</style>${tag}</head>`)
   })
 })

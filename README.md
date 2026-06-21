@@ -240,6 +240,8 @@ export default defineFlow('Sign-in flow', {
 
 **App chrome** — the [`decorator`](docs/configuration.md#decorator) receives each case's `level`, `sourcePath`, and `area`, so a consuming app can render **page**/**flow** cases inside their real navigation/layout (and leave smaller components bare). Tag a case with `meta.area`, or organize cases into area folders and read `sourcePath`.
 
+**CSS-in-JS (Material UI / emotion)** — components styled by a runtime CSS-in-JS library are first-class. A [**style engine**](docs/style-engines.md) collects the styling emitted *during* the server render and delivers it before scripting, so emotion/MUI (and styled-components) cases are styled in the chrome-free snapshot with **no flash** — not a `browserOnly` opt-out. Configure `styleEngines` (server-side extraction) alongside the `decorator` (the `ThemeProvider`); Display Case takes on no runtime dependency on the styling library. Static CSS (Tailwind output, design tokens) goes through [`globalStyles`](docs/configuration.md#globalstyles) instead.
+
 **Primer** — point `primer` at an authored `.mdx` document and the chrome gains a **Primer / Cases** mode switch in the sidebar. The Primer is long-form "wall text": a scrolling reading page with embedded **live specimens**, rendered in its own isolated frame (like `/render`). The MDX may import any component — case files *and* arbitrary `.tsx` — and wraps each specimen in the `<Display>` contract:
 
 ```mdx
@@ -286,6 +288,7 @@ The live accessibility scanner is a dev-only surface and is omitted from a publi
 - [Hierarchy](docs/hierarchy.md) — Atomic Design levels and flows.
 - [Tweaks](docs/tweaks.md) — typed, URL-encoded controls.
 - [Theming](docs/theming.md) — global styles, decorators, light/dark, viewport width.
+- [Style engines](docs/style-engines.md) — CSS-in-JS (Material UI / emotion) styled before scripting.
 - [Documentation panel](docs/documentation-panel.md) — rendering `.placard.md`.
 - [Writing placard docs](docs/writing-placard-docs.md) — what to put in a `.placard.md`, for agents and humans.
 - [Testing](docs/testing.md) — a11y + visual-regression checks and baselines.

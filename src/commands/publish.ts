@@ -161,7 +161,7 @@ export async function publish(
     : null
   const ssrEntry = await codegenSsrEntry(pkgDir, files, configPath)
   const ssrPrimerEntry = hasPrimer
-    ? await codegenSsrPrimerEntry(pkgDir, config.primer as string)
+    ? await codegenSsrPrimerEntry(pkgDir, config.primer as string, configPath)
     : null
 
   const defines = await buildDefines(pkgDir)

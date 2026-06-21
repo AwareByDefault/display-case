@@ -34,7 +34,7 @@ context: |
   - accessibility-checks    — gating accessibility (axe) checks plus optional in-app surfacing of each variant's result
   - visual-regression-checks — renders each case to an image and diffs against a baseline; overridable, optional-backend pipeline
   - structure-checks        — static best-practice checks over a showcase's authored material and configuration (phases, severities, exemptions)
-  - server-rendering        — delivers every surface rendered before scripting, plus the server-render (ssr) safety check
+  - server-rendering        — delivers every surface rendered before scripting (incl. render-time CSS-in-JS styling via style engines), plus the server-render (ssr) safety check
   - agent-init              — installs/removes Display Case's AI-agent integration into a target repo, idempotently
   - publishing              — keeps Display Case out of consuming apps while producing a standalone, deployable showcase build
 
@@ -60,6 +60,7 @@ context: |
   - manifest    — the machine-readable catalog of components/cases/docs/tweaks as file references
   - check       — a phase of `display-case check` (structure / tokens / ssr / a11y / visual)
   - the Vitrine — Display Case's own browse-chrome design system (`--dc-*` tokens)
+  - style engine — a per-render hook (configured via `styleEngines`) that collects render-time CSS-in-JS styling (emotion/MUI, styled-components) during the server render and delivers it before scripting; pairs with the client-side `decorator`
 
   Non-negotiable rules (rejected at review if violated)
   ----------------------------------------------------

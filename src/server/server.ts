@@ -290,6 +290,7 @@ async function rebuild(
     const ssrPrimerEntry = await codegenSsrPrimerEntry(
       pkgDir,
       config.primer as string,
+      configPath,
     )
     const ssrPrimerName = `ssr-primer-entry-${ssrBuildSeq}`
     const ssrPrimerResult = await Bun.build({
@@ -433,6 +434,9 @@ interface RenderDoc {
   markup: string
   /** Whether `markup` is present, so the client adopts instead of mounting. */
   ssr: boolean
+  /** Render-time (CSS-in-JS) styling collected by the style engines, as `<head>`
+   *  markup placed after the static `<style>` block. `''` when none. */
+  headStyles?: string
 }
 
 /** The render state the server decodes from a `/render/...` address — the same
@@ -496,7 +500,11 @@ function renderHtml(
   // scripts; its `--dc-*` tokens come from globalCss (the showcase lists the
   // token files in globalStyles). For a non-dogfooding consumer these rules are
   // inert chrome CSS — harmless in this dev-time-only preview document.
-  return `<!doctype html><html lang="en" data-theme="${doc.theme}" data-theme-pref="${doc.theme}"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Display Case render</title><style>html,body{margin:0}body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-sans, ui-sans-serif, system-ui, sans-serif)}${exhibitCenter}${globalCss}\n${vitrineCss}</style></head><body${bodyAttrs}><main id="root"${rootAttrs}>${doc.markup}</main>${ERROR_OVERLAY_SCRIPT}${liveReload ? LIVERELOAD_SCRIPT : ''}<script type="module" src="/dist/render-entry.js"></script></body></html>`
+  // The style engines' collected styling (if any) follows the static <style>
+  // block as its own discrete markup — emotion/styled-components tag their output
+  // with attributes the client runtime keys on to adopt it, so it must not be
+  // folded into the block above. Empty string when no engine is configured.
+  return `<!doctype html><html lang="en" data-theme="${doc.theme}" data-theme-pref="${doc.theme}"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Display Case render</title><style>html,body{margin:0}body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-sans, ui-sans-serif, system-ui, sans-serif)}${exhibitCenter}${globalCss}\n${vitrineCss}</style>${doc.headStyles ?? ''}</head><body${bodyAttrs}><main id="root"${rootAttrs}>${doc.markup}</main>${ERROR_OVERLAY_SCRIPT}${liveReload ? LIVERELOAD_SCRIPT : ''}<script type="module" src="/dist/render-entry.js"></script></body></html>`
 }
 
 function primerHtml(
@@ -504,7 +512,12 @@ function primerHtml(
   tokensCss: string,
   vitrineCss: string,
   liveReload: boolean,
-  doc: { theme: 'light' | 'dark'; markup: string; ssr: boolean },
+  doc: {
+    theme: 'light' | 'dark'
+    markup: string
+    ssr: boolean
+    headStyles?: string
+  },
 ): string {
   // The Primer's own document. It needs the Vitrine `--dc-*` tokens (the
   // reading-page + Display-card chrome paints from them), the consumer's
@@ -516,7 +529,9 @@ function primerHtml(
   // `data-ssr` tells the client whether to adopt the markup or mount fresh.
   const reset = 'html,body{margin:0;height:100%;background:var(--dc-bg)}'
   const rootAttrs = ` data-ssr="${doc.ssr ? '1' : '0'}"`
-  return `<!doctype html><html lang="en" data-theme="${doc.theme}" data-theme-pref="${doc.theme}"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Primer</title>${FONT_LINKS}<style>${tokensCss}\n${globalCss}\n${reset}\n${vitrineCss}</style></head><body><main id="root"${rootAttrs}>${doc.markup}</main>${ERROR_OVERLAY_SCRIPT}${liveReload ? LIVERELOAD_SCRIPT : ''}<script type="module" src="/dist/primer-entry.js"></script></body></html>`
+  // Style-engine output follows the static <style> block as discrete markup (see
+  // renderHtml). `''` when no engine is configured.
+  return `<!doctype html><html lang="en" data-theme="${doc.theme}" data-theme-pref="${doc.theme}"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Primer</title>${FONT_LINKS}<style>${tokensCss}\n${globalCss}\n${reset}\n${vitrineCss}</style>${doc.headStyles ?? ''}</head><body><main id="root"${rootAttrs}>${doc.markup}</main>${ERROR_OVERLAY_SCRIPT}${liveReload ? LIVERELOAD_SCRIPT : ''}<script type="module" src="/dist/primer-entry.js"></script></body></html>`
 }
 
 /**
@@ -779,6 +794,7 @@ export async function startDisplayCase(
         // rendering (delivered empty for the client to mount).
         let markup = ''
         let ssr = false
+        let headStyles: string | undefined
         if (state.renderPrimer) {
           const result = state.renderPrimer()
           if (result.browserOnly) {
@@ -788,6 +804,7 @@ export async function startDisplayCase(
           } else {
             markup = result.html
             ssr = true
+            headStyles = result.headStyles
           }
         }
         return new Response(
@@ -800,6 +817,7 @@ export async function startDisplayCase(
               theme,
               markup,
               ssr,
+              headStyles,
             },
           ),
           {
@@ -832,6 +850,7 @@ export async function startDisplayCase(
           } else {
             rs.markup = result.html
             rs.ssr = true
+            rs.headStyles = result.headStyles
           }
         }
         return new Response(
