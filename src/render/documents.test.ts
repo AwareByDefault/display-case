@@ -1,0 +1,147 @@
+import { describe, expect, test } from 'bun:test'
+import type { Manifest } from '../core/manifest'
+import { type DocAssets, primerDoc, renderDoc, shellDoc } from './documents'
+
+const assets: DocAssets = {
+  browser: '/assets/browser-abc123.js',
+  render: '/assets/render-def456.js',
+  primer: '/assets/primer-ghi789.js',
+}
+
+const manifest: Manifest = {
+  title: 'My Showcase',
+  components: [],
+  primer: true,
+  landing: 'primer',
+}
+
+describe('shellDoc', () => {
+  const doc = () =>
+    shellDoc({
+      title: 'My Showcase',
+      tokensCss: '.tok{}',
+      globalCss: '.glob{}',
+      chromeCss: '.chrome{}',
+      theme: 'dark',
+      markup: '<header>chrome</header>',
+      ssr: true,
+      manifest,
+      a11y: false,
+      assets,
+    })
+
+  test('is a themed HTML document carrying the title and pre-rendered markup', () => {
+    const html = doc()
+    expect(html.startsWith('<!doctype html>')).toBe(true)
+    expect(html).toContain('data-theme="dark"')
+    expect(html).toContain('<title>My Showcase</title>')
+    expect(html).toContain('<header>chrome</header>')
+  })
+
+  test('inlines all of the supplied CSS layers', () => {
+    const html = doc()
+    expect(html).toContain('.tok{}')
+    expect(html).toContain('.glob{}')
+    expect(html).toContain('.chrome{}')
+  })
+
+  test('seeds the manifest, theme, and a11y flag for hydration', () => {
+    const html = doc()
+    expect(html).toContain('window.__dcSeed=')
+    expect(html).toContain('"My Showcase"')
+    expect(html).toContain('"theme":"dark"')
+    expect(html).toContain('"a11y":false')
+  })
+
+  test('marks the root server-rendered and references the browser entry', () => {
+    expect(doc()).toContain('data-ssr="1"')
+    expect(doc()).toContain('src="/assets/browser-abc123.js"')
+  })
+
+  test('marks the root as client-only when ssr is false', () => {
+    const html = shellDoc({
+      title: 'X',
+      tokensCss: '',
+      globalCss: '',
+      chromeCss: '',
+      theme: 'light',
+      markup: '',
+      ssr: false,
+      manifest,
+      a11y: false,
+      assets,
+    })
+    expect(html).toContain('data-ssr="0"')
+  })
+
+  test('carries no dev live-reload machinery', () => {
+    expect(doc()).not.toContain('__livereload')
+    expect(doc().toLowerCase()).not.toContain('eventsource')
+  })
+})
+
+describe('renderDoc', () => {
+  const doc = (over: Partial<Parameters<typeof renderDoc>[0]> = {}) =>
+    renderDoc({
+      globalCss: '.g{}',
+      theme: 'light',
+      transparent: false,
+      fit: false,
+      markup: '<button>x</button>',
+      ssr: true,
+      assets,
+      ...over,
+    })
+
+  test('renders the isolated case markup with both theme attributes', () => {
+    const html = doc()
+    expect(html).toContain('data-theme="light"')
+    expect(html).toContain('data-theme-pref="light"')
+    expect(html).toContain('<button>x</button>')
+    expect(html).toContain('src="/assets/render-def456.js"')
+  })
+
+  test('a transparent exhibit decorates the body and clears its background', () => {
+    const html = doc({ transparent: true })
+    expect(html).toContain('data-decorated')
+    expect(html).toContain('background:transparent')
+  })
+
+  test('a fitted exhibit shrink-wraps the root to its content width', () => {
+    expect(doc({ fit: true })).toContain('width:fit-content')
+    expect(doc({ fit: false })).not.toContain('width:fit-content')
+  })
+
+  test('reflects the ssr flag on the root', () => {
+    expect(doc({ ssr: true })).toContain('data-ssr="1"')
+    expect(doc({ ssr: false })).toContain('data-ssr="0"')
+  })
+})
+
+describe('primerDoc', () => {
+  const doc = () =>
+    primerDoc({
+      tokensCss: '.tok{}',
+      globalCss: '.glob{}',
+      theme: 'dark',
+      markup: '<article>primer</article>',
+      ssr: true,
+      assets,
+    })
+
+  test('is the themed primer reading page with its markup and entry', () => {
+    const html = doc()
+    expect(html).toContain('<title>Primer</title>')
+    expect(html).toContain('data-theme="dark"')
+    expect(html).toContain('data-theme-pref="dark"')
+    expect(html).toContain('<article>primer</article>')
+    expect(html).toContain('src="/assets/primer-ghi789.js"')
+  })
+
+  test('inlines the token and global CSS and marks the ssr root', () => {
+    const html = doc()
+    expect(html).toContain('.tok{}')
+    expect(html).toContain('.glob{}')
+    expect(html).toContain('data-ssr="1"')
+  })
+})
