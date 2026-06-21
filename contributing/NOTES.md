@@ -18,22 +18,32 @@ root makes the CLI (and the propose/apply/archive skills, which shell out to it)
 work out of the box from anywhere in the tree.
 
 The CLI is pinned as a devDependency: **`@fission-ai/openspec`** (exact
-`1.3.1` — the bare `openspec` package on npm is unrelated). Pin reasons:
-reproducibility, and the archiver's validator strictness is **version-specific**
+`1.4.1` — the bare `openspec` package on npm is unrelated). Pin reasons:
+reproducibility, and the CLI's validator strictness is **version-specific**
 (see below). Run it via `bun run openspec <cmd>` so the pinned
 `node_modules/.bin` wins over any global install; `scripts/setup.ts` verifies it
 resolves. Its `postinstall` is intentionally left untrusted/blocked (like
 `@parcel/watcher`'s) — the binary works without it and trusting it would let it
 scaffold files on install.
 
-**Archiver gotcha (`openspec archive`):** 1.3.1's archive step rebuilds the
-target spec and validates it against a schema that requires a `## Purpose`
-section — which **none** of this repo's 17 specs use (house style is
-`# Title` + prose intro + `## Requirements`). So a plain `openspec archive`
-aborts with `Spec must have a Purpose section`. Work around it with
-`openspec archive <change> --yes --skip-specs`, then fold the change's
-ADDED/MODIFIED requirement into the canonical `openspec/specs/<cap>/spec.md` by
-hand, matching house style. Revisit if a future CLI version relaxes this.
+**Spec-schema gotcha (`## Purpose`):** the CLI's spec schema requires a
+`## Purpose` section, which **none** of this repo's 17 specs use — the house
+style is `# Title` + prose intro + `## Requirements` (see AGENTS.md → Spec
+rules). Confirmed on both 1.3.1 and 1.4.1. Consequences:
+- `openspec validate --specs` (and `--all`) reports **all 17 specs failing**
+  with `Spec must have a Purpose section`. **Validating a *change* still works**
+  (`openspec validate <change>` — that path doesn't re-validate the whole spec),
+  which is the one used in the propose/apply flow.
+- `openspec archive <change>` rebuilds the target spec and validates it, so it
+  **aborts** with the same error. Work around it with
+  `openspec archive <change> --yes --skip-specs`, then fold the change's
+  ADDED/MODIFIED requirement into the canonical `openspec/specs/<cap>/spec.md`
+  by hand, matching house style.
+
+This is a standing house-style-vs-CLI-schema divergence, not a per-version bug;
+the only way to make `validate --specs`/`archive` pass natively would be to add
+a `## Purpose` section to every spec (a deliberate repo-wide decision, not yet
+taken). Re-evaluate on CLI upgrades.
 
 ---
 
