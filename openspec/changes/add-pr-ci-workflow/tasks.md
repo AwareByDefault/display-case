@@ -20,5 +20,5 @@
 ## 3. Documentation
 
 - [ ] 3.1 `contributing/linting-best-practices.md` — replace the "intentionally no PR-CI workflow defined today" note with the workflow as the documented backstop to the husky hooks (the four jobs and which commands each runs).
-- [ ] 3.2 `contributing/openspec/specs/README.md` and `contributing/openspec/config.yaml` — add the `continuous-integration` capability to the capability map.
+- [ ] 3.2 `openspec/specs/README.md` and `openspec/config.yaml` — add the `continuous-integration` capability to the capability map.
 - [ ] 3.3 `contributing/NOTES.md` — record the CI/husky relationship (CI mirrors the hooks; CI uses `lint` not `lint:fix`; only `e2e` provisions a browser) if not obvious from the workflow file.

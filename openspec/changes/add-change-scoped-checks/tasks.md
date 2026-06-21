@@ -24,6 +24,6 @@
 
 ## 5. Documentation
 
-- [ ] 5.1 `contributing/openspec/specs/README.md` and `contributing/openspec/config.yaml` — add the `change-scoped-checks` capability.
+- [ ] 5.1 `openspec/specs/README.md` and `openspec/config.yaml` — add the `change-scoped-checks` capability.
 - [ ] 5.2 `docs/testing.md` and `docs/cli.md` — document `--only` / `--changed` and the soundness rules.
 - [ ] 5.3 `contributing/NOTES.md` — record the global-CSS fan-out rule and why scoping falls back to all on unattributed render inputs.
