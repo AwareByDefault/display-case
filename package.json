@@ -1,0 +1,67 @@
+{
+  "name": "display-case",
+  "version": "0.0.0",
+  "private": true,
+  "description": "A Bun-native, AI-friendly component showcase — a lightweight alternative to Storybook.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "bin": {
+    "display-case": "./src/cli.ts"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./tokens-check": "./src/tokens-check.ts",
+    "./prod-server": "./src/prod-server.ts"
+  },
+  "files": [
+    "src",
+    "skills",
+    "docs",
+    "display-case.prompt.md",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "clean": "rm -rf .display-case dist dist-showcase",
+    "dev": "bun src/cli.ts . --dev",
+    "display-case": "bun src/cli.ts .",
+    "display-case:check": "bun src/cli.ts check .",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "typecheck": "tsc --noEmit",
+    "check": "bun src/cli.ts check . --structure --tokens --ssr",
+    "test": "bun test",
+    "e2e": "playwright test",
+    "e2e:headed": "playwright test --headed",
+    "e2e:install": "playwright install chromium",
+    "prepare": "husky"
+  },
+  "peerDependencies": {
+    "react": "^19",
+    "react-dom": "^19"
+  },
+  "dependencies": {
+    "@mdx-js/mdx": "^3",
+    "@parcel/watcher": "^2.5.6",
+    "react-markdown": "^9.0.1",
+    "remark-gfm": "^4.0.0"
+  },
+  "optionalDependencies": {
+    "@axe-core/playwright": "^4.10.1",
+    "pixelmatch": "^6.0.0",
+    "playwright": "^1.50.1",
+    "pngjs": "^7.0.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.4.15",
+    "@playwright/test": "^1.60.0",
+    "@types/bun": "^1.2.0",
+    "@types/pngjs": "^6.0.5",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "husky": "^9.1.7",
+    "typescript": "^5.7.0"
+  }
+}

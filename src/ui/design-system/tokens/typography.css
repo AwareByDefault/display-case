@@ -1,0 +1,49 @@
+/* ============================================================
+   Display Case — Typography tokens
+   Hanken Grotesk drives the chrome (warm, legible, quiet).
+   JetBrains Mono carries developer texture — labels, code,
+   values, the wordmark. The chrome lives at small sizes so the
+   showcased component owns the visual weight.
+   ============================================================ */
+
+:root {
+  /* --- Families ---------------------------------------------- */
+  --dc-font-sans:
+    "Hanken Grotesk", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    Roboto, sans-serif;
+  --dc-font-mono:
+    "JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas,
+    monospace;
+
+  /* --- Size scale (px; dense chrome) ------------------------- */
+  --dc-text-2xs: 10px; /* compact chrome — undocked tweaks     */
+  --dc-text-xs: 11px; /* eyebrow labels, dim hints            */
+  --dc-text-sm: 12px; /* zoom %, secondary, captions          */
+  --dc-text-base: 14px; /* the chrome baseline                  */
+  --dc-text-md: 16px; /* icon glyphs, emphasis                */
+  --dc-text-lg: 20px;
+  --dc-text-xl: 28px; /* doc panel headings                   */
+  --dc-text-2xl: 40px; /* wordmark / specimen display          */
+
+  /* --- Weights ----------------------------------------------- */
+  --dc-weight-normal: 400;
+  --dc-weight-medium: 500; /* active nav, control labels       */
+  --dc-weight-semibold: 600; /* title, group labels              */
+  --dc-weight-bold: 700; /* wordmark, rare emphasis          */
+
+  /* --- Line height ------------------------------------------- */
+  --dc-leading-tight: 1.2;
+  --dc-leading-normal: 1.45;
+  --dc-leading-relaxed: 1.6; /* doc / markdown copy              */
+
+  /* --- Letter spacing ---------------------------------------- */
+  --dc-tracking-label: 0.08em; /* uppercase mono eyebrow labels    */
+  --dc-tracking-tight: -0.01em; /* display / wordmark               */
+  --dc-tracking-normal: 0;
+
+  /* --- Composite role tokens --------------------------------- */
+  /* Uppercase mono eyebrow — the signature label treatment. */
+  --dc-eyebrow:
+    var(--dc-weight-medium) var(--dc-text-xs) / var(--dc-leading-tight)
+    var(--dc-font-mono);
+}

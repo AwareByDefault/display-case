@@ -1,0 +1,7 @@
+# Scope `bun test` discovery to the unit tests under src/. The Playwright e2e
+# suite lives in e2e/ and also uses the `*.spec.ts` naming convention, which
+# Bun's test runner would otherwise pick up — and Playwright's `test.describe()`
+# throws when invoked under Bun's runner. Run the e2e suite with `bun run e2e`
+# (Playwright) instead.
+[test]
+root = "src"

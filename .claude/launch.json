@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "display-case",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": ["src/cli.ts", ".", "--port=3100", "--dev"],
+      "port": 3100
+    }
+  ]
+}

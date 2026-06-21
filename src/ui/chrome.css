@@ -1,0 +1,485 @@
+/* Display Case browsing chrome — "The Vitrine".
+   Styled entirely from the package's own design system (see
+   ./design-system/). Every value is a `--dc-*` token; nothing here
+   hard-codes a color, radius, or font. The chrome is warm, flat, and
+   recessive so the showcased component — the exhibit — owns the weight.
+   The server inlines the design-system tokens ahead of this file. */
+
+.dc-app {
+  display: grid;
+  grid-template-columns: var(--dc-sidebar-w) 1fr;
+  grid-template-rows: auto 1fr;
+  grid-template-areas: "header header" "sidebar main";
+  height: 100vh;
+  font-family: var(--dc-font-sans);
+  font-size: var(--dc-text-base);
+  line-height: var(--dc-leading-normal);
+  color: var(--dc-fg);
+  background: var(--dc-bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Collapsed nav: drop the sidebar column and let main span full width.
+   (The `.dcui-sidebar` display:none override lives just after the base
+   `.dcui-sidebar` rule below, to keep selector specificity ascending.) */
+.dc-app[data-nav="collapsed"] {
+  grid-template-columns: 1fr;
+  grid-template-areas: "header" "main";
+}
+
+/* ── Header ─────────────────────────────────────────────────────── */
+.dc-header {
+  grid-area: header;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--dc-space-8);
+  padding: var(--dc-space-5) var(--dc-space-8);
+  border-bottom: var(--dc-border-line);
+  background: var(--dc-bg-subtle);
+}
+.dc-header-left {
+  display: flex;
+  align-items: center;
+  gap: var(--dc-space-5);
+}
+/* The bracketed wordmark is the Wordmark component (owns its own dcui-wordmark
+   styles); the chrome only places it in the header-left cluster. */
+.dc-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--dc-space-4);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+/* The library-only controls live in a fading group (so they crossfade with the
+   mode switch) but must still read as the same inline cluster — same axis, gap,
+   and wrapping as their `.dc-controls` parent. */
+.dc-controls-extra {
+  display: flex;
+  align-items: center;
+  gap: var(--dc-space-4);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+/* Size the screen-size <select> to its current value, not its widest option
+   (without this a native select reserves room for "iPhone Pro Max" even when
+   "Full" is showing). Dropdown still lists full labels. */
+.dc-controls .dcui-select-el {
+  field-sizing: content;
+}
+
+/* Group related inputs into a single bordered cluster — never float a
+   lone control. The W×H + rotate fields live in one box. */
+.dc-dims {
+  display: flex;
+  align-items: center;
+  gap: var(--dc-space-1);
+  height: 26px;
+  border: var(--dc-border-line);
+  border-radius: var(--dc-radius-sm);
+  background: var(--dc-surface);
+  /* No right padding: the bare rotate button sits flush to the box edge. */
+  padding: 0 0 0 var(--dc-space-2);
+}
+.dc-dim {
+  /* Room for 4 digits (max sensible pixel dimension) plus a hair of breathing
+     space — `field-sizing: content` isn't supported everywhere, and the fallback
+     is the browser's very wide default <input> width. */
+  width: 4.5ch;
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: var(--dc-text-sm);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  color: var(--dc-fg);
+  /* Flat design: drop the native number spinners (they add width and chrome). */
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+.dc-dim::-webkit-outer-spin-button,
+.dc-dim::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.dc-dim::placeholder {
+  color: var(--dc-fg-subtle);
+}
+.dc-dim:focus,
+.dc-dim:focus-visible {
+  outline: none;
+}
+.dc-dim:disabled {
+  opacity: 0.5;
+}
+.dc-dim-x {
+  color: var(--dc-fg-subtle);
+  font-family: var(--dc-font-mono);
+  font-size: var(--dc-text-sm);
+}
+
+/* ── Sidebar nav ────────────────────────────────────────────────── */
+/* The Sidebar component owns the surface (border, backdrop, padding); the chrome
+   re-tasks it as a non-scrolling column so the mode switch can pin to the top and
+   the scroll/fade live on an inner region — keeping the rail's border crisp (a
+   mask on the scroll region can't touch a border that isn't on it). */
+.dcui-sidebar {
+  grid-area: sidebar;
+}
+.dc-app .dcui-sidebar {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.dc-app[data-nav="collapsed"] .dcui-sidebar {
+  display: none;
+}
+/* The scroll region: fills the rail below the pinned switch and carries the
+   content's scroll. Its native scrollbar is hidden (it can't fade, so on a
+   crossfade it would pop in as a step change; only the long Cases nav overflows,
+   so a reserved track would sit empty in the short Primer view) — replaced by a
+   soft gradient fade at whichever edge has more content off-screen. `data-fade-*`
+   are toggled from the scroll position (see shell.tsx); the mask is fixed to this
+   region's edges, so it tracks the viewport, not the scrolled content, and no
+   edge fades when it's fully docked. */
+.dc-nav-scroll {
+  --dc-nav-fade: var(--dc-space-12);
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: none; /* Firefox */
+}
+.dc-nav-scroll::-webkit-scrollbar {
+  display: none; /* WebKit/Blink */
+}
+.dc-nav-scroll[data-fade-top="true"][data-fade-bottom="true"] {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--dc-nav-fade),
+    #000 calc(100% - var(--dc-nav-fade)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--dc-nav-fade),
+    #000 calc(100% - var(--dc-nav-fade)),
+    transparent 100%
+  );
+}
+.dc-nav-scroll[data-fade-top="true"]:not([data-fade-bottom="true"]) {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--dc-nav-fade)
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--dc-nav-fade)
+  );
+}
+.dc-nav-scroll:not([data-fade-top="true"])[data-fade-bottom="true"] {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    #000 calc(100% - var(--dc-nav-fade)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    #000 calc(100% - var(--dc-nav-fade)),
+    transparent 100%
+  );
+}
+.dc-group {
+  margin-bottom: var(--dc-space-8);
+}
+/* Primer TOC groups are far more numerous than the component-tree levels, so
+   they sit closer together — enough to read the `##` heading as a group break,
+   not so much it fragments the nav. */
+.dc-primer-group {
+  margin-bottom: var(--dc-space-3);
+}
+/* Eyebrow styling is the Eyebrow component's; this only positions the label. */
+.dc-group-label {
+  margin: 0 0 var(--dc-space-3) var(--dc-space-3);
+}
+/* Nav rows are the NavItem component; this only spaces the groups. */
+.dc-nav-component {
+  margin-bottom: var(--dc-space-1);
+}
+
+/* ── Main + stage ───────────────────────────────────────────────── */
+.dc-main {
+  grid-area: main;
+  overflow-y: auto;
+  padding: var(--dc-space-10);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* The stage lays the content column beside the (optional) doc panel, filling
+   the main area's height so the preview can expand fully. */
+.dc-stage {
+  display: flex;
+  align-items: stretch;
+  gap: var(--dc-space-8);
+  /* basis 0 (not auto) so height is a share of the bounded grid cell, never
+     content-driven — otherwise the measured preview height feeds back. */
+  flex: 1 1 0;
+  min-height: 0;
+}
+.dc-content {
+  flex: 1;
+  min-width: 0;
+  /* min-height: 0 lets the column shrink below its content; overflow-y keeps the
+     Tweaks + Accessibility panels reachable when the stage's min-height plus the
+     panels exceed the available height (e.g. a short viewport, or the a11y panel
+     loading its violations) instead of pushing them off the bottom edge. */
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--dc-space-8);
+}
+
+.dc-doc-panel {
+  flex: 0 0 var(--dc-doc-w, var(--dc-doc-panel-w));
+  align-self: stretch;
+  border: var(--dc-border-line);
+  border-radius: var(--dc-radius-md);
+  background: var(--dc-surface);
+  position: sticky;
+  top: 0;
+  /* Positioning context for the edge handle; clips the (scrolling) content to
+     the rounded corners. The inner wrapper does the scrolling so the handle
+     stays pinned to the left edge. */
+  overflow: hidden;
+}
+.dc-doc-scroll {
+  height: 100%;
+  overflow-y: auto;
+  padding: var(--dc-space-6) var(--dc-space-8);
+}
+/* The resize grip IS the panel's left edge: a full-height strip pinned to the
+   left that brightens to marigold on hover; drag (or arrow keys) to resize. */
+.dc-doc-resize {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 10px;
+  z-index: 1;
+  cursor: col-resize;
+  touch-action: none;
+}
+.dc-doc-resize::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: transparent;
+  transition: background var(--dc-transition-fast);
+}
+.dc-doc-resize:hover::after,
+.dc-doc-resize:focus-visible::after,
+.dc-doc-resize:active::after {
+  background: var(--dc-brand);
+}
+.dc-doc-resize:focus-visible {
+  outline: none;
+}
+.dc-doc-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--dc-space-4);
+  margin-bottom: var(--dc-space-4);
+}
+
+@media (max-width: 900px) {
+  .dc-stage {
+    flex-wrap: wrap;
+  }
+  .dc-doc-panel {
+    flex-basis: 100%;
+    position: static;
+  }
+  /* Stacked layout: the horizontal drag handle is meaningless. */
+  .dc-doc-resize {
+    display: none;
+  }
+}
+
+/* The Accessibility panel, its severity tags, and the nav-rail a11y markers are
+   self-contained components that inject their own styles (showcase/A11yPanel,
+   showcase/ImpactTag, showcase/A11yBadge). */
+
+/* The preview is the stable centering viewport that fills the content column.
+   It measures the available area (for responsive sizing) and centers the stage
+   frame inside it, scrolling to every edge when the (possibly scaled or zoomed)
+   frame is larger than the panel. `safe center` keeps the start reachable
+   instead of clipping it on overflow. */
+.dc-preview {
+  flex: 1 1 0;
+  min-height: 12rem;
+  display: flex;
+  justify-content: safe center;
+  align-items: safe center;
+  overflow: auto;
+}
+
+/* The vitrine frame (border, rounded surface, grid + corner ticks, hug/fill
+   sizing) is the Stage component (dcui-stage); see
+   ./design-system/components/showcase/Stage.tsx. The shell only positions it
+   (centered in `.dc-preview`) and supplies the scaled frame-box below. */
+
+/* Occupies the *scaled* footprint so centering + scrolling are correct; the
+   iframe is scaled from its top-left corner within. */
+.dc-frame-box {
+  position: relative;
+  flex: 0 0 auto;
+  /* Clips the iframe to the visible (content) height: in Responsive mode the
+     iframe stays panel-tall so the component's viewport is stable, and the box
+     reveals only its measured height — the rest is grid, not blank surface. */
+  overflow: hidden;
+}
+.dc-frame {
+  position: absolute;
+  top: 0;
+  left: 0;
+  border: 0;
+  /* Transparent so the stage's surface + grid show through wherever the render
+     document is itself transparent (decorated components). Pages/flows paint
+     their own opaque body background over this. */
+  background: transparent;
+}
+
+/* Flow nav, the tweaks panel, and the button / icon-button / select / input
+   controls are now the design-system components (dcui-*); see
+   ./design-system/components/. Only shell *layout* lives in this file. */
+
+/* ── Zoom cluster ───────────────────────────────────────────────── */
+.dc-zoom {
+  display: flex;
+  align-items: center;
+  gap: var(--dc-space-1);
+  height: 26px;
+  border: var(--dc-border-line);
+  border-radius: var(--dc-radius-sm);
+  background: var(--dc-surface);
+}
+.dc-zoom-level {
+  font: inherit;
+  font-family: var(--dc-font-mono);
+  font-size: var(--dc-text-sm);
+  font-variant-numeric: tabular-nums;
+  min-width: 2.75rem;
+  text-align: center;
+  border: 0;
+  background: none;
+  color: var(--dc-fg);
+  cursor: pointer;
+  padding: var(--dc-space-2);
+  border-radius: var(--dc-radius-sm);
+}
+.dc-zoom-level:hover {
+  background: var(--dc-hover);
+}
+.dc-zoom-fit {
+  cursor: default;
+  color: var(--dc-fg-muted);
+}
+.dc-zoom-fit:hover {
+  background: none;
+}
+
+/* ── Documentation markdown ─────────────────────────────────────── */
+.dc-doc-md {
+  margin-top: var(--dc-space-6);
+  line-height: var(--dc-leading-relaxed);
+}
+.dc-doc-md pre {
+  background: var(--dc-bg-subtle);
+  border: var(--dc-border-line);
+  padding: var(--dc-space-6);
+  border-radius: var(--dc-radius-sm);
+  overflow-x: auto;
+}
+.dc-doc-md code {
+  font-family: var(--dc-font-mono);
+  font-size: 0.85em;
+}
+.dc-doc-md table {
+  border-collapse: collapse;
+}
+.dc-doc-md th,
+.dc-doc-md td {
+  border: var(--dc-border-line);
+  padding: var(--dc-space-2) var(--dc-space-4);
+}
+
+/* ── Empty / loading / error states ─────────────────────────────── */
+.dc-loading,
+.dc-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  color: var(--dc-fg-muted);
+  background: var(--dc-bg);
+  gap: var(--dc-space-2);
+}
+.dc-empty-hint {
+  font-size: var(--dc-text-sm);
+  color: var(--dc-fg-subtle);
+}
+.dc-empty code,
+.dc-empty-hint code {
+  font-family: var(--dc-font-mono);
+  font-size: 0.9em;
+  color: var(--dc-fg-muted);
+}
+.dc-render-missing {
+  padding: var(--dc-space-16);
+  font-family: var(--dc-font-sans);
+  color: var(--dc-danger);
+}
+
+/* ── Primer ────────────────────────────────────────────────────── */
+/* Mode switch placement: the SegmentedToggle (primer vs cases) pinned above the
+   sidebar scroll region — never shrinks, so nav items scroll and fade beneath
+   it. The control's own appearance lives with the SegmentedToggle component. */
+.dc-modeswitch {
+  flex: 0 0 auto;
+  margin-bottom: var(--dc-space-8);
+}
+
+/* The Primer host shares the `main` grid area with the library stage; the
+   inactive one is `hidden`. The reading page owns its own scroll inside the
+   isolated iframe, so the host is just an unpadded, edge-to-edge frame. */
+.dc-primer-host {
+  grid-area: main;
+  display: flex;
+  min-height: 0;
+}
+.dc-primer-frame {
+  flex: 1;
+  width: 100%;
+  border: 0;
+}
+/* `.dc-main`/`.dc-primer-host` set `display`, which outranks the UA `[hidden]`
+   rule — so the inactive view would still paint (and bleed through). Re-assert
+   the hide explicitly. The library stays in the DOM (its render iframe keeps its
+   handshake); it's just not displayed. */
+.dc-main[hidden],
+.dc-primer-host[hidden] {
+  display: none;
+}

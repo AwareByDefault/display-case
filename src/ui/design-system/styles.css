@@ -1,0 +1,14 @@
+/* ============================================================
+   Display Case Design System — "The Vitrine".
+   Global stylesheet entry point. Consumers link THIS one file;
+   it is a manifest of @imports only. Every token and the webfont
+   declarations live in the files below.
+
+   Display Case dogfoods this system: its own browse chrome
+   (ui/chrome.css) is styled entirely from these `--dc-*` tokens.
+   ============================================================ */
+
+@import "./tokens/fonts.css";
+@import "./tokens/colors.css";
+@import "./tokens/typography.css";
+@import "./tokens/spacing.css";

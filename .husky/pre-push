@@ -1,0 +1,5 @@
+#!/usr/bin/env sh
+# Pre-push gate: the Playwright e2e suite for the browse chrome.
+# Run `bun run e2e:install` once to fetch Chromium. See
+# contributing/testing-best-practices.md.
+bun run e2e

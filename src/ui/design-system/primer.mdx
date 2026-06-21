@@ -1,0 +1,236 @@
+import { Button, Eyebrow, Stage, Wordmark } from './components'
+import { MarigoldRamp, PaperRamp, SemanticSwatches, StatusHues, DefList, StatesRow, LayoutMock, FontFamilies, TypeScale, Weights, SpacingScale, RadiusRow, ElevationRow, Glyphs, RenderAddress, ControlsOverview, ShowcaseOverview, PrimerOverview } from './primer-specimens'
+
+<Eyebrow tone="accent">Primer</Eyebrow>
+
+# Design System
+
+Display Case is **chrome that defers to the content**. Its whole job is to frame
+someone else's component — the exhibit — so the showcase itself stays quiet,
+warm, and legible. It's Bun-native, AI-forward, and a lightweight alternative to
+Storybook. This page is the **Primer**: long-form wall text with embedded live
+specimens, authored in MDX and dogfooding the design system's own components.
+
+<Display
+  title="Wordmark"
+  subtitle="Type-only lockup — brackets frame the name like a case">
+  <Wordmark style={{ fontSize: '0.875rem' }}>Display Case</Wordmark>
+  <Wordmark style={{ fontSize: '1.5rem' }}>Display Case</Wordmark>
+  <Wordmark style={{ fontSize: '2.25rem' }}>Display Case</Wordmark>
+</Display>
+
+Three ideas shape every decision here. **Defer to the content** — the chrome is
+small, warm, and recessive; the component on the stage owns the visual weight.
+**Have a little charm** — paper neutrals, a single marigold accent, a bracketed
+wordmark, soft corner ticks; crafted, not clinical. **Be legible to machines** —
+deterministic render URLs, a manifest-first mindset, grouped addressable controls.
+
+## Content fundamentals
+
+How Display Case writes. The vibe is a calm museum primer, not a marketing
+page — quietly opinionated, never shouting, never decorating the copy.
+
+<Display
+  title="Voice & mechanics"
+  subtitle="The rules every label, button, and line of copy follows"
+  flush>
+  <DefList />
+</Display>
+
+## Visual foundations
+
+The "Vitrine" identity — warm, editorial, flat, and quiet. Detailed specimens
+for colour, type, and spacing follow in their own sections; these are the
+principles that bind them.
+
+**Elevation** is flat by default — the only thing that lifts is a genuinely
+floating layer (a menu or popover). Everything else is border-led; there are no
+card shadows. **Backgrounds** carry no gradients, photos, or patterns; the one
+permitted texture is the faint dotted backdrop behind an exhibit, and the corner
+ticks are the only decorative flourish. **Motion** is quiet and quick — around
+120ms on a gentle ease, no bounces or loops. **Interaction states**: hover is a
+warm fill wash, pressed deepens it with a half-pixel nudge, **selected is
+marigold**, focus draws a 2px marigold ring, and disabled drops to ~45% opacity.
+
+<Display
+  title="States"
+  subtitle="Hover · selected (marigold) · focus · disabled">
+  <StatesRow />
+</Display>
+
+<Display
+  title="Layout"
+  subtitle="A fixed three-region grid — header, sidebar, main">
+  <LayoutMock />
+</Display>
+
+## Colours
+
+Warm paper neutrals, not cold grey. The canvas is ivory, the sidebar a touch
+warmer, text a warm near-black ink — never `#000`. One colour does all the
+emphatic work: **marigold** marks the active case, focus rings, and links.
+Restraint is the point — a second accent would compete with the exhibit.
+
+Warmth never costs legibility — every text and accent pairing clears **WCAG AA**
+in both themes. The accent takes the most tuning: small marigold text on
+near-white paper is hard-capped by the 4.5∶1 rule, so the brand token sits at
+**`#a8570a`** — the brightest marigold that still clears AA *both* as a label on
+the sidebar fill and under the white text of an accent button. (The ramp's
+brighter `#c2690a` reads at only ~3.5 as text, so it stays a fill/decoration
+hue.) The quiet "subtle" text tier and the status hues are likewise nudged per
+theme to stay readable on ivory and on charcoal.
+
+<Display
+  title="Accent — marigold"
+  subtitle="The brand token is #a8570a (AA-tuned); the ramp's #c2690a anchors the family">
+  <MarigoldRamp />
+</Display>
+
+<Display
+  title="Paper ramp"
+  subtitle="Warm taupe-undertoned neutrals — surfaces, text, borders">
+  <PaperRamp />
+</Display>
+
+<Display
+  title="Semantic roles — light"
+  subtitle="The role tokens components consume"
+  theme="light">
+  <SemanticSwatches />
+</Display>
+
+<Display
+  title="Semantic roles — dark"
+  subtitle="The same roles under data-theme=dark — warm charcoal, never pure black"
+  theme="dark">
+  <SemanticSwatches />
+</Display>
+
+<Display
+  title="Status hues"
+  subtitle="Reserved for check output — pass, warn, fail. Lift on charcoal to hold AA.">
+  <StatusHues />
+</Display>
+
+## Type
+
+Two families. **Hanken Grotesk** carries all chrome text; **JetBrains Mono**
+carries developer texture — labels, values, code, and the wordmark. A dense 14px
+base keeps the chrome compact so the exhibit gets the room.
+
+<Display
+  title="Font families"
+  subtitle="System sans for chrome, mono for code & values">
+  <FontFamilies />
+</Display>
+
+<Display
+  title="Type scale"
+  subtitle="px-based; the chrome lives small so content gets room">
+  <TypeScale />
+</Display>
+
+<Display
+  title="Weights & labels"
+  subtitle="Three weights; the uppercase eyebrow pattern">
+  <Weights />
+</Display>
+
+## Spacing
+
+Tight, rem-based spacing keeps the chrome compact. Corners are modest — 5px on
+controls, 8px on panels, 12px on overlays. **Borders carry the structure**: 1px
+warm hairlines define every region, and elevation is reserved for floating layers.
+
+<Display
+  title="Spacing scale"
+  subtitle="Tight, rem-based — dense chrome yields room to content">
+  <SpacingScale />
+</Display>
+
+<Display
+  title="Radius"
+  subtitle="Modest, precise — softened, never pill-round or brutalist-square">
+  <RadiusRow />
+</Display>
+
+<Display
+  title="Borders & elevation"
+  subtitle="Flat by default — borders carry structure, not shadow">
+  <ElevationRow />
+</Display>
+
+## Brand
+
+The wordmark is type only — `[ Display Case ]` with mono brackets in marigold.
+There is no logo image, and that's intentional. The icon vocabulary is just as
+restrained: Unicode glyphs only — no icon font, no SVG, no emoji.
+
+<Display
+  title="Iconography"
+  subtitle="Unicode glyphs only — rendered in the UI font">
+  <Glyphs />
+</Display>
+
+## Components
+
+Three families compose the whole interface, mirroring the `components/` folders.
+**Controls** are the input atoms, **showcase parts** are the shell's molecules
+and organisms, and the **Primer primitives** are the prop-driven specimens this
+wall text is assembled from. Each family below is one grouped exhibit — a mono
+tag on the left, the live component on the right. **Display Case dogfoods every
+one of them.**
+
+<Display
+  title="Controls"
+  subtitle="Button · IconButton · Input · Select">
+  <ControlsOverview />
+</Display>
+
+<Display
+  title="Showcase parts"
+  subtitle="Eyebrow · Chip · NavItem · Stage · FlowNav · TweaksPanel · RenderAddress">
+  <ShowcaseOverview />
+</Display>
+
+<Display
+  title="Primer primitives"
+  subtitle="SwatchGrid · SpacingScale · GlyphGrid · SpecimenBoxRow">
+  <PrimerOverview />
+</Display>
+
+## Deterministic render URLs
+
+Every case renders at a stable URL. **Same URL, same render** — so an agent can
+enumerate the manifest, snapshot exactly one variant, and verify it without a
+human in the loop. Tweak state encodes into the query string, so a specific
+configuration is a link you can paste.
+
+<Display
+  title="Render address"
+  subtitle="GET /render/<component>/<case>?theme=…&t.<tweak>=…">
+  <RenderAddress />
+</Display>
+
+## Get started
+
+1. **Link the tokens once.** Pull in `styles.css` — every value is a `--dc-*`
+   custom property.
+2. **Render under a scope.** Wrap anything in `data-theme="light"` or `"dark"`.
+3. **Wrap specimens.** Put each live demo in `<Display title subtitle theme>`;
+   its title becomes the sidebar table-of-contents entry.
+
+```mdx
+import { Button, Stage } from './components'
+
+<Display title="Button" subtitle="The one true action" theme="dark">
+  <Stage caption="Playground">
+    <Button variant="accent">Snapshot</Button>
+  </Stage>
+</Display>
+```
+
+Switch to **Cases** in the sidebar to browse every component and its variants on
+the stage. The source of truth for this system is the **Display Case Design
+System** project on [claude.ai/design](https://claude.ai/design), kept in sync
+via `/design-sync`.

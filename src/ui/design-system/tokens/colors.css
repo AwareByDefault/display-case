@@ -1,0 +1,172 @@
+/* ============================================================
+   Display Case — Color tokens
+   "The Vitrine": warm paper neutrals, a warm-ink primary, and a
+   single marigold accent. Deliberately NOT cold gray — the chrome
+   is calm and warm so the showcased component is the exhibit.
+   No external UI library is referenced.
+   ============================================================ */
+
+:root {
+  /* --- Paper ramp (warm, taupe-undertoned neutrals) ----------- */
+  --dc-paper-50: #fbfaf6;
+  --dc-paper-100: #f4f1e9;
+  --dc-paper-200: #e6e0d4;
+  --dc-paper-300: #d6cebe;
+  --dc-paper-400: #b3a896;
+  --dc-paper-500: #8a8073;
+  --dc-paper-600: #6b6259;
+  --dc-paper-700: #4a423a;
+  --dc-paper-800: #2e2822;
+  --dc-paper-900: #211d18;
+  --dc-paper-950: #15110d;
+
+  /* --- Marigold ramp (the one accent) ------------------------- */
+  --dc-marigold-200: #fbe3bb;
+  --dc-marigold-300: #f6c878;
+  --dc-marigold-400: #f0a23b;
+  --dc-marigold-500: #e0820b; /* mid */
+  --dc-marigold-600: #c2690a; /* the marigold family's nominal accent step  */
+  --dc-marigold-700: #9a4f0a; /* deeper — the accent's hover/pressed         */
+
+  /* --- Status hues (used sparingly, for check output) --------- */
+  --dc-green-600: #3f7d4e;
+  --dc-amber-500: #d98a1f;
+  --dc-red-600: #c4493a;
+  --dc-red-700: #9e3528;
+
+  /* ============================================================
+     Semantic aliases — LIGHT (default)
+     These are the names components consume.
+     ============================================================ */
+  --dc-bg: var(--dc-paper-50); /* app canvas             */
+  --dc-bg-subtle: var(--dc-paper-100); /* sidebar / raised fill  */
+  --dc-surface: #ffffff; /* inputs / stage inside  */
+  --dc-fg: var(--dc-paper-900); /* primary text (warm ink)*/
+  --dc-fg-muted: var(--dc-paper-600); /* labels / secondary     */
+  --dc-fg-subtle: #736a5d; /* quiet text — the lightest warm taupe that still
+                              clears AA (4.5) on paper-50/100 + white. paper-500
+                              (#8a8073) read at only ~3.4–3.9. */
+  --dc-border: var(--dc-paper-200); /* warm hairlines         */
+  --dc-border-strong: var(--dc-paper-300);
+
+  /* Primary = warm ink (rare, for the one true action). */
+  --dc-ink: var(--dc-paper-900);
+  --dc-ink-hover: var(--dc-paper-800);
+  --dc-ink-fg: var(--dc-paper-50);
+
+  /* Accent = marigold (active case, focus, links, highlights). Tuned to #a8570a:
+     the brightest marigold that still clears AA *both* as small text on paper
+     (4.6 on the sidebar fill) and under white fill text on the accent button
+     (5.2) — the two ways the accent is used. The ramp's nominal #c2690a reads at
+     only ~3.5 as text; this keeps as much of that brightness as AA allows. -700
+     carries the hover. */
+  --dc-brand: #a8570a;
+  --dc-brand-hover: var(--dc-marigold-700);
+  --dc-brand-fg: #ffffff;
+  --dc-brand-subtle: #fbf0dd; /* faint marigold wash     */
+
+  --dc-hover: var(--dc-paper-100); /* control hover fill      */
+  --dc-active: var(--dc-paper-200); /* control pressed fill    */
+  --dc-focus-ring: var(--dc-marigold-400);
+
+  --dc-success: var(--dc-green-600);
+  --dc-warning: var(--dc-amber-500);
+  --dc-danger: var(--dc-red-600);
+
+  /* Consumer-app canvas names the render harness + app-surface specimens paint
+     (server.ts/primer `var(--color-bg, …)`). The Vitrine IS its own consumer,
+     so it fulfils that contract by aliasing them to its themed surface — without
+     this, the /render frame body stays transparent and every dark-theme specimen
+     renders on a white canvas (failing contrast). Re-declared per theme below so
+     they re-resolve against the active scope's --dc-bg/--dc-fg. */
+  --color-bg: var(--dc-bg);
+  --color-fg: var(--dc-fg);
+}
+
+/* ============================================================
+   Semantic aliases — LIGHT (explicit scope)
+   The light values above live only on :root, so a scope nested
+   inside a dark ancestor (e.g. a <Display theme="light"> specimen
+   on a dark primer) needs them re-declared to override the
+   inherited dark values. The ramps stay global on :root.
+   ============================================================ */
+[data-theme="light"] {
+  --dc-bg: var(--dc-paper-50);
+  --dc-bg-subtle: var(--dc-paper-100);
+  --dc-surface: #ffffff;
+  --dc-fg: var(--dc-paper-900);
+  --dc-fg-muted: var(--dc-paper-600);
+  --dc-fg-subtle: #736a5d;
+  --dc-border: var(--dc-paper-200);
+  --dc-border-strong: var(--dc-paper-300);
+  /* Re-resolve the composite so its inner var(--dc-border) binds to *this*
+     scope's border colour — see the note in the dark block below. */
+  --dc-border-line: var(--dc-border-width) solid var(--dc-border);
+
+  --dc-ink: var(--dc-paper-900);
+  --dc-ink-hover: var(--dc-paper-800);
+  --dc-ink-fg: var(--dc-paper-50);
+
+  --dc-brand: #a8570a;
+  --dc-brand-hover: var(--dc-marigold-700);
+  --dc-brand-fg: #ffffff;
+  --dc-brand-subtle: #fbf0dd;
+
+  --dc-hover: var(--dc-paper-100);
+  --dc-active: var(--dc-paper-200);
+  --dc-focus-ring: var(--dc-marigold-400);
+
+  --dc-success: var(--dc-green-600);
+  --dc-warning: var(--dc-amber-500);
+  --dc-danger: var(--dc-red-600);
+
+  --color-bg: var(--dc-bg);
+  --color-fg: var(--dc-fg);
+}
+
+/* ============================================================
+   Semantic aliases — DARK
+   Activated by [data-theme="dark"] on <html> or any scope.
+   Warm charcoal, never pure black.
+   ============================================================ */
+:root[data-theme="dark"],
+[data-theme="dark"] {
+  --dc-bg: #1a1714;
+  --dc-bg-subtle: #211d19;
+  --dc-surface: #262019;
+  --dc-fg: #f2ede3;
+  --dc-fg-muted: #a89e91;
+  --dc-fg-subtle: #9a8f80; /* quiet text on charcoal — lifted from #7c7164
+                              (~3.4–3.7) to clear AA on bg/subtle/surface. */
+  --dc-border: #332c24;
+  --dc-border-strong: #453c30;
+  /* Composite border tokens substitute their inner var() at the scope where
+     they are *declared*, not where they are used. Declared only on :root, the
+     light --dc-border would stay baked into --dc-border-line even inside a
+     forced-dark scope, so themed swatches/tiles kept light hairlines. Re-declare
+     it here so the composite re-resolves against this scope's --dc-border. */
+  --dc-border-line: var(--dc-border-width) solid var(--dc-border);
+
+  --dc-ink: #f2ede3;
+  --dc-ink-hover: #ffffff;
+  --dc-ink-fg: #1a1714;
+
+  --dc-brand: var(--dc-marigold-400);
+  --dc-brand-hover: var(--dc-marigold-300);
+  --dc-brand-fg: #1a1714;
+  --dc-brand-subtle: #2a2118;
+
+  --dc-hover: #211d19;
+  --dc-active: #2e2820;
+  --dc-focus-ring: var(--dc-marigold-500);
+
+  /* Status as TEXT on charcoal: the light red/green read at only ~3.3 here, so
+     lift them for dark. (warning/amber already clears AA on charcoal.) Tags and
+     badges that carry white text use the fixed ramp reds directly, not these. */
+  --dc-success: #579d68;
+  --dc-warning: var(--dc-amber-500);
+  --dc-danger: #d97366;
+
+  --color-bg: var(--dc-bg);
+  --color-fg: var(--dc-fg);
+}

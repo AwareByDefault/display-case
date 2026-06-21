@@ -1,0 +1,8 @@
+#!/usr/bin/env sh
+# Quality gate on commit. See contributing/linting-best-practices.md.
+# Auto-fixes formatting/lint (matches CI's --no-fix verification), then the
+# browser-free correctness gate. Aborts the commit on any failure.
+bun run lint:fix
+bun run typecheck
+bun run check
+bun test

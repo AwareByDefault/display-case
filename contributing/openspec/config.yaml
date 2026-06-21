@@ -1,0 +1,100 @@
+schema: spec-driven
+
+context: |
+  Domain
+  ------
+  Display Case is a Bun-native, AI-friendly component showcase — a lightweight
+  alternative to Storybook. It is a per-package development tool: contributors
+  colocate `*.case.tsx` files next to their components, run one command, and
+  browse every variant in an isolated preview. There is no Vite, no Webpack, and
+  no config server — discovery, bundling, and serving are all done with Bun's
+  built-in bundler and `Bun.serve`. It is strictly a development tool and is
+  never bundled into a consuming application build.
+
+  Guiding philosophy: a component should be browsable, snapshottable, and
+  verifiable in isolation — by a human or a machine — without booting an app.
+  Render is pure and deterministic (every surface is server-rendered before
+  scripts run); every surface is machine-readable (a manifest plus deterministic
+  render URLs); the tool stays dependency-light and the showcased component owns
+  the visual weight.
+
+  Capability map (each is `specs/{name}/`)
+  ----------------------------------------
+  - discovery-and-manifest  — discovers colocated case files; exposes a machine-readable catalog of every component and case as file references
+  - hierarchy               — groups components by declared Atomic-Design level (atom → molecule → organism → template → page → flow)
+  - browsing-surface        — lists components, renders the selected case in isolation, gives each case a stable deep-linkable address
+  - theming-and-viewport    — switches the preview between light/dark themes and constrains it to a chosen viewport width / device size
+  - tweaks                  — interactive, typed controls whose values are URL-encoded for sharing and reproduction
+  - placard-docs            — an inline documentation panel rendering a component's authored `<name>.placard.md`
+  - render-endpoint         — isolated, chrome-free rendering of each case under a requested theme, for snapshotting
+  - flows                   — ordered, named multi-step flows demonstrating a behavioural page/user flow, with in-step transitions
+  - primer                  — an authored long-form reading surface interleaving prose with live component specimens
+  - showcase-location       — locates the showcase to run and anchors derived state so independent working copies (worktrees) don't collide
+  - live-reload             — reflects edits to cases, docs, primer, and component implementations while running
+  - accessibility-checks    — gating accessibility (axe) checks plus optional in-app surfacing of each variant's result
+  - visual-regression-checks — renders each case to an image and diffs against a baseline; overridable, optional-backend pipeline
+  - structure-checks        — static best-practice checks over a showcase's authored material and configuration (phases, severities, exemptions)
+  - server-rendering        — delivers every surface rendered before scripting, plus the server-render (ssr) safety check
+  - agent-init              — installs/removes Display Case's AI-agent integration into a target repo, idempotently
+  - publishing              — keeps Display Case out of consuming apps while producing a standalone, deployable showcase build
+
+  Tech stack (lives in design.md, NEVER in spec.md)
+  -------------------------------------------------
+  Single-package TypeScript project. Bun runtime: the dev server and bundler are
+  Bun-native (`Bun.serve` + `Bun.build`); the CLI entry is `src/cli.ts`. React 19
+  is a peer dependency. Public API and CLI surface live in `src/`, with colocated
+  `*.test.ts` unit tests (run by `bun test`) and `*.test-d.ts` type tests. The
+  browse chrome and its "Vitrine" design system live in `src/ui/`. The optional
+  visual toolchain (Playwright, @axe-core/playwright, pixelmatch, pngjs) is
+  lazily loaded. A self-contained Playwright suite under `e2e/` drives the chrome.
+
+  Domain vocabulary
+  -----------------
+  - case        — one named variant of a component, authored in a `*.case.tsx` via `defineCases`
+  - flow        — an ordered, multi-step interactive demo authored via `defineFlow`
+  - tweak       — a typed, URL-encoded interactive control on a case
+  - placard     — a component's sibling `<name>.placard.md` usage doc (the per-exhibit label)
+  - primer      — the collection-level long-form `.mdx` reading page with embedded live specimens
+  - manifest    — the machine-readable catalog of components/cases/docs/tweaks as file references
+  - check       — a phase of `display-case check` (structure / tokens / ssr / a11y / visual)
+  - the Vitrine — Display Case's own browse-chrome design system (`--dc-*` tokens)
+
+  Non-negotiable rules (rejected at review if violated)
+  ----------------------------------------------------
+  - Render purity: cases and components MUST render identically on server and
+    client. No `Date.now()`, `Math.random()`, locale/timezone-dependent
+    formatting, or browser-only APIs (window, layout, canvas) during render;
+    pass such values as fixed tweaks, or opt a component out with `browserOnly`.
+    The ssr check enforces this.
+  - No consuming-app coupling: the tool MUST NOT pull a consuming app's code,
+    runtime, or state into itself, and is never bundled into a consuming build.
+  - Token vocabulary: `var(--token)` references resolve to a custom property the
+    showcased package defines (the tokens check enforces conformance).
+  - Worktree-safe: hold no global or main-repo state; anchor resolution, build
+    cache, and paths to the targeted package so worktrees never collide.
+  - Machine-readable first: every browsable surface has a deterministic,
+    chrome-free render address and is enumerable via the manifest.
+
+rules:
+  tasks:
+    - |
+      Every change that introduces a new capability, a new architectural
+      pattern, or a new developer-facing workflow MUST include a documentation
+      task group. Add tasks for whichever of these are affected (skip any that
+      are unchanged by the change):
+        - contributing/NOTES.md — non-obvious patterns, key design decisions,
+          debugging notes, or anything a future AI agent or developer would need
+          that isn't obvious from the code
+        - README.md — feature tour, quick-start steps, ports, or publishing
+          paths that changed (product-facing)
+        - docs/ — the product documentation guide(s) affected (using the tool)
+        - AGENTS.md — new workflows or conventions AI agents must follow
+        - contributing/coding-best-practices.md — new patterns, conventions, or
+          rules that all future code in this repo should follow
+        - contributing/testing-best-practices.md — new testing rules, locator
+          conventions, isolation patterns, or gates that emerged from the change
+        - contributing/linting-best-practices.md — new checks or escape hatches
+        - openspec/config.yaml — new capabilities, new domain concepts, or
+          changes to the spec-writing rules themselves (like this one!)
+      Do not add doc tasks for purely internal refactors or bug fixes where none
+      of the above surfaces are affected.

@@ -1,0 +1,32 @@
+# Dependencies
+node_modules/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# TypeScript / test output
+*.tsbuildinfo
+test-results/
+playwright-report/
+
+# Display Case codegen + bundle cache and local visual-regression baselines
+.display-case/
+
+# Display Case published builds (`display-case publish` output)
+dist-showcase/
+dist/
+
+# Claude
+.claude/settings.local.json
+# Linked git worktrees live here (EnterWorktree / `git worktree add`). They are
+# full checkouts with their own configs — ignoring them keeps tooling run from
+# the main checkout from descending into the duplicate root configs.
+.claude/worktrees/

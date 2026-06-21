@@ -1,0 +1,18 @@
+/* ============================================================
+   Display Case — Font face declarations
+   Two webfonts give the chrome its developer-native personality:
+     · Hanken Grotesk — warm, legible UI grotesk for all chrome text
+     · JetBrains Mono — characterful mono for labels, values, code,
+       and the bracketed wordmark
+   Loaded from the Google Fonts CDN. Swap these @import lines for
+   self-hosted woff2 if you need a fully offline bundle.
+
+   Note: when Display Case serves its own browse chrome it injects
+   the equivalent <link rel="stylesheet"> into the document head
+   (see server.ts FONT_LINKS) rather than this @import, so the font
+   declaration leads the document and never fights a consumer's own
+   stylesheet @imports. This file remains the canonical source for
+   anyone linking styles.css directly.
+   ============================================================ */
+
+@import url("https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap");

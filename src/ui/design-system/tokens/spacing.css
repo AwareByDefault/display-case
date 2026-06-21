@@ -1,0 +1,48 @@
+/* ============================================================
+   Display Case — Spacing, radius, border & elevation tokens
+   Dense, rem-based spacing keeps the chrome compact so the
+   exhibit gets the room. Corners are modest (5px controls,
+   8px panels). Elevation is mostly border-led — the one place
+   we lift is floating overlays (menus, popovers).
+   ============================================================ */
+
+:root {
+  /* --- Spacing scale (rem) ----------------------------------- */
+  --dc-space-0: 0;
+  --dc-space-1: 0.125rem; /* 2px  — icon gaps                  */
+  --dc-space-2: 0.25rem; /* 4px  — control padding-y          */
+  --dc-space-3: 0.375rem; /* 6px  — nav-case padding           */
+  --dc-space-4: 0.5rem; /* 8px  — control padding-x, gaps    */
+  --dc-space-5: 0.625rem; /* 10px — header padding-y           */
+  --dc-space-6: 0.75rem; /* 12px — sidebar / panel padding    */
+  --dc-space-8: 1rem; /* 16px — header padding-x, stage gap*/
+  --dc-space-10: 1.25rem; /* 20px — main padding               */
+  --dc-space-12: 1.5rem; /* 24px                              */
+  --dc-space-16: 2rem; /* 32px — empty-state inset          */
+
+  /* --- Layout sizes ------------------------------------------ */
+  --dc-sidebar-w: 15rem; /* fixed nav column                  */
+  --dc-doc-panel-w: 22rem; /* docs aside                        */
+
+  /* --- Radius (modest, precise) ------------------------------ */
+  --dc-radius-sm: 5px; /* buttons, inputs, chips, nav rows     */
+  --dc-radius-md: 8px; /* panels, stage frame, doc panel       */
+  --dc-radius-lg: 12px; /* overlays / large callouts            */
+  --dc-radius-full: 999px;
+
+  /* --- Borders ----------------------------------------------- */
+  --dc-border-width: 1px;
+  --dc-border-line: var(--dc-border-width) solid var(--dc-border);
+
+  /* --- Elevation (rare — borders do most of the work) -------- */
+  --dc-shadow-none: none;
+  --dc-shadow-sm: 0 1px 2px rgba(33, 29, 24, 0.05);
+  --dc-shadow-overlay: 0 12px 32px -8px rgba(33, 29, 24, 0.22);
+
+  /* --- Motion ------------------------------------------------ */
+  --dc-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --dc-duration-fast: 0.12s; /* chevron rotate, hover fills */
+  --dc-duration-base: 0.2s;
+  --dc-transition-fast: var(--dc-duration-fast) var(--dc-ease);
+  --dc-transition-base: var(--dc-duration-base) var(--dc-ease);
+}
