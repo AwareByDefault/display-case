@@ -1,5 +1,7 @@
 # Live Reload
 
+## Purpose
+
 Display Case reflects edits to the material it presents while running, without requiring the viewer to manually restart the tool.
 
 ## Requirements

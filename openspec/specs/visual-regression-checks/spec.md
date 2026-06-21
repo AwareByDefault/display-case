@@ -1,5 +1,7 @@
 # Visual-Regression Checks
 
+## Purpose
+
 Display Case renders each case to an image and compares it against a recorded baseline, with an overridable capture/audit and comparison pipeline whose default backend is optional.
 
 ## Requirements

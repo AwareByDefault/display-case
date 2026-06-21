@@ -1,5 +1,7 @@
 # Server Rendering
 
+## Purpose
+
 Display Case delivers every surface with its content already rendered before any scripts execute, and provides a check that verifies every case can render before scripting.
 
 ## Requirements

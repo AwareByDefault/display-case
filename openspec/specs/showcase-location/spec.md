@@ -1,5 +1,7 @@
 # Showcase Location
 
+## Purpose
+
 Display Case determines which showcase to run and anchors all derived state to that showcase so independent working copies do not collide.
 
 ## Requirements

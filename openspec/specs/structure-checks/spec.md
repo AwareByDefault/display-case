@@ -1,5 +1,7 @@
 # Structure Checks
 
+## Purpose
+
 Display Case runs a set of static best-practice checks over a showcase — inspecting authored material and configuration without rendering any case or starting a browser — covering coverage, hierarchy, primer, snapshot setup, addressing, tweaks, flow integrity, and composition, with configurable phases, severities, and per-target exemptions.
 
 ## Requirements

@@ -1,5 +1,7 @@
 # Browsing Surface
 
+## Purpose
+
 Display Case presents a calm browsing surface that lists discovered components, lets a viewer select and render a case in isolation, and gives every case a stable, deep-linkable address.
 
 ## Requirements

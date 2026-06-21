@@ -1,5 +1,7 @@
 # Agent Init
 
+## Purpose
+
 Display Case provides commands that install and remove its AI-agent integration into a target repository — registering a launchable service, placing bundled skills, and pointing the agent at Display Case's guide — idempotently and non-destructively.
 
 ## Requirements

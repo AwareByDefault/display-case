@@ -1,5 +1,7 @@
 # Discovery and Manifest
 
+## Purpose
+
 Display Case discovers component cases colocated with their components and exposes a machine-readable catalog so AI agents can enumerate components and cases without the browsing chrome.
 
 ## Requirements

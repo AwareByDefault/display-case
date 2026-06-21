@@ -1,5 +1,7 @@
 # Hierarchy
 
+## Purpose
+
 Display Case groups discovered components by their declared level in the design hierarchy and presents the groups in order of increasing composition.
 
 ## Requirements

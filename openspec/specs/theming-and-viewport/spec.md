@@ -1,5 +1,7 @@
 # Theming and Viewport
 
+## Purpose
+
 Display Case lets a viewer switch the preview between light and dark themes and constrain it to a chosen viewport width.
 
 ## Requirements

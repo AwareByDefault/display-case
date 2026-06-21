@@ -1,5 +1,7 @@
 # Primer
 
+## Purpose
+
 A showcase may include an authored primer — a single long-form reading surface that interleaves formatted prose with live component specimens drawn from the showcase.
 
 ## Requirements

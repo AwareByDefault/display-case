@@ -1,5 +1,7 @@
 # Placard Docs
 
+## Purpose
+
 When a component has authored usage documentation, Display Case offers an inline documentation panel within the preview.
 
 ## Requirements

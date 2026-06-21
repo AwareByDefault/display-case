@@ -1,5 +1,7 @@
 # Render Endpoint
 
+## Purpose
+
 Display Case provides, for each case, an isolated rendering free of the browsing chrome so a client can capture it in light and dark themes.
 
 ## Requirements

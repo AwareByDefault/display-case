@@ -1,5 +1,7 @@
 # Accessibility Checks
 
+## Purpose
+
 Display Case runs automated accessibility checks against rendered cases as a gating run, and — when configured — surfaces each variant's accessibility result on the running browsing surface.
 
 ## Requirements

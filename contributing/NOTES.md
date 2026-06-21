@@ -26,24 +26,20 @@ resolves. Its `postinstall` is intentionally left untrusted/blocked (like
 `@parcel/watcher`'s) — the binary works without it and trusting it would let it
 scaffold files on install.
 
-**Spec-schema gotcha (`## Purpose`):** the CLI's spec schema requires a
-`## Purpose` section, which **none** of this repo's 17 specs use — the house
-style is `# Title` + prose intro + `## Requirements` (see AGENTS.md → Spec
-rules). Confirmed on both 1.3.1 and 1.4.1. Consequences:
-- `openspec validate --specs` (and `--all`) reports **all 17 specs failing**
-  with `Spec must have a Purpose section`. **Validating a *change* still works**
-  (`openspec validate <change>` — that path doesn't re-validate the whole spec),
-  which is the one used in the propose/apply flow.
-- `openspec archive <change>` rebuilds the target spec and validates it, so it
-  **aborts** with the same error. Work around it with
-  `openspec archive <change> --yes --skip-specs`, then fold the change's
-  ADDED/MODIFIED requirement into the canonical `openspec/specs/<cap>/spec.md`
-  by hand, matching house style.
+**Spec structure (`## Purpose` required):** the CLI's spec schema requires each
+spec to have a `## Purpose` **and** a `## Requirements` section. The repo's
+original house style was `# Title` + a prose intro + `## Requirements` (no
+`## Purpose`), so for a while **every** spec failed `openspec validate --specs`
+with `Spec must have a Purpose section`, and `openspec archive` (which rebuilds
+and re-validates the target spec) aborted with it — the early workaround was
+`openspec archive <change> --yes --skip-specs` plus hand-folding the requirement.
 
-This is a standing house-style-vs-CLI-schema divergence, not a per-version bug;
-the only way to make `validate --specs`/`archive` pass natively would be to add
-a `## Purpose` section to every spec (a deliberate repo-wide decision, not yet
-taken). Re-evaluate on CLI upgrades.
+**Resolved (2026-06-21):** all 17 specs were conformed — the one-paragraph intro
+is now wrapped in a `## Purpose` section (`# Title` → `## Purpose` →
+`## Requirements`). `openspec validate --specs` now reports 17/17 passing, so
+`archive` no longer needs `--skip-specs`. When authoring or editing a spec, keep
+the `## Purpose` + `## Requirements` headers (see AGENTS.md → Spec rules). Note
+the historical archived changes still describe the old `--skip-specs` flow.
 
 ---
 

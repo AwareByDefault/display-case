@@ -1,5 +1,7 @@
 # Publishing
 
+## Purpose
+
 Display Case is a development-only tool excluded from consuming applications, but it can produce its own standalone, deployable build of a showcase.
 
 ## Requirements

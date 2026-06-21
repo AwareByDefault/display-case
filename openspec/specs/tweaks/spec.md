@@ -1,5 +1,7 @@
 # Tweaks
 
+## Purpose
+
 A case may declare tweaks — named, typed, interactive controls — whose current values are encoded in the case's address so a tweaked state is shareable and reproducible.
 
 ## Requirements

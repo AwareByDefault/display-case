@@ -141,6 +141,9 @@ because the CLI auto-discovers its workspace by walking up from the cwd.
 - `openspec/specs/{capability}/spec.md` describes **observable
   behavior only**. Use RFC 2119 keywords (SHALL/MUST/SHOULD/MAY). Scenarios use
   bulleted `GIVEN`/`WHEN`/`THEN`/`AND` — not bolded prose.
+- Structure each spec as `# Title`, a `## Purpose` section (the one-paragraph
+  intro), then `## Requirements`. The `## Purpose` + `## Requirements` headers are
+  required by the OpenSpec CLI schema (`openspec validate --specs`).
 - No library, framework, class, file, or function names in `spec.md`. A spec
   should survive a stack migration unchanged.
 - Implementation detail belongs in `openspec/changes/{change}/design.md`.

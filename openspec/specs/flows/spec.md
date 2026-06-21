@@ -1,5 +1,7 @@
 # Flows
 
+## Purpose
+
 An interactive flow is a showcased entry at the flow hierarchy level comprising ordered, named steps, each demonstrating one state of a behavioural page or user flow, with optional transitions between steps.
 
 ## Requirements
