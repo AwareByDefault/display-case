@@ -1,0 +1,169 @@
+.dcui-tweaks {
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-md);
+  background: var(--dc-surface);
+  padding: var(--dc-space-6) var(--dc-space-8);
+}
+/* Undocked: a free overlay over a large exhibit, so it shrinks its own
+   footprint — tighter padding, narrower column, smaller type (below). */
+.dcui-tweaks[data-mode="floating"] {
+  position: fixed;
+  right: var(--dc-space-8);
+  bottom: var(--dc-space-8);
+  width: 16rem;
+  max-width: calc(100vw - var(--dc-space-12));
+  max-height: calc(100vh - var(--dc-space-12));
+  overflow-y: auto;
+  padding: var(--dc-space-4) var(--dc-space-6);
+  border-radius: var(--dc-radius-lg);
+  box-shadow: var(--dc-shadow-overlay);
+  z-index: 50;
+}
+.dcui-tweaks-head {
+  display: flex;
+  align-items: center;
+  gap: var(--dc-space-4);
+  margin-bottom: var(--dc-space-4);
+}
+.dcui-tweaks[data-mode="floating"] .dcui-tweaks-head {
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  gap: var(--dc-space-3);
+  /* margins negate the (tighter) floating panel padding to span its edges */
+  margin: calc(-1 * var(--dc-space-4)) calc(-1 * var(--dc-space-6))
+    var(--dc-space-3);
+  padding: var(--dc-space-3) var(--dc-space-6);
+  border-bottom: 1px solid var(--dc-border);
+  transition: margin-bottom var(--dc-transition-base);
+}
+.dcui-tweaks[data-mode="floating"][data-dragging="true"] .dcui-tweaks-head {
+  cursor: grabbing;
+}
+.dcui-tweaks-grip {
+  flex: 0 0 auto;
+  font-family: var(--dc-font-mono);
+  font-size: var(--dc-text-sm);
+  line-height: 1;
+  color: var(--dc-fg-subtle);
+}
+.dcui-tweaks[data-mode="docked"] .dcui-tweaks-grip {
+  display: none;
+}
+.dcui-tweaks-url {
+  margin-left: auto;
+  font-family: var(--dc-font-mono);
+  font-size: var(--dc-text-xs);
+  color: var(--dc-fg-subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dcui-tweaks-toggle {
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+.dcui-tweaks-url + .dcui-tweaks-toggle {
+  margin-left: var(--dc-space-2);
+}
+.dcui-tweaks-rows {
+  display: flex;
+  flex-direction: column;
+}
+.dcui-tweak-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--dc-space-8);
+  padding: var(--dc-space-3) 0;
+}
+.dcui-tweak-row + .dcui-tweak-row {
+  border-top: 1px solid var(--dc-border);
+}
+.dcui-tweak-label {
+  font-family: var(--dc-font-mono);
+  font-size: var(--dc-text-sm);
+  color: var(--dc-fg-muted);
+}
+.dcui-tweak-control {
+  display: flex;
+  align-items: center;
+  gap: var(--dc-space-4);
+}
+
+/* --- Undocked compaction — smaller type, tighter rows --------- */
+.dcui-tweaks[data-mode="floating"] .dcui-eyebrow,
+.dcui-tweaks[data-mode="floating"] .dcui-tweaks-grip,
+.dcui-tweaks[data-mode="floating"] .dcui-tweaks-url {
+  font-size: var(--dc-text-2xs);
+}
+.dcui-tweaks[data-mode="floating"] .dcui-tweak-row {
+  gap: var(--dc-space-6);
+  padding: var(--dc-space-2) 0;
+}
+.dcui-tweaks[data-mode="floating"] .dcui-tweak-label {
+  font-size: var(--dc-text-2xs);
+}
+/* Shrink the controls too — shorter, smaller type than their own "sm".
+   The .dcui-tweak-control hop outweighs each control's [data-size="sm"]. */
+.dcui-tweaks[data-mode="floating"] .dcui-tweak-control .dcui-field,
+.dcui-tweaks[data-mode="floating"] .dcui-tweak-control .dcui-select-el {
+  height: 22px;
+  font-size: var(--dc-text-2xs);
+}
+.dcui-tweaks[data-mode="floating"] .dcui-tweak-control input[type="checkbox"] {
+  width: 13px;
+  height: 13px;
+}
+
+/* --- Undocked collapse — chevron hides/shows the rows ---------- */
+.dcui-tweaks-collapse-btn {
+  flex: 0 0 auto;
+}
+/* The disclosure triangle (matches the nav). It centers cleanly in its em box,
+   so it sits square with the title. Open → points down; collapsed → sideways. */
+.dcui-tweaks-chevron {
+  display: inline-block;
+  font-size: 0.65rem;
+  line-height: 1;
+  transform: rotate(90deg);
+  transition: transform var(--dc-transition-base);
+}
+.dcui-tweaks[data-collapsed="true"] .dcui-tweaks-chevron {
+  transform: rotate(0deg);
+}
+/* The rows live in a grid whose single track animates 1fr → 0fr. The
+   wrapper is inert when docked, so focus rings there are never clipped. */
+.dcui-tweaks[data-mode="floating"] .dcui-tweaks-collapse {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows var(--dc-transition-base);
+}
+.dcui-tweaks[data-mode="floating"] .dcui-tweaks-collapse > .dcui-tweaks-rows {
+  overflow: hidden;
+  min-height: 0;
+}
+.dcui-tweaks[data-mode="floating"][data-collapsed="true"]
+  .dcui-tweaks-collapse {
+  grid-template-rows: 0fr;
+}
+.dcui-tweaks[data-mode="floating"][data-collapsed="true"] .dcui-tweaks-head {
+  margin-bottom: 0;
+}
+/* Docked collapse: no height animation (the docked wrapper is left un-clipped so
+   focus rings show), just hide the rows and drop the header's bottom margin so
+   the panel shrinks to its header bar — reclaiming stage space on a crowded
+   page. */
+.dcui-tweaks[data-mode="docked"][data-collapsed="true"] .dcui-tweaks-collapse {
+  display: none;
+}
+.dcui-tweaks[data-mode="docked"][data-collapsed="true"] .dcui-tweaks-head {
+  margin-bottom: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dcui-tweaks-chevron,
+  .dcui-tweaks[data-mode="floating"] .dcui-tweaks-head,
+  .dcui-tweaks[data-mode="floating"] .dcui-tweaks-collapse {
+    transition: none;
+  }
+}

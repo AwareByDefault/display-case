@@ -29,9 +29,13 @@ Flat and border-led so the showcased component is the exhibit. Has charm
 
 ## Components
 
-`components/` holds the library as **self-contained, pure React components** —
-each injects its own `dcui-*` CSS on import (via `inject-style.ts`) and consumes
-only the `--dc-*` tokens, so a single import brings its markup *and* styling.
+`components/` holds the library as **pure React components** — each keeps its
+`dcui-*` CSS in a **co-located `.css` file** (`Button.tsx` → `Button.css`) and
+consumes only the `--dc-*` tokens. The server reads every component `.css`, the
+shell `chrome.css`, and the primer `primer.css`, concatenates them into one
+**Vitrine stylesheet**, and inlines it into every document `<style>` before
+scripts run (`readVitrineCss` in `../../server/server.ts`). There is **no
+runtime style injection** — the components no longer touch `document` to paint.
 
 | Group | Components |
 |---|---|
@@ -67,11 +71,11 @@ lets Display Case **dogfood its own layout**: `components/shell/` adds `template
 cases (Case/Primer templates, placeholder slots), `page` cases (Button,
 RenderAddress, Sidebar, Primer, Case-template pages — real content slotted in),
 and a `flow` (`ShellView.case.tsx`, Primer → Cases). They share
-`shell-fixtures.tsx` (a `// display-case: no-case` helper). `ShellView` injects
-`chrome.css` itself (`injectStyle('dc-chrome', …)`) so it paints inside the
-isolated `/render` doc, which doesn't link `chrome.css`. See
-`../../../contributing/NOTES.md` for the gotchas (render-doc CSS, snapshot
-determinism, primer skeleton widths).
+`shell-fixtures.tsx` (a `// display-case: no-case` helper). `ShellView` paints
+inside the isolated `/render` doc because the server inlines the whole Vitrine
+stylesheet — `chrome.css` included — into *every* document (the shell pages use
+its `.dc-*` layout). See `../../../contributing/NOTES.md` for the gotchas
+(render-doc CSS, snapshot determinism, primer skeleton widths).
 
 ## How the chrome consumes the tokens
 

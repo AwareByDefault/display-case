@@ -50,6 +50,30 @@ async function readDesignTokens(): Promise<string> {
   return parts.join('\n')
 }
 
+// The Vitrine's own chrome stylesheet, assembled by reading and concatenating
+// (in path-sorted order) the shell layout (chrome.css), every design-system
+// component's co-located CSS, and the primer chrome's CSS. The design-system
+// components no longer inject their CSS at runtime; this blob is inlined into
+// every document head so the chrome paints before scripts run. Mirrors
+// readDesignTokens (read N files, join) — no bundler step, no JS-graph import.
+const COMPONENTS_DIR = join(HERE, 'ui', 'design-system', 'components')
+const PRIMER_CSS = join(HERE, 'ui', 'primer.css')
+
+async function readVitrineCss(): Promise<string> {
+  const componentFiles: string[] = []
+  for await (const f of new Bun.Glob('**/*.css').scan({
+    cwd: COMPONENTS_DIR,
+    absolute: true,
+  })) {
+    componentFiles.push(f)
+  }
+  componentFiles.sort()
+  const files = [CHROME_CSS, ...componentFiles]
+  if (existsSync(PRIMER_CSS)) files.push(PRIMER_CSS)
+  const parts = await Promise.all(files.map((f) => Bun.file(f).text()))
+  return parts.join('\n')
+}
+
 /** Walk up from this package to find the repo root (nearest dir with `.git`). */
 function findRepoRoot(): string {
   let dir = HERE
@@ -377,7 +401,7 @@ function clientConfigScript(cfg: {
 function shellHtml(
   title: string,
   globalCss: string,
-  chromeCss: string,
+  vitrineCss: string,
   tokensCss: string,
   liveReload: boolean,
   clientConfig: string,
@@ -393,7 +417,7 @@ function shellHtml(
   // the rendered shell (1) or mount fresh (0). The seed (manifest/theme/a11y)
   // is inlined before the module so the client hydrates from the same data.
   const reset = 'html,body{margin:0;height:100%;background:var(--dc-bg)}'
-  return `<!doctype html><html lang="en" data-theme="${doc.theme}"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>${title}</title>${FONT_LINKS}<style>${tokensCss}\n${globalCss}\n${reset}\n${chromeCss}</style></head><body><div id="root" data-ssr="${doc.ssr ? '1' : '0'}">${doc.markup}</div>${ERROR_OVERLAY_SCRIPT}${doc.seedScript}${clientConfig}${liveReload ? LIVERELOAD_SCRIPT : ''}<script type="module" src="/dist/browser-entry.js"></script></body></html>`
+  return `<!doctype html><html lang="en" data-theme="${doc.theme}"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>${title}</title>${FONT_LINKS}<style>${tokensCss}\n${globalCss}\n${reset}\n${vitrineCss}</style></head><body><div id="root" data-ssr="${doc.ssr ? '1' : '0'}">${doc.markup}</div>${ERROR_OVERLAY_SCRIPT}${doc.seedScript}${clientConfig}${liveReload ? LIVERELOAD_SCRIPT : ''}<script type="module" src="/dist/browser-entry.js"></script></body></html>`
 }
 
 /** The document-level state the render template bakes in, mirroring what the
@@ -442,6 +466,7 @@ function parseRenderState(url: URL): ParsedRenderState {
 
 function renderHtml(
   globalCss: string,
+  vitrineCss: string,
   liveReload: boolean,
   doc: RenderDoc,
 ): string {
@@ -466,26 +491,32 @@ function renderHtml(
     ? ' data-decorated style="background:transparent"'
     : ''
   const rootAttrs = `${doc.fit ? ' style="width:fit-content"' : ''} data-ssr="${doc.ssr ? '1' : '0'}"`
-  return `<!doctype html><html lang="en" data-theme="${doc.theme}" data-theme-pref="${doc.theme}"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Display Case render</title><style>html,body{margin:0}body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-sans, ui-sans-serif, system-ui, sans-serif)}${exhibitCenter}${globalCss}</style></head><body${bodyAttrs}><main id="root"${rootAttrs}>${doc.markup}</main>${ERROR_OVERLAY_SCRIPT}${liveReload ? LIVERELOAD_SCRIPT : ''}<script type="module" src="/dist/render-entry.js"></script></body></html>`
+  // The Vitrine stylesheet follows globalCss so a dogfooded design-system case
+  // (the showcase's own `dcui-*`/`dcpl-*`/shell components) paints before
+  // scripts; its `--dc-*` tokens come from globalCss (the showcase lists the
+  // token files in globalStyles). For a non-dogfooding consumer these rules are
+  // inert chrome CSS — harmless in this dev-time-only preview document.
+  return `<!doctype html><html lang="en" data-theme="${doc.theme}" data-theme-pref="${doc.theme}"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Display Case render</title><style>html,body{margin:0}body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-sans, ui-sans-serif, system-ui, sans-serif)}${exhibitCenter}${globalCss}\n${vitrineCss}</style></head><body${bodyAttrs}><main id="root"${rootAttrs}>${doc.markup}</main>${ERROR_OVERLAY_SCRIPT}${liveReload ? LIVERELOAD_SCRIPT : ''}<script type="module" src="/dist/render-entry.js"></script></body></html>`
 }
 
 function primerHtml(
   globalCss: string,
   tokensCss: string,
+  vitrineCss: string,
   liveReload: boolean,
   doc: { theme: 'light' | 'dark'; markup: string; ssr: boolean },
 ): string {
-  // The Primer's own document. It needs both the Vitrine `--dc-*` tokens (the
-  // reading-page + Display-card chrome paints from them) and the consumer's
-  // globalCss (the embedded specimens are real consumer components). The Display
-  // card styles inject themselves at runtime from the bundled component, so only
-  // tokens + globalCss are inlined here. A single <main> landmark keeps the a11y
-  // runner honest. The theme is baked into <html> so the first paint is correct;
-  // the mount re-applies it (idempotent) and accepts later theme messages.
+  // The Primer's own document. It needs the Vitrine `--dc-*` tokens (the
+  // reading-page + Display-card chrome paints from them), the consumer's
+  // globalCss (the embedded specimens are real consumer components), and the
+  // Vitrine stylesheet (the specimen + card chrome CSS, inlined server-side so
+  // it paints before scripts). A single <main> landmark keeps the a11y runner
+  // honest. The theme is baked into <html> so the first paint is correct; the
+  // mount re-applies it (idempotent) and accepts later theme messages.
   // `data-ssr` tells the client whether to adopt the markup or mount fresh.
   const reset = 'html,body{margin:0;height:100%;background:var(--dc-bg)}'
   const rootAttrs = ` data-ssr="${doc.ssr ? '1' : '0'}"`
-  return `<!doctype html><html lang="en" data-theme="${doc.theme}" data-theme-pref="${doc.theme}"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Primer</title>${FONT_LINKS}<style>${tokensCss}\n${globalCss}\n${reset}</style></head><body><main id="root"${rootAttrs}>${doc.markup}</main>${ERROR_OVERLAY_SCRIPT}${liveReload ? LIVERELOAD_SCRIPT : ''}<script type="module" src="/dist/primer-entry.js"></script></body></html>`
+  return `<!doctype html><html lang="en" data-theme="${doc.theme}" data-theme-pref="${doc.theme}"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Primer</title>${FONT_LINKS}<style>${tokensCss}\n${globalCss}\n${reset}\n${vitrineCss}</style></head><body><main id="root"${rootAttrs}>${doc.markup}</main>${ERROR_OVERLAY_SCRIPT}${liveReload ? LIVERELOAD_SCRIPT : ''}<script type="module" src="/dist/primer-entry.js"></script></body></html>`
 }
 
 /**
@@ -595,7 +626,7 @@ export async function startDisplayCase(
   const { config, configPath } = await resolveConfig(pkgDir)
   let state = await rebuild(pkgDir, config, configPath)
   // `let` so dev mode can re-read them when the chrome's CSS/tokens change.
-  let chromeCss = await Bun.file(CHROME_CSS).text()
+  let vitrineCss = await readVitrineCss()
   let tokensCss = await readDesignTokens()
   const outdir = join(cacheDir(pkgDir), 'dist')
 
@@ -760,11 +791,17 @@ export async function startDisplayCase(
           }
         }
         return new Response(
-          primerHtml(state.globalCss, tokensCss, reload && !scanning, {
-            theme,
-            markup,
-            ssr,
-          }),
+          primerHtml(
+            state.globalCss,
+            tokensCss,
+            vitrineCss,
+            reload && !scanning,
+            {
+              theme,
+              markup,
+              ssr,
+            },
+          ),
           {
             headers: { 'content-type': 'text/html; charset=utf-8' },
           },
@@ -798,7 +835,7 @@ export async function startDisplayCase(
           }
         }
         return new Response(
-          renderHtml(state.globalCss, reload && !scanning, rs),
+          renderHtml(state.globalCss, vitrineCss, reload && !scanning, rs),
           {
             headers: { 'content-type': 'text/html; charset=utf-8' },
           },
@@ -825,7 +862,7 @@ export async function startDisplayCase(
         shellHtml(
           state.manifest.title,
           state.globalCss,
-          chromeCss,
+          vitrineCss,
           tokensCss,
           dev,
           interactive ? clientConfigScript({ reload, a11y, dev }) : '',
@@ -896,7 +933,7 @@ export async function startDisplayCase(
       try {
         console.log(`↻ ${label}, rebuilding…`)
         if (dev) {
-          chromeCss = await Bun.file(CHROME_CSS).text()
+          vitrineCss = await readVitrineCss()
           tokensCss = await readDesignTokens()
         }
         state = await rebuild(pkgDir, config, configPath)

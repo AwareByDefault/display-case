@@ -1,5 +1,3 @@
-import './styles'
-
 /**
  * Display Case — GlyphGrid
  * A grid of glyph tiles, each a large glyph over a short usage caption. Generic

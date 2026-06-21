@@ -1,0 +1,27 @@
+.dcui-a11y-badge {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0.95rem;
+  height: 0.95rem;
+  padding: 0 0.2rem;
+  border-radius: 999px;
+  /* The fixed ramp red, not --dc-danger: this pill carries white text, so it
+     needs a fill dark enough for AA in both themes. --dc-danger is the lighter
+     text-role hue in dark (for danger *text* on charcoal) and would drop the
+     white count below AA here. */
+  background: var(--dc-red-600);
+  color: #ffffff;
+  font-family: var(--dc-font-mono);
+  font-size: var(--dc-text-xs);
+  font-weight: var(--dc-weight-medium);
+  line-height: 1;
+}
+/* Dot variant: a bare danger dot (no number — the counts live on the case rows). */
+.dcui-a11y-badge[data-dot="true"] {
+  min-width: 0;
+  width: 0.5rem;
+  height: 0.5rem;
+  padding: 0;
+}

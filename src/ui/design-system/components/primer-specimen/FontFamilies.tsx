@@ -1,5 +1,3 @@
-import './styles'
-
 /**
  * Display Case — FontFamilies
  * A stack of font-family rows: a mono tag, a large sample set in the family, and

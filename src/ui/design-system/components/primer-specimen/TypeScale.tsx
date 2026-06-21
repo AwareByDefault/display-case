@@ -1,5 +1,3 @@
-import './styles'
-
 /**
  * Display Case — TypeScale
  * A column of type-size rows: a mono tag beside a live sample rendered at the

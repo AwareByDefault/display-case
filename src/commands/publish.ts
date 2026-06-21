@@ -27,6 +27,8 @@ const BROWSER_ENTRY = join(HERE, 'ui', 'browser-entry.tsx')
 const CHROME_CSS = join(HERE, 'ui', 'chrome.css')
 const DS_DIR = join(HERE, 'ui', 'design-system', 'tokens')
 const DS_TOKEN_FILES = ['colors.css', 'typography.css', 'spacing.css']
+const COMPONENTS_DIR = join(HERE, 'ui', 'design-system', 'components')
+const PRIMER_CSS = join(HERE, 'ui', 'primer.css')
 
 export interface PublishOptions {
   /** Output directory (default `<pkgDir>/dist-showcase`). */
@@ -81,6 +83,25 @@ async function readDesignTokens(): Promise<string> {
   return parts.join('\n')
 }
 
+// The Vitrine's own chrome stylesheet — chrome.css + every design-system
+// component's co-located CSS + the primer chrome's CSS, read and concatenated in
+// path-sorted order. Mirrors server.ts; the published documents inline it so the
+// chrome paints before scripts (the components no longer inject at runtime).
+async function readVitrineCss(): Promise<string> {
+  const componentFiles: string[] = []
+  for await (const f of new Bun.Glob('**/*.css').scan({
+    cwd: COMPONENTS_DIR,
+    absolute: true,
+  })) {
+    componentFiles.push(f)
+  }
+  componentFiles.sort()
+  const parts = await Promise.all(
+    [CHROME_CSS, ...componentFiles, PRIMER_CSS].map((f) => Bun.file(f).text()),
+  )
+  return parts.join('\n')
+}
+
 async function readGlobalCss(
   pkgDir: string,
   config: DisplayCaseConfig,
@@ -111,7 +132,7 @@ export interface BuildDescriptor {
   assets: { browser: string; render: string; primer: string }
   tokensCss: string
   globalCss: string
-  chromeCss: string
+  vitrineCss: string
 }
 
 export async function publish(
@@ -207,7 +228,7 @@ export async function publish(
     assets,
     tokensCss: await readDesignTokens(),
     globalCss: await readGlobalCss(pkgDir, config),
-    chromeCss: await Bun.file(CHROME_CSS).text(),
+    vitrineCss: await readVitrineCss(),
   }
 
   await Bun.write(

@@ -1,0 +1,175 @@
+.dc-primer {
+  height: 100vh;
+  overflow-y: auto;
+  background: var(--dc-bg);
+  color: var(--dc-fg);
+  font-family: var(--dc-font-sans);
+  font-size: var(--dc-text-base);
+  line-height: var(--dc-leading-relaxed);
+}
+.dc-primer-inner {
+  max-width: 56rem;
+  margin: 0 auto;
+  padding: var(--dc-space-16) var(--dc-space-12) 6rem;
+}
+
+/* Prose — quiet, legible long-form copy. */
+.dc-primer h1 {
+  font-size: var(--dc-text-2xl);
+  font-weight: var(--dc-weight-bold);
+  letter-spacing: var(--dc-tracking-tight);
+  line-height: var(--dc-leading-tight);
+  margin: 0 0 var(--dc-space-8);
+}
+.dc-primer h2 {
+  font-size: var(--dc-text-xl);
+  font-weight: var(--dc-weight-semibold);
+  letter-spacing: var(--dc-tracking-tight);
+  line-height: var(--dc-leading-tight);
+  margin: 3rem 0 var(--dc-space-8);
+  scroll-margin-top: var(--dc-space-8);
+}
+.dc-primer h3 {
+  font-size: var(--dc-text-lg);
+  font-weight: var(--dc-weight-semibold);
+  margin: var(--dc-space-12) 0 var(--dc-space-4);
+}
+.dc-primer p {
+  margin: 0 0 var(--dc-space-8);
+  color: var(--dc-fg);
+}
+.dc-primer a {
+  color: var(--dc-brand);
+  text-decoration: none;
+}
+.dc-primer a:hover {
+  text-decoration: underline;
+}
+.dc-primer strong {
+  font-weight: var(--dc-weight-semibold);
+}
+.dc-primer ul,
+.dc-primer ol {
+  margin: 0 0 var(--dc-space-8);
+  padding-left: var(--dc-space-12);
+}
+.dc-primer li {
+  margin: var(--dc-space-2) 0;
+}
+.dc-primer code {
+  font-family: var(--dc-font-mono);
+  font-size: 0.9em;
+  background: var(--dc-bg-subtle);
+  border: var(--dc-border-line);
+  border-radius: var(--dc-radius-sm);
+  padding: 0.05em 0.35em;
+}
+.dc-primer pre {
+  font-family: var(--dc-font-mono);
+  font-size: var(--dc-text-sm);
+  line-height: var(--dc-leading-normal);
+  background: var(--dc-bg-subtle);
+  border: var(--dc-border-line);
+  border-radius: var(--dc-radius-md);
+  padding: var(--dc-space-8);
+  overflow-x: auto;
+  margin: 0 0 var(--dc-space-8);
+}
+.dc-primer pre code {
+  background: none;
+  border: 0;
+  padding: 0;
+}
+
+/* Tables (GFM) — border-led and flat, like every other Vitrine surface: a
+   hairline frame, a quiet mono header on the subtle fill, and hairline row
+   rules. Authored as Markdown pipe-tables; this gives them the chrome's look
+   without per-document styling. */
+.dc-primer table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0 0 var(--dc-space-8);
+  font-size: var(--dc-text-sm);
+  border: var(--dc-border-line);
+}
+.dc-primer thead th {
+  text-align: left;
+  padding: var(--dc-space-5) var(--dc-space-6);
+  background: var(--dc-bg-subtle);
+  color: var(--dc-fg-muted);
+  font-family: var(--dc-font-mono);
+  font-size: var(--dc-text-2xs);
+  font-weight: var(--dc-weight-medium);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: var(--dc-border-line);
+}
+.dc-primer tbody td {
+  padding: var(--dc-space-5) var(--dc-space-6);
+  vertical-align: top;
+  color: var(--dc-fg);
+}
+.dc-primer tbody tr + tr td {
+  border-top: var(--dc-border-line);
+}
+
+/* Display — the specimen card contract. The title and subtitle sit as plain
+   wall-text *above* the box; the box holds only the live specimen. */
+.dc-display {
+  margin: 0 0 var(--dc-space-12);
+  scroll-margin-top: var(--dc-space-8);
+}
+.dc-display-head {
+  margin-bottom: var(--dc-space-5);
+}
+.dc-display-title {
+  font-size: var(--dc-text-lg);
+  font-weight: var(--dc-weight-semibold);
+  letter-spacing: var(--dc-tracking-tight);
+  line-height: var(--dc-leading-tight);
+  color: var(--dc-fg);
+}
+.dc-display-sub {
+  margin-top: var(--dc-space-1);
+  font-size: var(--dc-text-sm);
+  color: var(--dc-fg-muted);
+}
+.dc-display-specimen {
+  border: var(--dc-border-line);
+  border-radius: var(--dc-radius-md);
+  background: var(--dc-bg);
+  padding: var(--dc-space-12);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--dc-space-8);
+  align-items: center;
+  justify-content: center;
+}
+/* A forced-theme specimen re-scopes the design tokens for its subtree, so it
+   must repaint its own surface (the value the consumer app would give it). */
+.dc-display-specimen[data-theme] {
+  background: var(--dc-bg);
+  color: var(--dc-fg);
+}
+/* App surface — opt in (appSurface) to paint the consumer design system's own
+   canvas (--color-bg/--color-fg, the same tokens the /render frame paints)
+   instead of the Vitrine's --dc-bg, so a specimen sits on the exact background
+   the real app gives it. Degrades to --dc-bg when the consumer defines no
+   --color-bg. Listed after the [data-theme] rule (equal specificity → source
+   order wins), and the [data-theme] combination is spelled out so a forced-theme
+   app-surface specimen resolves the themed --color-bg of its own subtree. */
+.dc-display-specimen[data-app-surface],
+.dc-display-specimen[data-app-surface][data-theme] {
+  background: var(--color-bg, var(--dc-bg));
+  color: var(--color-fg, var(--dc-fg));
+}
+/* Flush — the specimen draws no frame or padding of its own. A single
+   self-bordered child (e.g. a DefinitionList) fills the box edge-to-edge and
+   supplies the one border, so there's no box-within-a-box; the rounded, clipped
+   background still backs the child's corners. */
+.dc-display-specimen[data-flush] {
+  display: block;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+}

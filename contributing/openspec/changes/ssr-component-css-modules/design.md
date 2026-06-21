@@ -48,9 +48,11 @@ same model rather than invent a parallel one.
 ### 1. Plain co-located `.css` files, not CSS Modules
 
 Each component gets a sibling stylesheet (`Button.tsx` → `Button.css`) holding
-exactly today's `const CSS` body, imported for its side-effect on the bundle
-graph: `import './Button.css'`. The existing manual `dcui-*` / `dcpl-*`
-namespaces are kept verbatim.
+exactly today's `const CSS` body. The existing manual `dcui-*` / `dcpl-*`
+namespaces are kept verbatim. The component module simply **drops** its
+`injectStyle(...)` call (and the `injectStyle` import); it does **not** gain a
+JS-side `import './Button.css'` — the stylesheet is delivered to the document by
+the server (Decision 2), not pulled through the JS module graph.
 
 - **Why not CSS Modules (`.module.css`):** the components select on hand-written
   class names *and* attribute selectors (`.dcui-btn[data-variant="primary"]`,
@@ -60,99 +62,118 @@ namespaces are kept verbatim.
   cross-element rules awkward. The namespaces already prevent collisions, so
   scoping buys little for a large, mechanical rewrite. Rejected for churn and
   selector friction.
+- **Why not a JS-side `import './X.css'`** (the bundler route): the project
+  already delivers its token CSS and `chrome.css` by **reading the files and
+  concatenating them into the document `<style>`** (`readDesignTokens`,
+  `server.ts`), never through the JS graph. Bundling component `.css` through
+  the browser/SSR entries would instead emit per-entry CSS assets, raise the
+  question of how a bare `.css` import behaves under `renderToString`, and split
+  delivery across `<link>`/`<style>`. Reading-and-concatenating sidesteps all of
+  it and matches the proven precedent. (A bare `import './x.css'` *is* a no-op
+  under Bun's runtime — verified — but we avoid needing that property at all.)
 - **Why not keep the template literal but collect it server-side** (a tiny SSR
   style registry — Option 1 from the investigation): viable and lower-churn, but
-  keeps a bespoke runtime mechanism and an import-order contract. Moving CSS to
-  real files makes it the bundler's job, which is the project's "let Bun do it"
-  grain. This proposal deliberately takes the files route.
+  keeps a bespoke runtime mechanism and an import-order contract. Real files
+  read at serve time are simpler and live next to the component.
 
-### 2. One aggregated component stylesheet, inlined like `chrome.css`
+### 2. One aggregated Vitrine stylesheet, read-and-concatenated, inlined in every document
 
-Bun's bundler, following the component `.css` imports from the browser entry,
-emits the component CSS. We surface it to the document builders as a single
-`componentsCss` string and inline it into the head `<style>` next to the
-existing slots: `tokensCss + globalCss + reset + chromeCss + componentsCss`.
+A single `vitrineCss` string is assembled by **reading and concatenating**, in a
+stable sorted order, the complete set of Display Case's own chrome CSS:
+`chrome.css` + every `src/ui/design-system/components/**/*.css` + the primer
+chrome's `primer.css`. This mirrors `readDesignTokens()` exactly (read N files,
+`join('\n')`). It is inlined into the head `<style>` of **all three** documents
+— shell, isolated render, and primer — in both the dev host (`server.ts`) and
+the prod/publish path (`documents.ts` + `prod-server.ts` + `publish.ts`).
 
-- The browser entry **no longer injects** anything; all styling lives in the
-  head. This keeps the "render before scripts" guarantee literally true.
-- Inlining (not `<link>`) matches `chrome.css` today, so dev and
-  `publish --static` behave identically with no extra request and no asset-order
-  race.
-- Determinism: the aggregate is assembled in a stable, sorted import order
-  (e.g. a generated/maintained barrel that imports each component CSS) so rule
-  cascade order never depends on discovery or filesystem iteration.
-- All three documents get the slot: `buildShellDocument`, `buildRenderDocument`
-  (the chrome-free `/render` — which previously inlined almost nothing), and
-  `buildPrimerDocument`, in both `documents.ts` and the prod/publish builders.
+- `vitrineCss` **replaces** the shell's current `chromeCss` slot (it is a
+  superset — `chrome.css` is its first part) and **adds** the same blob to the
+  render and primer documents, which previously carried no chrome/component CSS.
+- The browser entry **no longer injects** anything; all chrome styling lives in
+  the head before scripts. This keeps "render before scripts" literally true.
+- **Why all three docs, including the chrome-free `/render`:** Display Case
+  dogfoods its own design system — the 35 `*.case.tsx` under
+  `src/ui/design-system/components/` (including `shell/` pages that use
+  `chrome.css` `.dc-*` layout and `primer-specimen/` `dcpl-*` specimens) are
+  viewed through `/render`. Today they are styled only because `injectStyle`
+  fires client-side. Inlining the full `vitrineCss` into `/render` keeps every
+  such case styled before scripts. The cost for a *non-dogfooding* consumer is a
+  few KB of inert chrome CSS in a **dev-time-only** preview document (Display
+  Case is never bundled into a consumer's app), which is an acceptable trade for
+  one uniform mechanism over per-surface partitioning of chrome vs. content CSS.
+- Inlining (not `<link>`) matches `chrome.css`/tokens today, so dev and
+  `publish --static` behave identically — no extra request, no asset-order race.
+- Determinism: files are sorted by path before concatenation, so cascade order
+  never depends on filesystem iteration. Cross-component collisions are already
+  prevented by the `dc-*` / `dcui-*` / `dcpl-*` prefixes.
 
-### 3. Server import of `.css` must be side-effect-free, not fatal
+### 3. `vitrineCss` is read at serve time and re-read on `.css` change
 
-The codegen'd SSR entry imports case modules → design-system components → their
-`.css`. Under `renderToString` (Node/Bun runtime, not the bundler) those `.css`
-imports must **not throw**; the actual CSS is delivered via the inlined
-aggregate, so the server-side import only needs to resolve to a harmless no-op.
-The implementation MUST confirm Bun resolves a bare `import './x.css'` to an
-empty/no-op module in the run/test runtime (or configure a loader that makes it
-so) before mass-migrating. This is the single most load-bearing unknown and is
-validated first (see Migration Plan step 0).
+`server.ts` reads `vitrineCss` once at build time alongside `tokensCss`, and
+re-reads it inside the debounced rebuild (where it already re-reads `chromeCss`
+and `tokensCss`) so editing any component `.css` live-reloads. The dev watcher's
+glob already matches `*.css`, so new sibling stylesheets are watched with no
+change. `publish.ts` reads it once into the `BuildDescriptor` for the prod
+server / static export. No JS module graph, no bundler step for CSS — therefore
+no `renderToString` `.css`-import concern at all.
 
 ### 4. Live-reload watches `.css`
 
 Today editing a component's CSS string reloads the module and re-injects.
-Afterward, the watch set must include the new `.css` files and rebuild the
-`componentsCss` aggregate on change — mirroring the existing chrome.css re-read
-(`server.ts:899`). Editing a `.css` triggers a CSS rebuild + live-reload, not a
-full SSR bundle rebuild where avoidable.
+Afterward, the dev rebuild re-reads `vitrineCss` on change — mirroring the
+existing `chromeCss`/`tokensCss` re-read in the debounced rebuild. The watcher's
+glob already matches `*.css`, so editing any sibling stylesheet triggers a
+live-reload with no watcher change.
 
 ## Risks / Trade-offs
 
-- **Bun runtime `.css` import behavior under SSR/test** → If a bare `.css`
-  import throws or pulls content during `renderToString`, the SSR path breaks.
-  *Mitigation:* validate in a one-component spike first (Migration step 0); fall
-  back to retaining the `{ type: 'text' }` import attribute (and an aggregate
-  built by concatenating those texts) if the bare import is not no-op.
-- **Cascade ordering across 22 sheets** → Merging per-component CSS into one
-  sheet could change specificity outcomes if order shifts. *Mitigation:* fixed
-  sorted import order in the aggregate; visual-regression check over the
-  showcase before/after to catch any drift.
-- **Larger inlined HTML** (component CSS now in every document head) vs a cached
-  `<link>` → *Mitigation:* matches the current `chrome.css` trade-off and is
-  modest; a content-hashed `<link>` for `publish` is a later, separate option.
-- **Mechanical rewrite scope (22 + primer-specimen)** → many files touched.
-  *Mitigation:* the change is purely an extract-and-import per file with no logic
-  change; do it component-by-component behind the validated spike, gated by the
-  SSR check and e2e chrome suite.
+- **Cascade ordering across ~24 sheets** → Concatenating per-component CSS into
+  one blob could change specificity outcomes if order shifts. *Mitigation:*
+  fixed path-sorted order; the `dc-*`/`dcui-*`/`dcpl-*` prefixes prevent
+  cross-component collisions; visual-regression review over the showcase to
+  catch any drift.
+- **Chrome CSS in the chrome-free `/render`** → a non-dogfooding consumer's
+  isolated render carries inert Vitrine CSS. *Mitigation:* it is a dev-time-only
+  preview document (never shipped to a consumer's app), the bytes are small, and
+  it buys one uniform mechanism (see Decision 2). Revisit only if a consumer
+  reports a real collision against a `dcui-*`/`dcpl-*` class.
+- **Larger inlined HTML** (Vitrine CSS now in every document head) vs a cached
+  `<link>` → *Mitigation:* matches the current `chrome.css`/tokens trade-off and
+  is modest; a content-hashed `<link>` for `publish` is a later, separate option.
+- **Mechanical rewrite scope (~22 components + primer-specimen)** → many files
+  touched. *Mitigation:* the change is purely extract-CSS-and-drop-`injectStyle`
+  per file with no logic change; gated by the SSR check and e2e chrome suite.
 
 ## Migration Plan
 
-0. **Spike (decision-gating):** convert one component (e.g. `Button`) to a
-   co-located `.css` + import; wire a single `componentsCss` slot into the
-   render + shell documents; confirm (a) the server-side import does not throw
-   under `renderToString`, (b) `/render` HTML is styled with scripts disabled,
-   (c) live-reload of the `.css` works. Resolve Decision 3's loader question here.
-1. Add the aggregate stylesheet plumbing and the `componentsCss` slot to all
-   three document builders (dev + prod/publish).
-2. Migrate the remaining design-system components and `primer-specimen/styles.ts`
-   mechanically: CSS body → sibling `.css`, replace `injectStyle(...)` with
-   `import './X.css'`.
+0. **Spike (de-risking):** convert `Button` (CSS body → sibling `Button.css`,
+   drop `injectStyle`); add the `vitrineCss` read-and-concat helper; wire it into
+   the shell + render + primer documents (dev); confirm `/render/<comp>/<case>`
+   and the shell HTML are styled with scripts disabled, and live-reload of the
+   `.css` works.
+1. Add the `vitrineCss` read-and-concat helper and the document-slot wiring to
+   all three builders, in both `server.ts` (dev) and `documents.ts` +
+   `prod-server.ts` + `publish.ts` (prod/publish), replacing the shell-only
+   `chromeCss` slot with the superset `vitrineCss`.
+2. Migrate the remaining design-system components, `primer-specimen/styles.ts`,
+   and `primer.tsx` mechanically: CSS body → sibling `.css`, drop `injectStyle`.
+   Drop `ShellView`'s `chrome.css` text-import + injection (the server now inlines
+   it everywhere).
 3. Delete `inject-style.ts` and `src/types/css-text.d.ts` once no references
-   remain; update `primer.tsx` (its own `injectStyle` call) the same way.
-4. Update live-reload watch set for `.css`.
-5. Docs: design-system README (the self-contained-styling section now describes
-   co-located CSS files), `contributing/NOTES.md`, and
-   `contributing/coding-best-practices.md` (new convention: component CSS is a
-   co-located bundled file, never runtime-injected).
-6. Verify: `bun run check --ssr` (now meaningfully covers styling presence),
-   `bun run e2e`, and the visual-regression review for cascade drift.
+   remain; grep-confirm zero `injectStyle` usages.
+4. Update the dev rebuild to re-read `vitrineCss`.
+5. Docs: design-system README (self-contained-styling section now describes
+   co-located `.css` read-and-concatenated server-side), `contributing/NOTES.md`,
+   and `contributing/coding-best-practices.md` (new convention: component CSS is
+   a co-located file inlined server-side, never runtime-injected).
+6. Verify: `bun run check` (structure + tokens + ssr), `bun run e2e`, and the
+   visual-regression review for cascade drift.
 
-**Rollback:** the change is additive until step 3; reverting the commits
-restores `injectStyle`. No data or persisted state is involved.
+**Rollback:** reverting the commits restores `injectStyle`. No data or persisted
+state is involved.
 
 ## Open Questions
 
-- Does Bun's run/test runtime treat a bare `import './x.css'` as a no-op module,
-  or is the `{ type: 'text' }` attribute (or a loader stub) required? Resolved in
-  Migration step 0; design assumes the fallback is cheap either way.
-- Should the aggregate be a hand-maintained barrel or generated from discovery?
-  Lean barrel for determinism and simplicity; revisit only if component churn
-  makes manual maintenance noisy.
+- Should the aggregate be path-sorted-glob or a hand-maintained list? Lean glob
+  + sort for determinism and zero-maintenance as components churn; revisit only
+  if a specific cascade-order need makes an explicit ordered list worthwhile.

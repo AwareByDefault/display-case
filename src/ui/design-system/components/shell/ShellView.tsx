@@ -2,7 +2,6 @@
 // dogfooding (ShellView.case.tsx); internal plumbing, not a consumer primitive.
 import type { CSSProperties, ReactNode } from 'react'
 import type { TweakDescriptor } from '../../../../index'
-import chromeCss from '../../../chrome.css' with { type: 'text' }
 import { DocMarkdown } from '../../../markdown'
 import {
   buildUrl,
@@ -36,14 +35,6 @@ import {
   TweaksPanel,
   Wordmark,
 } from '..'
-import { injectStyle } from '../inject-style'
-
-// The chrome's layout CSS (grid regions, stage/preview sizing, nav rail, mode
-// switch, docs panel). The browse server also inlines `chrome.css` into the
-// shell document; injecting it here additionally carries the styles into the
-// isolated /render document, so `ShellView` paints correctly when exhibited as
-// a page/template/flow (a duplicate, identical block in the live shell — inert).
-injectStyle('dc-chrome', chromeCss)
 
 /**
  * The browse chrome, as a pure function of its {@link ShellViewModel}. Every

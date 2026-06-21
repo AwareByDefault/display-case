@@ -1,7 +1,6 @@
 import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react'
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { injectStyle } from '../inject-style'
 
 /**
  * Display Case — SelectMenu
@@ -19,73 +18,6 @@ import { injectStyle } from '../inject-style'
  * then moves on. The popup portals to `document.body` so an `overflow`-clipping
  * or `position: fixed` ancestor can't trap it.
  */
-
-const CSS = `
-.dcui-selectmenu { position: relative; display: inline-flex; align-items: center; }
-/* The trigger borrows the native Select's chrome (.dcui-select-el) so the two
-   read identically, then layers in flex for the value + ellipsis. */
-.dcui-selectmenu-trigger {
-  display: inline-flex;
-  align-items: center;
-  min-width: 0;
-  user-select: none;
-}
-.dcui-selectmenu-value {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.dcui-selectmenu-trigger[aria-disabled="true"] { opacity: 0.5; cursor: not-allowed; }
-
-.dcui-selectmenu-list {
-  position: fixed;
-  z-index: 60;
-  margin: 0;
-  padding: var(--dc-space-2);
-  list-style: none;
-  background: var(--dc-surface);
-  border: 1px solid var(--dc-border);
-  border-radius: var(--dc-radius-md);
-  box-shadow: var(--dc-shadow-overlay);
-  overflow-y: auto;
-  min-width: max-content;
-}
-.dcui-selectmenu-option {
-  display: flex;
-  align-items: center;
-  gap: var(--dc-space-3);
-  padding: var(--dc-space-2) var(--dc-space-4);
-  border-radius: var(--dc-radius-sm);
-  font-family: var(--dc-font-sans);
-  font-size: var(--dc-text-sm);
-  color: var(--dc-fg);
-  cursor: pointer;
-  white-space: nowrap;
-}
-/* Active (keyboard or hover) — the single moving highlight. */
-.dcui-selectmenu-option[data-active="true"] { background: var(--dc-hover); }
-/* A disabled option is a non-interactive group header (mono, uppercase, quiet)
-   — never highlighted, never the check column's concern. */
-.dcui-selectmenu-option[aria-disabled="true"] {
-  cursor: default;
-  color: var(--dc-fg-subtle);
-  font-family: var(--dc-font-mono);
-  font-size: var(--dc-text-xs);
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-}
-.dcui-selectmenu-option[aria-disabled="true"][data-active="true"] {
-  background: none;
-}
-.dcui-selectmenu-check {
-  flex: 0 0 auto;
-  width: 1em;
-  font-family: var(--dc-font-mono);
-  font-size: var(--dc-text-xs);
-  color: var(--dc-fg-muted);
-}
-`
-injectStyle('dcui-selectmenu', CSS)
 
 export type SelectMenuSize = 'sm' | 'md'
 export type SelectMenuOption =

@@ -1,5 +1,3 @@
-import './styles'
-
 /**
  * Display Case — StatusList
  * A row of status items: a coloured dot beside a name and a short caption, each

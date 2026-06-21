@@ -1,5 +1,4 @@
 import type { HTMLAttributes, ReactNode } from 'react'
-import { injectStyle } from '../inject-style'
 
 /**
  * Display Case — Sidebar
@@ -9,16 +8,6 @@ import { injectStyle } from '../inject-style'
  * `--dc-bg-subtle` surface. Layout (grid placement, collapse) is the chrome's;
  * the surface is the component's.
  */
-
-const CSS = `
-.dcui-sidebar {
-  overflow-y: auto;
-  padding: var(--dc-space-6);
-  border-right: var(--dc-border-line);
-  background: var(--dc-bg-subtle);
-}
-`
-injectStyle('dcui-sidebar', CSS)
 
 export interface SidebarProps extends HTMLAttributes<HTMLElement> {
   /** Accessible name for the nav landmark; consumers should pass the contextual

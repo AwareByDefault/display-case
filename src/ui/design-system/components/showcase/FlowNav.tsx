@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react'
 import { Button } from '../controls/Button'
-import { injectStyle } from '../inject-style'
 import { Chip } from './Chip'
 
 /**
@@ -9,39 +8,6 @@ import { Chip } from './Chip'
  * on one bar. Each step is individually addressable (click a chip), mirroring
  * the flow's `goto` transitions.
  */
-
-const CSS = `
-.dcui-flownav {
-  display: flex;
-  align-items: center;
-  gap: var(--dc-space-6);
-  flex-wrap: wrap;
-  padding: var(--dc-space-4) var(--dc-space-6);
-  border: 1px solid var(--dc-border);
-  border-radius: var(--dc-radius-md);
-  background: var(--dc-bg-subtle);
-}
-/* Scope the steps reset under .dcui-flownav so the no-margin/no-padding list
-   wins over ambient prose styles (e.g. a Primer's .dc-primer ol rule), which
-   would otherwise add a bottom margin that pushes the chips off the bar's
-   centre line, out of vertical alignment with the Prev / Next rail. */
-.dcui-flownav .dcui-flownav-steps {
-  display: flex;
-  align-items: center;
-  gap: var(--dc-space-3);
-  flex-wrap: wrap;
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  flex: 1;
-}
-.dcui-flownav-rail {
-  margin-left: auto;
-  display: flex;
-  gap: var(--dc-space-3);
-}
-`
-injectStyle('dcui-flownav', CSS)
 
 export interface FlowStep {
   id: string

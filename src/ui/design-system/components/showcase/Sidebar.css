@@ -1,0 +1,6 @@
+.dcui-sidebar {
+  overflow-y: auto;
+  padding: var(--dc-space-6);
+  border-right: var(--dc-border-line);
+  background: var(--dc-bg-subtle);
+}

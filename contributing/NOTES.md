@@ -4,6 +4,49 @@ Non-obvious decisions, debugging notes, and architectural context for the Displa
 
 ---
 
+## 2026-06-21: Component CSS is server-inlined (the Vitrine stylesheet), not runtime-injected
+
+**What changed.** The design-system components used to paint by calling
+`injectStyle(id, css)` at module load — a client-only `document.head` mutation
+that **no-ops under Node**. So component CSS was absent from every
+server-rendered document and only appeared once the browser bundle ran (a flash
+of unstyled content; an unstyled `/render` snapshot if scripts were disabled).
+Now each component keeps its CSS in a **co-located `.css` file** (`Button.tsx` →
+`Button.css`) and **`readVitrineCss()`** (in `server.ts`, duplicated in
+`publish.ts` like `readDesignTokens`) reads-and-concatenates, in **path-sorted**
+order, `chrome.css` + every `components/**/*.css` + `primer.css` into one
+**Vitrine stylesheet** inlined into every document `<style>` before scripts.
+`inject-style.ts` and `src/types/css-text.d.ts` are deleted.
+
+**Why read-and-concat, not a JS-side `import './x.css'`.** The project already
+delivers its token CSS and `chrome.css` by reading files and concatenating
+(`readDesignTokens`), never through the JS module graph. Bundling component CSS
+through the browser/SSR entries would emit per-entry CSS assets and raise the
+question of how a bare `.css` import behaves under `renderToString` (it's a
+no-op under Bun's runtime — verified — but we avoid needing that). Reading the
+files sidesteps all of it. New components are picked up automatically (the glob);
+the dev watcher already matches `.css`, and the dev rebuild re-reads `vitrineCss`
+next to its `tokensCss` re-read.
+
+**Why it's inlined into the chrome-free `/render` too.** Display Case dogfoods
+its own design system: the `dcui-*`/`dcpl-*`/shell `page` cases are exhibited
+through `/render`, which carries no chrome. Inlining the whole Vitrine stylesheet
+(including `chrome.css`, for the shell-page cases' `.dc-*` layout) into all three
+documents keeps every such case styled before scripts. For a non-dogfooding
+consumer that's a few KB of inert, fully-prefixed (`.dc-*`/`.dcui-*`/`.dcpl-*`)
+chrome CSS in a **dev-time-only** preview doc — never shipped to their app.
+
+**`/render` still needs `--dc-*` tokens.** The Vitrine CSS supplies *rules*, not
+token values. `/render` resolves `--dc-*` from `globalCss`, which is why the
+dogfood `display-case.config.ts` lists the token files in `globalStyles`.
+
+**Lint footnote.** With the CSS now in real `.css` files, Biome's CSS linter sees
+it: a few pre-existing intentional patterns (`!important` in specimen styles, one
+descending-specificity selector in `A11yPanel.css`) surface as **warnings** —
+non-fatal, and "fixing" them would change behavior, so they stand.
+
+---
+
 ## 2026-06-21: Import-graph rules use Bun's scanner; no native AST for keyed-cases
 
 **What changed.** The composition (import-graph) structure rules previously parsed each component's imports with a regex (`IMPORT_RE`), which also matched **commented-out** and **string-literal** imports and counted (erased) **type-only** ones — any of which could conjure a phantom composition dependency and a false `atom-purity`/`no-downward-dependency` finding. `parseImports` now first asks **`Bun.Transpiler().scan(code)`** for the authoritative set of real runtime import paths (Bun's parser ignores comments/strings and drops type-only), then keeps only the regex matches whose source is in that set; the regex still contributes the **named bindings** scan doesn't expose. Bun-native, zero new dependency. Regression test: `atom-purity: a commented-out or string-literal import is not a dependency` (fails on the old regex, passes now).
@@ -61,8 +104,9 @@ points for future agents:
 - **Shell renders in-process, no fresh-bundle dance.** Unlike cases (which need
   the per-rebuild `target:'bun'` bundle to dodge Bun's module cache), the shell
   depends only on manifest *data*, so `ssr-shell.tsx` imports `Shell` directly
-  into the server process. `injectStyle` already no-ops without `document`, so
-  importing the design-system components server-side is safe.
+  into the server process. The design-system components carry no module-load side
+  effects (their CSS lives in co-located `.css` files inlined by the server, not
+  injected), so importing them server-side is safe.
 
 - **Dev vs prod servers share renderers, not envelopes.** `server.ts` (dev) and
   `prod-server.ts` (publish) both call the same React renderers (`ssr-shell`,
@@ -246,9 +290,9 @@ run. Background-fill of all variants at start-up is now built — see the
 The browse chrome's inline UI was extracted into a **self-contained component
 library** at `src/ui/design-system/components/`
 (`controls/` Button·IconButton·Input·Select, `showcase/`
-Eyebrow·Chip·NavItem·Stage·FlowNav·TweaksPanel). Each is a pure component that
-**injects its own `dcui-*` CSS** on import (`inject-style.ts`) and consumes only
-`--dc-*` tokens — a single import brings markup + styling. `shell.tsx` now
+Eyebrow·Chip·NavItem·Stage·FlowNav·TweaksPanel). Each is a pure component whose
+`dcui-*` CSS lives in a **co-located `.css` file** (see the 2026-06-21 note below
+— originally each *injected* its CSS at runtime via `inject-style.ts`). `shell.tsx`
 consumes them; `chrome.css` was trimmed to shell **layout only** (the component
 rules `.dc-btn/.dc-icon-btn/.dc-select/.dc-input/.dc-nav-*/.dc-flow-*/.dc-tweaks-*`
 are gone — their styling lives with the components).
@@ -266,9 +310,10 @@ has a colocated `*.case.tsx` (coverage lint enforces one per component) +
   as unknown tokens → list them in the config's `tokens.allow`.
 - `globalStyles` are concatenated verbatim (no `@import` resolution), so list the
   individual token files, not `styles.css`.
-- `inject-style.ts` and `index.ts` are `.ts` (not `.tsx`), so the coverage check
-  (which derives `*.tsx` from the `*.case.tsx` roots) doesn't demand cases for
-  them — keep utils/barrels as `.ts`.
+- `index.ts` (and other barrels/utils) are `.ts` (not `.tsx`), so the coverage
+  check (which derives `*.tsx` from the `*.case.tsx` roots) doesn't demand cases
+  for them — keep utils/barrels as `.ts`. The co-located `*.css` files are
+  likewise outside the `*.tsx` coverage surface.
 
 ### Display Case chrome split — exhibiting the chrome as page/template/flow
 
@@ -295,15 +340,17 @@ real content), and `ShellView.case.tsx` (a `defineFlow` Primer → Cases, the mo
 switch wired to `goto`).
 
 **Gotchas this surfaced (each cost a debug cycle):**
-- **`chrome.css` must be injected by `ShellView`, not just inlined by the server.**
-  `server.ts` only inlines `chrome.css` into the *browse-shell* HTML; the isolated
-  `/render` doc (`renderHtml`) never links it. So `ShellView` does
-  `import chromeCss from '../../../chrome.css' with { type: 'text' }` then
-  `injectStyle('dc-chrome', chromeCss)` — the same self-contained pattern the
-  `dcui-*` components use. Safe to inject into *every* render doc only because
-  `chrome.css` is **fully `.dc-*`-scoped** (no `html/body/*`/`:root` rules), so it
-  can't drift the other components' snapshots. (The text import needs the ambient
-  `declare module '*.css'` in `src/css-text.d.ts`.)
+- **The chrome-free `/render` doc needs the shell + component CSS for the
+  dogfooded shell/component cases.** `ShellView`, the `page`/`template` cases, and
+  the `dcui-*`/`dcpl-*` cases are all exhibited through `/render`, which carries no
+  chrome of its own. Originally `ShellView` injected `chrome.css` at runtime and
+  each component injected its `dcui-*` CSS, so they painted in `/render` once the
+  client bundle ran. As of 2026-06-21 the server instead inlines the whole Vitrine
+  stylesheet (`chrome.css` + every component `.css` + `primer.css`) into *every*
+  document head — so these cases are styled **before scripts** (see that note).
+  Safe to inline into every render doc only because the Vitrine CSS is fully
+  `.dc-*`/`.dcui-*`/`.dcpl-*`-scoped (no `html/body/*`/`:root` rules), so it can't
+  drift a consumer's component snapshots.
 - **The exhibit's address must live on the model, not be derived in the view.**
   `buildAddressUrl` reads `window.location.origin`; the dev/check server uses an
   **ephemeral port**, so an address bar computed in the view changes every run and

@@ -1,5 +1,3 @@
-import './styles'
-
 /**
  * Display Case — ColorRamp
  * A horizontal ramp of colour stops with a label + caption under each chip.

@@ -131,6 +131,8 @@ The browse chrome has its **own** design system — *The Vitrine* — under `src
 
 **5.4** Escape hatches, used sparingly: a per-reference `/* allow: unknown-token */` comment, or list genuinely host-app-provided tokens under `tokens.allow` in the config.
 
+**5.5** **Component CSS is a co-located `.css` file, inlined server-side — never runtime-injected.** Each Vitrine component keeps its `dcui-*`/`dcpl-*` rules in a sibling stylesheet (`Button.tsx` → `Button.css`); the component module carries **no** `const CSS` blob and does **not** touch `document` to paint. `readVitrineCss()` (in `server.ts`, mirrored in `publish.ts`) reads-and-concatenates `chrome.css` + every `components/**/*.css` + `primer.css` in path-sorted order into one **Vitrine stylesheet** that the server inlines into every document `<style>` before scripts run — so §3 (render before scripts) holds for styling, not just markup. Do **not** reintroduce a runtime style-injection helper; a component that paints only after hydration is the FOUC bug this replaced. Keep selectors fully `.dc-*`/`.dcui-*`/`.dcpl-*`-prefixed (no bare `html/body/:root` rules) so the blob is safe to inline into the chrome-free `/render` doc without drifting a consumer's snapshots.
+
 ---
 
 ## 6. Import boundaries & dependencies

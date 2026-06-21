@@ -94,6 +94,7 @@ function documentFor(loaded: Loaded, path: string, url: URL): string {
     return primerDoc({
       tokensCss: descriptor.tokensCss,
       globalCss: descriptor.globalCss,
+      vitrineCss: descriptor.vitrineCss,
       theme,
       markup,
       ssr,
@@ -119,6 +120,7 @@ function documentFor(loaded: Loaded, path: string, url: URL): string {
     }
     return renderDoc({
       globalCss: descriptor.globalCss,
+      vitrineCss: descriptor.vitrineCss,
       theme: rs.theme,
       transparent: rs.transparent,
       fit: rs.fit,
@@ -140,7 +142,7 @@ function documentFor(loaded: Loaded, path: string, url: URL): string {
     title: descriptor.title,
     tokensCss: descriptor.tokensCss,
     globalCss: descriptor.globalCss,
-    chromeCss: descriptor.chromeCss,
+    vitrineCss: descriptor.vitrineCss,
     theme,
     markup: shell.html,
     ssr: shell.ssr,

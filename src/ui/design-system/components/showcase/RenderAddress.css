@@ -1,0 +1,35 @@
+.dcui-address {
+  display: flex;
+  align-items: center;
+  gap: var(--dc-space-4);
+  width: 100%;
+  /* border-box so the 100% width + padding + border stays inside the container
+     (matches the docked tweaks panel's right edge instead of overflowing it). */
+  box-sizing: border-box;
+  border: var(--dc-border-line);
+  border-radius: var(--dc-radius-sm);
+  background: var(--dc-surface);
+  padding: var(--dc-space-3) var(--dc-space-4);
+}
+/* A solid accent tag (the accent Button's fill), but inert — it's just a label. */
+.dcui-address-method {
+  flex: 0 0 auto;
+  line-height: 1;
+  font-family: var(--dc-font-mono);
+  font-size: var(--dc-text-xs);
+  font-weight: var(--dc-weight-medium);
+  color: var(--dc-brand-fg);
+  background: var(--dc-brand);
+  padding: 0.3125rem var(--dc-space-3);
+  border-radius: var(--dc-radius-sm);
+}
+.dcui-address-url {
+  font-family: var(--dc-font-mono);
+  font-size: var(--dc-text-sm);
+  color: var(--dc-fg);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

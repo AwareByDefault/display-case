@@ -1,5 +1,3 @@
-import './styles'
-
 /**
  * Display Case — SwatchGrid
  * A grid of role swatches: a colour chip beside a token name and a short role

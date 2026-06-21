@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react'
-import { injectStyle } from '../inject-style'
 import { A11yBadge } from './A11yBadge'
 
 /**
@@ -11,102 +10,6 @@ import { A11yBadge } from './A11yBadge'
  * `kind="case"` renders an indented case link that lines up under the component
  * name. The active row is marigold with a left tick.
  */
-
-const CSS = `
-.dcui-navrow {
-  display: flex;
-  align-items: center;
-  gap: var(--dc-space-1);
-  width: 100%;
-  box-sizing: border-box;
-  position: relative;
-}
-.dcui-nav-disclosure {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 22px;
-  border: 0;
-  background: none;
-  color: var(--dc-fg-subtle);
-  cursor: pointer;
-  border-radius: var(--dc-radius-sm);
-  padding: 0;
-  transition: color var(--dc-transition-fast), background var(--dc-transition-fast);
-}
-.dcui-nav-disclosure:hover { color: var(--dc-fg); background: var(--dc-hover); }
-/* A non-expandable component row (single case) keeps the chevron's footprint so
-   its name still lines up under expandable siblings — just with no glyph. */
-.dcui-nav-disclosure-spacer { flex: 0 0 auto; width: 20px; height: 22px; }
-.dcui-chevron {
-  font-family: var(--dc-font-mono);
-  font-size: 0.65rem;
-  line-height: 1;
-  transition: transform var(--dc-transition-fast);
-}
-.dcui-chevron[data-expanded="true"] { transform: rotate(90deg); }
-.dcui-nav-name {
-  flex: 1;
-  min-width: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--dc-space-3);
-  text-align: left;
-  font-family: var(--dc-font-sans);
-  font-size: var(--dc-text-base);
-  font-weight: var(--dc-weight-medium);
-  color: var(--dc-fg);
-  border: 0;
-  background: none;
-  cursor: pointer;
-  padding: 0.25rem var(--dc-space-3);
-  border-radius: var(--dc-radius-sm);
-  overflow: hidden;
-  transition: background var(--dc-transition-fast), color var(--dc-transition-fast);
-}
-/* The name text itself truncates; the alert pill beside it never shrinks. */
-.dcui-nav-label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.dcui-nav-name:hover { background: var(--dc-hover); }
-.dcui-nav-count {
-  font-family: var(--dc-font-mono);
-  font-size: var(--dc-text-xs);
-  color: var(--dc-fg-subtle);
-  flex: 0 0 auto;
-  padding-right: var(--dc-space-3);
-}
-/* Case rows indent so their text lines up under the component name (chevron
-   width + row gap, then the name's own text padding). */
-.dcui-navrow[data-kind="case"] { padding-left: calc(20px + var(--dc-space-1)); }
-.dcui-navrow[data-kind="case"] .dcui-nav-name {
-  font-weight: var(--dc-weight-normal);
-  font-size: var(--dc-text-sm);
-  color: var(--dc-fg-muted);
-}
-.dcui-navrow[data-kind="case"] .dcui-nav-name:hover { color: var(--dc-fg); }
-.dcui-navrow[data-current="true"] .dcui-nav-name {
-  color: var(--dc-brand);
-  font-weight: var(--dc-weight-medium);
-}
-.dcui-navrow[data-current="true"]::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 2px;
-  height: 1rem;
-  border-radius: 1px;
-  background: var(--dc-brand);
-}
-`
-injectStyle('dcui-navitem', CSS)
 
 export type NavItemKind = 'component' | 'case'
 

@@ -14,10 +14,12 @@ export default defineConfig({
   // Land on the Primer (the default) — the wall text orients you before you
   // browse the cases. Switch to 'cases' to open the library first instead.
   landing: 'primer',
-  // The components inject their own (dcui-*) CSS; they only need the design
-  // system's --dc-* tokens + fonts. globalStyles are concatenated verbatim (no
-  // @import resolution), so list the token files individually rather than
-  // styles.css. fonts.css's @import is an absolute URL and inlines fine.
+  // The server inlines the components' (dcui-*) CSS into every document; the
+  // cases here only need the design system's --dc-* tokens + fonts so the
+  // isolated /render doc resolves those custom properties. globalStyles are
+  // concatenated verbatim (no @import resolution), so list the token files
+  // individually rather than styles.css. fonts.css's @import is an absolute URL
+  // and inlines fine.
   globalStyles: [
     './src/ui/design-system/tokens/fonts.css',
     './src/ui/design-system/tokens/colors.css',

@@ -1,5 +1,3 @@
-import './styles'
-
 /**
  * Display Case — SpacingScale
  * A column of spacing rows: a mono token tag, its resolved value, and a bar

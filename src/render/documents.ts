@@ -29,7 +29,7 @@ export function shellDoc(opts: {
   title: string
   tokensCss: string
   globalCss: string
-  chromeCss: string
+  vitrineCss: string
   theme: Theme
   markup: string
   ssr: boolean
@@ -43,12 +43,13 @@ export function shellDoc(opts: {
     theme: opts.theme,
     a11y: opts.a11y,
   })
-  return `<!doctype html><html lang="en" data-theme="${opts.theme}"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>${opts.title}</title>${FONT_LINKS}<style>${opts.tokensCss}\n${opts.globalCss}\n${reset}\n${opts.chromeCss}</style></head><body><div id="root" data-ssr="${opts.ssr ? '1' : '0'}">${opts.markup}</div><script>window.__dcSeed=${seed}</script><script type="module" src="${opts.assets.browser}"></script></body></html>`
+  return `<!doctype html><html lang="en" data-theme="${opts.theme}"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>${opts.title}</title>${FONT_LINKS}<style>${opts.tokensCss}\n${opts.globalCss}\n${reset}\n${opts.vitrineCss}</style></head><body><div id="root" data-ssr="${opts.ssr ? '1' : '0'}">${opts.markup}</div><script>window.__dcSeed=${seed}</script><script type="module" src="${opts.assets.browser}"></script></body></html>`
 }
 
 /** The isolated case render document. */
 export function renderDoc(opts: {
   globalCss: string
+  vitrineCss: string
   theme: Theme
   transparent: boolean
   fit: boolean
@@ -62,18 +63,22 @@ export function renderDoc(opts: {
     ? ' data-decorated style="background:transparent"'
     : ''
   const rootAttrs = `${opts.fit ? ' style="width:fit-content"' : ''} data-ssr="${opts.ssr ? '1' : '0'}"`
-  return `<!doctype html><html lang="en" data-theme="${opts.theme}" data-theme-pref="${opts.theme}"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Display Case render</title><style>html,body{margin:0}body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-sans, ui-sans-serif, system-ui, sans-serif)}${exhibitCenter}${opts.globalCss}</style></head><body${bodyAttrs}><main id="root"${rootAttrs}>${opts.markup}</main><script type="module" src="${opts.assets.render}"></script></body></html>`
+  // The Vitrine stylesheet follows globalCss so a dogfooded design-system case
+  // paints before scripts; for a non-dogfooding consumer these are inert chrome
+  // rules in a dev-time-only preview document (see server.ts renderHtml).
+  return `<!doctype html><html lang="en" data-theme="${opts.theme}" data-theme-pref="${opts.theme}"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Display Case render</title><style>html,body{margin:0}body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-sans, ui-sans-serif, system-ui, sans-serif)}${exhibitCenter}${opts.globalCss}\n${opts.vitrineCss}</style></head><body${bodyAttrs}><main id="root"${rootAttrs}>${opts.markup}</main><script type="module" src="${opts.assets.render}"></script></body></html>`
 }
 
 /** The primer reading-page document. */
 export function primerDoc(opts: {
   tokensCss: string
   globalCss: string
+  vitrineCss: string
   theme: Theme
   markup: string
   ssr: boolean
   assets: DocAssets
 }): string {
   const reset = 'html,body{margin:0;height:100%;background:var(--dc-bg)}'
-  return `<!doctype html><html lang="en" data-theme="${opts.theme}" data-theme-pref="${opts.theme}"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Primer</title>${FONT_LINKS}<style>${opts.tokensCss}\n${opts.globalCss}\n${reset}</style></head><body><main id="root" data-ssr="${opts.ssr ? '1' : '0'}">${opts.markup}</main><script type="module" src="${opts.assets.primer}"></script></body></html>`
+  return `<!doctype html><html lang="en" data-theme="${opts.theme}" data-theme-pref="${opts.theme}"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Primer</title>${FONT_LINKS}<style>${opts.tokensCss}\n${opts.globalCss}\n${reset}\n${opts.vitrineCss}</style></head><body><main id="root" data-ssr="${opts.ssr ? '1' : '0'}">${opts.markup}</main><script type="module" src="${opts.assets.primer}"></script></body></html>`
 }

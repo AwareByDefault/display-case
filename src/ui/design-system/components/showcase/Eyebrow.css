@@ -1,0 +1,16 @@
+.dcui-eyebrow {
+  font-family: var(--dc-font-mono);
+  font-size: var(--dc-text-xs);
+  font-weight: var(--dc-weight-medium);
+  letter-spacing: var(--dc-tracking-label);
+  text-transform: uppercase;
+  color: var(--dc-fg-muted);
+  line-height: var(--dc-leading-tight);
+  margin: 0;
+}
+.dcui-eyebrow[data-tone="accent"] {
+  color: var(--dc-brand);
+}
+.dcui-eyebrow[data-tone="strong"] {
+  color: var(--dc-fg);
+}
