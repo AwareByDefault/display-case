@@ -81,11 +81,16 @@ chrome you're editing. Package scripts that target work on the tool (not on
 consumer cases):
 
 ```bash
+bun run setup        # first-time setup: deps + the Playwright Chromium browser
 bun dev              # showcase this package, with live reload of the app chrome
 bun run check        # static gate: structure + tokens + ssr (browser-free)
 bun test             # unit / type tests
 bun run e2e          # Playwright e2e tests for the browse chrome (boots its own server)
 ```
+
+`bun run setup` is idempotent — it runs `bun install` and installs the Chromium
+binary the e2e suite drives. There is no Docker, no service stack, and no `.env`
+to provision; Display Case is a self-contained dev tool.
 
 Contributor guides — coding/testing/linting best practices, worktree-safe
 execution, and the OpenSpec specs — live under [`contributing/`](contributing/)

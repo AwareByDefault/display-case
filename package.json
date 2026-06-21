@@ -24,6 +24,7 @@
     "LICENSE"
   ],
   "scripts": {
+    "setup": "bun scripts/setup.ts",
     "clean": "rm -rf .display-case dist dist-showcase",
     "dev": "bun src/cli.ts . --dev",
     "display-case": "bun src/cli.ts .",

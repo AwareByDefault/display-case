@@ -72,11 +72,12 @@ for the gate — Biome + `tsc --noEmit` + `display-case check --structure --toke
 --ssr` — how it's wired into git hooks, and the per-check escape hatches.
 
 ```bash
+bun run setup        # first-time: deps + the Playwright Chromium browser (idempotent)
 bun run lint         # biome check
 bun run typecheck    # tsc --noEmit
 bun run check        # display-case static checks (structure + tokens + ssr)
 bun test             # unit / type tests
-bun run e2e          # Playwright chrome suite (one-time: bun run e2e:install)
+bun run e2e          # Playwright chrome suite (setup installs the browser)
 ```
 
 Do not skip or suppress lint errors. Fix the root cause.
