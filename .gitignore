@@ -16,6 +16,7 @@ Thumbs.db
 *.tsbuildinfo
 test-results/
 playwright-report/
+.tmp/
 
 # Display Case codegen + bundle cache and local visual-regression baselines
 .display-case/

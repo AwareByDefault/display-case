@@ -34,6 +34,7 @@
     "typecheck": "tsc --noEmit",
     "check": "bun src/cli.ts check . --structure --tokens --ssr",
     "test": "bun test",
+    "test:container": "bun test ./test/publish-container.test.ts",
     "e2e": "playwright test",
     "e2e:headed": "playwright test --headed",
     "e2e:install": "playwright install chromium",

@@ -16,6 +16,8 @@ Display Case has three independent test layers. Know which one a given check bel
 
 **1.4 `display-case check` — the showcase's own correctness gate.** A separate runner (the product feature, fully documented in [../docs/testing.md](../docs/testing.md)) that audits the *cases themselves* across five phases. It is both a thing this repo ships and a thing this repo runs against its own showcase. See §5.
 
+**1.5 Publish / deploy coverage.** The `publish` command and its `prod-server` are covered by [`src/publish.test.ts`](../src/publish.test.ts) (part of `bun test`): the emitted artifacts, the served build booted in-process, and the static export. The real `docker build` of the generated Dockerfile is a separate, **Docker-gated** test ([`test/publish-container.test.ts`](../test/publish-container.test.ts), run via `bun run test:container`). See §11.
+
 ---
 
 ## 2. `bun test` discovery is scoped to `src/`
@@ -119,6 +121,8 @@ display-case check .          # all five phases over this showcase
 display-case check . --structure --tokens --ssr   # static phases only (no browser, CI-friendly)
 display-case check . --a11y --visual              # browser phases (need the optional toolchain)
 display-case check . --visual --update            # re-record visual baselines after an intentional change
+
+bun run test:container        # Docker-gated: build + run the generated Dockerfile (skips if no Docker)
 ```
 
 ---
@@ -126,3 +130,15 @@ display-case check . --visual --update            # re-record visual baselines a
 ## 10. Quality gates
 
 A change is complete only when the unit suite, the static `display-case check` phases, and lint all pass, and any chrome change is covered by the e2e suite. `tsc --noEmit` (which includes `*.test-d.ts` and test files) is part of lint, so a type error in a test counts as a lint failure. For the full check inventory and gating model see [linting-best-practices.md](linting-best-practices.md).
+
+---
+
+## 11. Publish / deploy testing
+
+The publish path produces a deployable artifact, so it is tested at three levels — the first two Docker-free and always-on, the third Docker-gated.
+
+**11.1 Artifacts (unit).** [`src/publish.test.ts`](../src/publish.test.ts) runs `publish` into a temp dir and asserts the build is what a deploy expects: content-hashed `browser`/`render` bundles, a frozen `manifest.json` + `dc-build.json` (with `a11y: false` — dev surfaces excluded), the built SSR renderers under `server/`, and the generated `server.ts` (imports `display-case/prod-server`, no `__livereload`), `package.json` (a `bun server.ts` service), and `Dockerfile` (Bun base + `/health` check). `--base` is asserted to prefix the asset URLs.
+
+**11.2 Served + static (integration).** The same file boots the served build **in-process** via `startProdServer(out, { port: 0 })` and asserts `/health`, a server-rendered shell that links the hashed bundle and carries no dev live-reload, a chrome-free pre-scripting `/render/...` document, and `immutable` asset caching — then asserts the `--static` export writes complete `index.html` + per-case render documents. Note the build dir is anchored **inside the repo** (`.tmp/`, gitignored): the SSR bundle keeps `react`/`react-dom` external, so resolution must reach the repo's `node_modules` (a real deploy installs them alongside the build); a `/tmp` dir would fail to resolve React.
+
+**11.3 Container (Docker-gated).** [`test/publish-container.test.ts`](../test/publish-container.test.ts) does a real `docker build` of the generated Dockerfile, runs the image, polls `/health`, and asserts the shell serves. It lives **outside** the `bun test` root (`src/`) so it never runs in the default suite or pre-commit — invoke it with `bun run test:container`. It **skips gracefully** (`describe.skip`) when Docker (or its daemon) is absent, so it never fails a Docker-less machine. Because `display-case` isn't published to npm yet, the test substitutes a locally-packed tarball (`bun pm pack`) for the generated `display-case: latest` dependency so the container build doesn't depend on npm publication; once published, that substitution becomes unnecessary.
