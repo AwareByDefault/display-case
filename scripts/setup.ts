@@ -30,6 +30,21 @@ async function ensureDeps() {
   console.log('✓ dependencies')
 }
 
+async function ensureOpenspec() {
+  // The OpenSpec CLI drives the spec workflow (propose/validate/apply/archive)
+  // over the root `openspec/` workspace. It is pinned as a devDependency, so
+  // `bun install` above already provided it — this just confirms it resolves and
+  // reports the version (idempotent, like the bun check). Invoked through
+  // `bun run` so the local `node_modules/.bin` is on PATH ahead of any global.
+  const openspec = await $`bun run openspec --version`.nothrow().quiet()
+  if (openspec.exitCode !== 0) {
+    console.error('✗ openspec CLI not found after install.')
+    console.error('  Expected the pinned @fission-ai/openspec devDependency.')
+    process.exit(openspec.exitCode || 1)
+  }
+  console.log(`✓ openspec ${openspec.stdout.toString().trim()}`)
+}
+
 async function ensureChromium() {
   // `playwright install` is itself idempotent — it skips an already-installed
   // browser — so just run it and surface any failure. This is the e2e
@@ -47,6 +62,7 @@ async function ensureChromium() {
 
 await ensureBun()
 await ensureDeps()
+await ensureOpenspec()
 await ensureChromium()
 
 console.log('\n✓ Setup complete.')

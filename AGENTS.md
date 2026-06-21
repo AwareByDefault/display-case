@@ -10,9 +10,12 @@ scripts in this repository.
 > **Two audiences, two doc trees.** [`docs/`](docs/) is the **product
 > documentation** — how to *use* Display Case (write cases, configure, theme,
 > check, publish). [`contributing/`](contributing/) is the **repository's own**
-> engineering guide — how to *work on* Display Case (best practices, OpenSpec
-> specs, worktree-safe execution). When in doubt: using the tool → `docs/`;
-> changing the tool → `contributing/`.
+> engineering guide — how to *work on* Display Case (best practices,
+> worktree-safe execution). When in doubt: using the tool → `docs/`;
+> changing the tool → `contributing/`. The OpenSpec workspace
+> ([`openspec/`](openspec/)) is the one exception that sits at the repo root, not
+> under `contributing/`, so its CLI works out of the box (see Spec/design
+> discipline).
 
 ---
 
@@ -124,24 +127,29 @@ the `lint-in-worktree`, `test-in-worktree`, and `run-e2e` skills handle the
 ## Spec/design discipline
 
 This project uses **OpenSpec**: a strict separation between **what the system
-does** (behavior, in [`contributing/openspec/specs/`](contributing/openspec/specs/))
+does** (behavior, in [`openspec/specs/`](openspec/specs/))
 and **how it does it** (implementation, in each change's `design.md` under
-[`contributing/openspec/changes/`](contributing/openspec/changes/)).
+[`openspec/changes/`](openspec/changes/)). The workspace lives at the repo root
+(`openspec/`) so the `openspec` CLI works out of the box from anywhere in the
+tree; it is pinned as a devDependency, so `bun run openspec <cmd>` (or a direct
+`openspec <cmd>`) uses the repo's version. Note `openspec/` is the one part of
+the engineering material that sits at the root rather than under `contributing/`,
+because the CLI auto-discovers its workspace by walking up from the cwd.
 
 ### Spec rules
 
-- `contributing/openspec/specs/{capability}/spec.md` describes **observable
+- `openspec/specs/{capability}/spec.md` describes **observable
   behavior only**. Use RFC 2119 keywords (SHALL/MUST/SHOULD/MAY). Scenarios use
   bulleted `GIVEN`/`WHEN`/`THEN`/`AND` — not bolded prose.
 - No library, framework, class, file, or function names in `spec.md`. A spec
   should survive a stack migration unchanged.
-- Implementation detail belongs in `contributing/openspec/changes/{change}/design.md`.
+- Implementation detail belongs in `openspec/changes/{change}/design.md`.
 
 The behavior is split across discrete capability specs (discovery, case
 authoring, tweaks, flows, rendering, checks, publishing, …) — see
-[contributing/openspec/specs/README.md](contributing/openspec/specs/README.md)
+[openspec/specs/README.md](openspec/specs/README.md)
 for the map. The full change history lives under
-[`contributing/openspec/changes/archive/`](contributing/openspec/changes/archive/).
+[`openspec/changes/archive/`](openspec/changes/archive/).
 
 ### Workflow
 

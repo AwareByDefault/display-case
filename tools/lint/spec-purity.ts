@@ -2,7 +2,7 @@
 /**
  * Keeps the OpenSpec behavior specs implementation-free.
  *
- * A `contributing/openspec/specs/{capability}/spec.md` describes observable
+ * An `openspec/specs/{capability}/spec.md` describes observable
  * behavior only — it should survive a stack migration unchanged. This check
  * fails when a spec:
  *   - names an implementation/tool detail (the stack, libraries, runtimes), or
@@ -48,7 +48,7 @@ const KEYWORDS = ['GIVEN', 'WHEN', 'THEN', 'AND']
 const BOLD_KEYWORD_RE = new RegExp(`^(\\s*)\\*\\*(${KEYWORDS.join('|')})\\*\\*`)
 
 const root = resolve(import.meta.dir, '../..')
-const glob = new Glob('contributing/openspec/specs/**/spec.md')
+const glob = new Glob('openspec/specs/**/spec.md')
 
 let violations = 0
 

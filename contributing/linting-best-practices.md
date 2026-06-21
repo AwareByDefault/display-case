@@ -80,7 +80,7 @@ display-case check .                               # everything, including a11y 
 | `types` | `tsc --noEmit` — one tsconfig for the whole package | all `.ts`/`.tsx` | — |
 | `biome` plugin: e2e locators | e2e specs must not call `getByText()`/`getByRole()` — drive the chrome via `getByTestId(DcTestIds.*)` (see [testing-best-practices.md](testing-best-practices.md) §6). GritQL plugin [tools/lint/e2e-locators.grit](../tools/lint/e2e-locators.grit), scoped to `e2e/**` by a `biome.json` override; runs in `biome check`. | `e2e/**` | `// biome-ignore lint/plugin: <reason>` on the line |
 | `biome` plugin: no inline svg | No inline `<svg>` in the browse chrome — the Vitrine design system is "Unicode glyphs only". AST name-match, so `<svgPath>`/`<Svg>` are not flagged. GritQL plugin [tools/lint/no-custom-svg.grit](../tools/lint/no-custom-svg.grit), scoped to `src/ui/**`; runs in `biome check`. | `src/ui/**` | `// biome-ignore lint/plugin: <reason>` (in JSX, immediately before the element) |
-| `spec-purity` | No implementation/tool names in a behavior spec; bullet `GIVEN/WHEN/THEN`, not bolded (`--fix` converts bolded keywords) | `contributing/openspec/specs/**/spec.md` | `<!-- allow: <reason> -->` on the line |
+| `spec-purity` | No implementation/tool names in a behavior spec; bullet `GIVEN/WHEN/THEN`, not bolded (`--fix` converts bolded keywords) | `openspec/specs/**/spec.md` | `<!-- allow: <reason> -->` on the line |
 
 `spec-purity` is the one remaining **script** check (it scans Markdown, which a
 GritQL JS plugin can't) — it lives in [`tools/lint/`](../tools/lint/) and runs via

@@ -4,6 +4,39 @@ Non-obvious decisions, debugging notes, and architectural context for the Displa
 
 ---
 
+## 2026-06-21: OpenSpec workspace lives at the repo root, and the CLI is pinned
+
+The OpenSpec workspace is **`openspec/`** at the repo root — **not** under
+`contributing/`, even though every other piece of engineering material is. This
+is deliberate: the `openspec` CLI discovers its workspace by walking **up** from
+the current directory looking for an `openspec/` dir. With the workspace under
+`contributing/openspec/`, every command had to be run from `contributing/` and
+`openspec list` from the repo root failed with the misleading
+`No OpenSpec changes directory found. Run 'openspec init' first` — which does
+*not* mean uninitialized, just "no `openspec/` found from here." Moving it to the
+root makes the CLI (and the propose/apply/archive skills, which shell out to it)
+work out of the box from anywhere in the tree.
+
+The CLI is pinned as a devDependency: **`@fission-ai/openspec`** (exact
+`1.3.1` — the bare `openspec` package on npm is unrelated). Pin reasons:
+reproducibility, and the archiver's validator strictness is **version-specific**
+(see below). Run it via `bun run openspec <cmd>` so the pinned
+`node_modules/.bin` wins over any global install; `scripts/setup.ts` verifies it
+resolves. Its `postinstall` is intentionally left untrusted/blocked (like
+`@parcel/watcher`'s) — the binary works without it and trusting it would let it
+scaffold files on install.
+
+**Archiver gotcha (`openspec archive`):** 1.3.1's archive step rebuilds the
+target spec and validates it against a schema that requires a `## Purpose`
+section — which **none** of this repo's 17 specs use (house style is
+`# Title` + prose intro + `## Requirements`). So a plain `openspec archive`
+aborts with `Spec must have a Purpose section`. Work around it with
+`openspec archive <change> --yes --skip-specs`, then fold the change's
+ADDED/MODIFIED requirement into the canonical `openspec/specs/<cap>/spec.md` by
+hand, matching house style. Revisit if a future CLI version relaxes this.
+
+---
+
 ## 2026-06-21: Style engines — render-time CSS-in-JS (emotion/MUI) delivered before scripting
 
 `globalStyles` and the Vitrine stylesheet are *static* CSS, read from disk and
