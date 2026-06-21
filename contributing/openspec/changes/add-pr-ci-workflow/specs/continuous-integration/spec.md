@@ -3,9 +3,11 @@
 ### Requirement: Proposed changes are gated by the full quality suite
 
 The repository SHALL automatically run its full quality suite — static analysis,
-type checking, the project's own static checks, unit tests, and end-to-end tests
-— against every proposed change to the mainline, without a contributor having to
-trigger it manually.
+type checking, the project's own static checks, unit tests, end-to-end tests, and
+the gating render checks (accessibility and visual-regression) — against every
+proposed change to the mainline, without a contributor having to trigger it
+manually. The render checks MAY be scoped to the components a change affects (see
+the change-scoped-checks capability).
 
 The suite SHALL run the verification (non-mutating) form of each layer, reporting
 a failure on material that is unformatted, unlinted, mistyped, or failing a check

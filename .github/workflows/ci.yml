@@ -72,3 +72,65 @@ jobs:
             test-results/
           retention-days: 7
           if-no-files-found: ignore
+
+  # The render-backed gating checks, scoped to the components this PR could have
+  # affected (`--changed` → src/core/affected.ts). A PR that touches no render
+  # input checks nothing and exits fast; a global-style/pipeline change checks
+  # everything. `fetch-depth: 0` + the base sha give `git diff` a resolvable
+  # merge-base; on workflow_dispatch (no PR) the ref falls back to origin/main.
+  a11y:
+    name: A11y (changed components)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      - run: bunx playwright install --with-deps chromium
+      - run: bun src/cli.ts check . --a11y --changed
+        env:
+          DISPLAY_CASE_BASE_REF: ${{ github.event.pull_request.base.sha || 'origin/main' }}
+      - name: Upload a11y report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: a11y-report
+          path: .display-case/a11y/last-check.json
+          retention-days: 7
+          if-no-files-found: ignore
+
+  visual:
+    name: Visual regression (changed components)
+    runs-on: ubuntu-latest
+    # Render inside the SAME Playwright image the committed baselines were
+    # recorded in (scripts/record-baselines.ts), so pixel diffs reflect real
+    # changes, not macOS↔Linux font rendering. Keep this tag, the baseline
+    # image, and the `playwright` version in bun.lock in lockstep.
+    container:
+      image: mcr.microsoft.com/playwright:v1.61.0-noble
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # The repo is checked out as a different owner than the container user;
+      # let git diff (used by --changed) read it.
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      # No `playwright install` — the image ships the matching browsers.
+      - run: bun src/cli.ts check . --visual --changed
+        env:
+          DISPLAY_CASE_BASE_REF: ${{ github.event.pull_request.base.sha || 'origin/main' }}
+      - name: Upload visual diffs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-diffs
+          path: test/visual-baselines/**/*.diff.png
+          retention-days: 7
+          if-no-files-found: ignore

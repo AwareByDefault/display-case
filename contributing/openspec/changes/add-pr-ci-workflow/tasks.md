@@ -5,12 +5,15 @@
 - [ ] 1.3 Add the `check` job: `bun install --frozen-lockfile`, `bun run check` (structure + tokens + ssr).
 - [ ] 1.4 Add the `test` job: `bun install --frozen-lockfile`, `bun test`.
 - [ ] 1.5 Add the `e2e` job: `bun install --frozen-lockfile`, `bunx playwright install --with-deps chromium`, `bun run e2e`; upload `playwright-report/` + `test-results/` as an artifact on failure.
+- [ ] 1.6 Add the `a11y` job: `fetch-depth: 0`, install + `playwright install --with-deps chromium`, `display-case check . --a11y --changed` with `DISPLAY_CASE_BASE_REF` = the PR base sha; upload the a11y report.
+- [ ] 1.7 Add the `visual` job in the pinned Playwright container (`mcr.microsoft.com/playwright:v1.61.0-noble`): `fetch-depth: 0`, mark the workspace a git safe.directory, install, `display-case check . --visual --changed`; upload `*.diff.png` on failure.
 
 ## 2. Verify
 
-- [ ] 2.1 Confirm the four CI commands pass on a clean checkout exactly as CI runs them: `bun run lint`, `bun run typecheck`, `bun run check`, `bun test`.
+- [ ] 2.1 Confirm the four browser-free commands pass on a clean checkout exactly as CI runs them: `bun run lint`, `bun run typecheck`, `bun run check`, `bun test`.
 - [ ] 2.2 Confirm `bun run e2e` passes (with Chromium installed) — the same suite the `e2e` job runs.
-- [ ] 2.3 Validate the workflow YAML parses and the job/step structure is well-formed.
+- [ ] 2.3 Confirm the scoped render checks behave: `--changed` on a clean tree scopes to nothing, a component-local change to one component, a global-style change to all.
+- [ ] 2.4 Validate the workflow YAML parses and the job/step structure is well-formed.
 
 ## 3. Documentation
 

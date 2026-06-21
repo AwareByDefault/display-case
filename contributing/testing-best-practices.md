@@ -71,6 +71,12 @@ These drive the same `/render/<component>/<case>` endpoint the browse iframe use
 
 **5.3** With no phase flag, every phase runs; naming a phase runs only the named phase(s). The command exits non-zero on any token/a11y/visual/structure-`error` finding, making it safe as a CI gate. Recording new baselines is not, by itself, a failure.
 
+**5.4 Change-scoping the browser phases (`--only` / `--changed`).** The a11y/visual phases can be restricted to a subset of components so a PR doesn't re-render the whole showcase — the static phases are unaffected. `--only=<ids/globs>` is explicit; `--changed[=ref]` derives the subset from each component's import closure (`src/core/affected.ts`). The soundness rules: a render-relevant change no closure claims (global CSS, the render pipeline, shared source) scopes to **all**; a change with no render inputs (docs/tests/CI) scopes to **none** (no browser booted). The PR CI a11y/visual jobs use `--changed`. Full behavior: [../docs/testing.md#change-scoped-checks](../docs/testing.md#change-scoped-checks).
+
+**5.5 Committed visual baselines must match the CI render environment.** `display-case.config.ts` sets `baselineDir: ./test/visual-baselines` (committed). Pixel renders differ across OSes, so record baselines in the *same* image CI diffs in: `bun run baselines:record` records inside the pinned `mcr.microsoft.com/playwright` Docker image (the `visual` CI job runs in that same image). Never `--update` on macOS and commit — CI (Linux) would never match. After an intentional visual change, re-record via `baselines:record`, review the PNGs, and commit them. Keep the image tag, the record script, and the `playwright` version in `bun.lock` in lockstep.
+
+**5.6 CI gate.** `.github/workflows/ci.yml` runs the whole suite on every PR — `lint`/`typecheck`, the static checks, `bun test`, `e2e`, and the change-scoped `a11y`/`visual` jobs — as the backstop to the bypassable husky hooks. See [linting-best-practices.md](linting-best-practices.md).
+
 ---
 
 ## 6. e2e locator discipline

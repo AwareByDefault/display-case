@@ -77,9 +77,13 @@ The a11y phase prints each violation's affected nodes (for colour-contrast, the 
 | `--visual` | — | Run visual-regression checks. |
 | `--update` | off | (Re)record visual baselines from the current renders. |
 | `--strict` | off | Treat structure warnings as errors for this run. |
+| `--only=ids` | — | Scope the render phases (a11y/visual) to these component ids or globs (comma-separated). |
+| `--changed[=ref]` | — | Scope the render phases to components a change touched since `ref` (default the base branch, or `DISPLAY_CASE_BASE_REF`). |
 | `--port=N` | ephemeral | Port for the internal server the checks drive. |
 
 **Default behavior:** if no phase flag is given, **all** phases run — except any a config opts out via [`check.defaultPhases`](configuration.md). Pass one or more phase flags to narrow to just those phases; an explicit flag always runs that phase regardless of config.
+
+**Change-scoping the render checks.** `--only` / `--changed` restrict the (slow, browser-backed) a11y and visual phases to a subset of components — the static phases are unaffected. With `--changed`, a component is in scope when a changed file is in its import closure; a change to a globally-applied stylesheet or the shared render path scopes to **all** components, and a change with no render inputs (docs, tests) scopes to **none** (the render phases pass without launching a browser). This is what the CI a11y/visual jobs use. See [Testing → Change-scoped checks](testing.md#change-scoped-checks).
 
 ```bash
 display-case check .                       # all phases (minus config opt-outs)
@@ -88,6 +92,8 @@ display-case check . --tokens              # token conformance only (fast, no br
 display-case check . --a11y                # a11y only
 display-case check . --structure --strict  # structure rules, warnings fail the run
 display-case check . --visual --update     # record/refresh visual baselines
+display-case check . --a11y --only=button  # a11y for one component
+display-case check . --a11y --visual --changed=origin/main  # only what this branch touched
 ```
 
 Full details — the structure rules and their escape hatches, baselines, diff outputs, exit codes — are in [Testing](testing.md). Per-rule severity and enable/disable live in [Configuration](configuration.md).

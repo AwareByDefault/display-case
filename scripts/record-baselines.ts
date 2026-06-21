@@ -35,7 +35,9 @@ console.log(`→ recording baselines in ${PLAYWRIGHT_IMAGE}`)
 
 const inContainer = [
   'set -e',
-  // Bun is not in the Playwright image; fetch it for this one-shot run.
+  // Bun is not in the Playwright image; fetch it for this one-shot run. Its
+  // installer needs unzip, which the image also lacks.
+  'apt-get update >/dev/null 2>&1 && apt-get install -y unzip >/dev/null 2>&1',
   'curl -fsSL https://bun.sh/install | bash >/dev/null 2>&1',
   'export BUN_INSTALL=$HOME/.bun',
   'export PATH=$BUN_INSTALL/bin:$PATH',

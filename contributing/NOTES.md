@@ -88,6 +88,53 @@ counterpart that captures it. Things a future agent needs to know:
 
 ---
 
+## 2026-06-21: PR CI, change-scoped render checks, and committed visual baselines
+
+**CI is a backstop to husky, not a replacement.** `.github/workflows/ci.yml` runs
+the same gate the hooks run, on every PR, because hooks are bypassable and absent
+for bot/web/merge-button edits. Jobs: `lint` (uses `bun run lint`, the *no-fix*
+form — CI must fail on unformatted code, not silently fix it), `check`, `test`,
+`e2e`, `a11y`, `visual`. They're separate jobs so each is its own PR check.
+
+**Change-scoping (`--only` / `--changed`) only touches the render phases.** The
+expensive a11y/visual phases can be restricted to affected components; structure/
+tokens/ssr always run full (they're cheap). `src/core/affected.ts` builds each
+component's import closure by walking **relative** specifiers only (JS + CSS
+`@import`); bare specifiers (`react`, `display-case`) aren't traced — a PR never
+edits node_modules. There is no Bun module-graph/metafile, hence the hand-rolled
+walk.
+
+**The soundness rule is the subtle part.** Component CSS here is concatenated and
+inlined *globally* (`readVitrineCss` globs all `*.css`), and components don't
+JS-import their own CSS — so a JS closure alone would miss CSS entirely. The fix:
+a changed file that **no** component's closure claims (global CSS, the render
+pipeline, shared `src/`, the barrel `components/index.ts`) scopes to **all**
+components; a change with no render inputs at all (docs, tests, CI) scopes to
+**none**. So a `.css` edit correctly fans out to all 35, a component `.tsx` edit
+to just its dependents, and a docs edit to zero (no browser booted). Verified by
+hand; see `affected.test.ts` for the attribution unit tests.
+
+- **Gotcha — the barrel inflates closures.** The shell pages/templates import
+  `components/index.ts`, which re-exports everything, so their closures include
+  every component. A change to *any* component therefore always re-checks those ~6
+  aggregator components. Sound (over-approximation), mildly less efficient.
+- **Gotcha — uncommitted edits contaminate `--changed`.** It unions `git diff
+  <ref>...HEAD` with `git diff HEAD`, so a dirty working tree (e.g. mid-feature)
+  makes everything look changed → all affected. Commit first to test scoping.
+
+**Visual baselines are committed and Linux-recorded.** `display-case.config.ts`
+sets `baselineDir: ./test/visual-baselines` (208 PNGs). They MUST be recorded in
+the same env CI renders in — `bun run baselines:record` does this via the pinned
+`mcr.microsoft.com/playwright:v1.61.0-noble` Docker image (the `visual` CI job
+runs in that same image). Recording on macOS would commit baselines CI can never
+match (font/antialiasing). Keep the image tag, the record script, and the
+`playwright` version in `bun.lock` in lockstep. The record script `apt-get
+install`s unzip (bun's installer needs it; the image lacks it) and uses an
+anonymous `node_modules` volume so the container's Linux install never clobbers
+the host's.
+
+---
+
 ## 2026-06-21: Component CSS is server-inlined (the Vitrine stylesheet), not runtime-injected
 
 **What changed.** The design-system components used to paint by calling

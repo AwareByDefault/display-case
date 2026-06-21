@@ -193,6 +193,42 @@ export default defineConfig({
 
 `baselineDir` accepts a path relative to the package or an absolute path. See [Configuration](configuration.md#baselinedir).
 
+> **Committed baselines must match the environment that diffs them.** Pixel
+> renders differ across operating systems (fonts, antialiasing). If CI diffs in
+> Linux, record the committed baselines in that same Linux environment, not on a
+> developer's machine — otherwise every CI run reports false changes. This repo
+> records them in the pinned Playwright Docker image via `bun run
+> baselines:record`; see [contributing/testing-best-practices.md](../contributing/testing-best-practices.md).
+
+## Change-scoped checks
+
+The a11y and visual phases re-render every case, which is wasteful in CI when a
+change touched only a few components. Two flags restrict them to a subset (the
+static phases are unaffected):
+
+- `--only=<ids/globs>` — check only the named components (comma-separated).
+- `--changed[=ref]` — check only the components a change touched since `ref`
+  (default the base branch; override with `=ref` or `DISPLAY_CASE_BASE_REF`).
+
+With `--changed`, a component is in scope when a changed file is in its **import
+closure** — the case, the component, and everything they reference transitively
+(including stylesheets reached by `@import`). Two deliberate fallbacks keep it
+sound:
+
+- A render-relevant change that **no** component's closure claims — a
+  globally-applied stylesheet, the shared render path, other shared source —
+  scopes to **every** component, so a regression is never silently skipped.
+- A change touching **no** render input (docs, specs, tests, tooling) scopes to
+  **nothing**: the render phases report success without launching a browser.
+
+When both flags are given, the scope is their intersection. This is what the CI
+a11y/visual jobs use to gate a PR on only the components it could have affected.
+
+```bash
+display-case check . --a11y --only=button
+display-case check . --a11y --visual --changed=origin/main
+```
+
 ## Exit codes
 
 `display-case check` exits **0** when there are zero token violations, zero a11y violations, zero visual changes, and zero **error**-severity structure findings, and **1** otherwise. Structure **warnings** are reported but do not, by themselves, cause a non-zero exit unless `--strict` (or `check.structure.strict`) escalates them. Recording new baselines does not, by itself, cause a non-zero exit. This makes the command safe to use as a CI gate.

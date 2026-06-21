@@ -24,19 +24,33 @@ clean.
 **Non-Goals:**
 - No new branch-protection rules (configured in GitHub settings, out of band).
 - No change to Display Case runtime behavior, dependencies, or the published build.
-- No visual-regression (`--visual`) or a11y (`--a11y`) check phases in CI — those
-  need committed baselines / provisioned toolchain and stay in the review gate.
+- No *unscoped* render checks: a11y/visual run change-scoped (see the
+  `change-scoped-checks` capability), not over the whole showcase every PR.
 - No release/publish automation; this is a PR backstop only.
 
 ## Decisions
 
-- **One workflow, four parallel jobs (`lint`, `check`, `test`, `e2e`).** Each job
-  is independent and surfaces as its own PR check, so a red check points straight
-  at the failing layer. Alternative — a single sequential job — was rejected: it
-  hides which layer failed and serializes the fast browser-free work behind the
-  slow e2e run. The cost is re-running `checkout` + `setup-bun` + `bun install`
-  per job; Bun installs are fast and `setup-bun` caches Bun itself, so the
-  parallelism wins.
+- **One workflow, independent parallel jobs (`lint`, `check`, `test`, `e2e`,
+  `a11y`, `visual`).** Each job is independent and surfaces as its own PR check,
+  so a red check points straight at the failing layer. Alternative — a single
+  sequential job — was rejected: it hides which layer failed and serializes the
+  fast browser-free work behind the slow browser runs. The cost is re-running
+  `checkout` + `setup-bun` + `bun install` per job; Bun installs are fast and
+  `setup-bun` caches Bun itself, so the parallelism wins.
+- **The render checks (`a11y`, `visual`) run change-scoped via `--changed`.**
+  Re-auditing all ~100 cases on every PR is wasted work; `--changed` (the
+  `change-scoped-checks` capability) restricts them to the affected components.
+  `actions/checkout` uses `fetch-depth: 0` and the job passes the PR base sha via
+  `DISPLAY_CASE_BASE_REF` so `git diff` has a resolvable merge-base; on
+  `workflow_dispatch` (no PR) the ref falls back to `origin/main`.
+- **`visual` runs inside the pinned Playwright container.** Pixel baselines are
+  recorded in `mcr.microsoft.com/playwright:v1.61.0-noble`
+  (scripts/record-baselines.ts); the visual job renders in that *same* image so a
+  diff reflects a real change, not a macOS↔Linux font-rendering difference. The
+  image tag, the baseline-recording image, and the `playwright` version in
+  bun.lock must move together. `a11y` needs no baselines (axe is DOM-rule-based),
+  so it runs on the plain runner with `playwright install --with-deps chromium`,
+  like `e2e`.
 - **`bun run lint`, not `lint:fix`.** CI must *verify*, failing on unformatted or
   unlinted code, rather than silently auto-fixing it (which would make CI pass on
   a tree that the author never cleaned). The pre-commit hook uses `lint:fix` for

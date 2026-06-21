@@ -17,8 +17,16 @@ without passing the gate.
   - **check** — `bun run check` (the static `--structure --tokens --ssr` phases)
   - **test** — `bun test` (unit/type tests)
   - **e2e** — `bun run e2e` (the Playwright browse-chrome suite, with its Chromium browser provisioned)
-- The four run as **independent parallel jobs**, so each surfaces as its own PR
+  - **a11y** — `display-case check --a11y --changed` (accessibility audit, scoped
+    to the components this PR could have affected)
+  - **visual** — `display-case check --visual --changed` (visual-regression diff,
+    scoped likewise; rendered inside the pinned Playwright container against
+    committed baselines)
+- The jobs run as **independent parallel jobs**, so each surfaces as its own PR
   check and a failure points straight at the offending layer.
+- The render-backed jobs (a11y, visual) consume the `change-scoped-checks`
+  capability so a typical PR re-audits only the handful of affected components,
+  not the whole showcase.
 - In-flight runs for a ref are **cancelled when a new commit is pushed**.
 - This is **repo engineering tooling only**. It changes no Display Case runtime
   behavior, adds no runtime dependency, and ships nothing into a consuming build
