@@ -66,7 +66,7 @@ export default defineConfig({
 })
 ```
 
-Each provider receives the `CaseContext` (`componentId`, `caseId`, `theme`, `width`), so identity-aware providers can vary per case while pure ones ignore it. The built-ins double as reference implementations: [`src/providers/playwright-driver.ts`](../src/providers/playwright-driver.ts) and [`src/providers/pixelmatch-diff.ts`](../src/providers/pixelmatch-diff.ts). See [Configuration → `providers`](configuration.md#providers) for the full interfaces and a worked per-case-tolerance diff.
+Each provider receives the `CaseContext` (`componentId`, `caseId`, `theme`, `width`), so identity-aware providers can vary per case while pure ones ignore it. The built-ins double as reference implementations: [`src/checks/providers/playwright-driver.ts`](../src/checks/providers/playwright-driver.ts) and [`src/checks/providers/pixelmatch-diff.ts`](../src/checks/providers/pixelmatch-diff.ts). See [Configuration → `providers`](configuration.md#providers) for the full interfaces and a worked per-case-tolerance diff.
 
 ## Structure checks
 

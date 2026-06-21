@@ -6,13 +6,13 @@
 // as a template (placeholder slots), a page (real content slotted in), and a
 // flow (Primer ↔ Cases) — Display Case dogfooding its own layout end to end.
 import type { ReactNode } from 'react'
-import { slugify } from '../../../../catalog'
-import type { A11yViolation, TweakSchema } from '../../../../index'
+import { slugify } from '../../../../core/catalog'
 import type {
   Manifest,
   ManifestCase,
   ManifestComponent,
-} from '../../../../manifest'
+} from '../../../../core/manifest'
+import type { A11yViolation, TweakSchema } from '../../../../index'
 import { Display } from '../../../primer'
 import { groupByLevel, groupPrimerSections } from '../../../shell-core'
 import type { A11ySurface, ShellViewModel } from '../../../use-shell'

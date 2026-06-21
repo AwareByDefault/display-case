@@ -28,7 +28,7 @@ Non-obvious decisions, debugging notes, and architectural context for the Displa
 
 **The foot-gun it guards.** The browse chrome swaps cases **in place** — `render-mount.tsx` re-renders one persistent React root with `root.render()` and never unmounts (so theme/tweak changes don't flicker). A controlled component in a case needs a little stateful wrapper (`function Demo({ initial }) { const [v, setV] = useState(initial); … }`) reused across several cases. Because that `<Demo>` sits at the same tree position across cases, React **keeps its `useState` value** instead of re-seeding from each case's `initial`. Between cases whose props differ (a different selected id, a disjoint option set) the leaked value shows the wrong selection — or none active at all (e.g. the value isn't in the new options, so no segment is `data-active`, and its label renders in the default muted colour). Fix: give each case's wrapper a **distinct `key`** so React remounts it. Single-use specimens are safe (a sibling case renders a different element, which remounts). Full authoring guidance: `docs/writing-cases.md` → Authoring rules.
 
-**The check.** `interactive-cases-keyed` (structure rule, default on, error) in `src/structure-check.ts`. It flags a locally-defined stateful wrapper (body calls `useState`/`useReducer`) rendered in **≥2** case thunks where any usage omits a `key`. It is **regex/text-based**, matching the rest of `structure-check` (zero parser deps): it blanks comments first via the shared `blankComments` in `src/check-text.ts`, attributes each state hook to its nearest-preceding component definition, then counts `<Name …>` usages after `defineCases(` and checks each opening tag for `key=`. Escape hatch: `// display-case: allow-interactive-cases-keyed <reason>`.
+**The check.** `interactive-cases-keyed` (structure rule, default on, error) in `src/checks/structure-check.ts`. It flags a locally-defined stateful wrapper (body calls `useState`/`useReducer`) rendered in **≥2** case thunks where any usage omits a `key`. It is **regex/text-based**, matching the rest of `structure-check` (zero parser deps): it blanks comments first via the shared `blankComments` in `src/checks/check-text.ts`, attributes each state hook to its nearest-preceding component definition, then counts `<Name …>` usages after `defineCases(` and checks each opening tag for `key=`. Escape hatch: `// display-case: allow-interactive-cases-keyed <reason>`.
 
 **Known limitations (why an AST version was considered).** The regex heuristic:
 - checks for `key` *presence*, **not distinctness** — the same literal `key="x"` on every case is still buggy (same key ⇒ no remount) but passes;
@@ -132,7 +132,7 @@ export (host a Display Case beyond localhost). See
 ### `ssr` check phase — enforce pre-render purity dynamically, not statically
 
 The best-practice "don't use browser APIs in component render" is enforced by a
-new `ssr` check phase (`src/ssr-check.ts`), not a static lint. Rationale: a
+new `ssr` check phase (`src/checks/ssr-check.ts`), not a static lint. Rationale: a
 static rule can't tell whether a `window` reference sits in render (breaks SSR)
 or in an effect/handler (fine) — `TweaksPanel`'s `fixedBounds` reads `window` at
 module scope but is only called from a `useEffect`, and a naive rule would
@@ -157,13 +157,13 @@ scans; `'refresh'` additionally scans every uncached/stale variant. See
 
 Implementation:
 
-- **`src/a11y-scanner.ts`** — new `populateAtStartup(variants, mode)`. It reuses
+- **`src/checks/a11y-scanner.ts`** — new `populateAtStartup(variants, mode)`. It reuses
   the **existing** `cachedViolations` reuse logic (so a start-up verdict is
   byte-identical to the lazy path) and the existing scan queue/`pump()`. `refresh`
   probes `ensureDriver()` **once** before enqueueing: if the browser can't launch
   it returns early rather than flooding the SSE channel with a burst of
   `unavailable` events (the on-demand path still reports `unavailable` on view).
-- **`src/server.ts`** — calls `populateAtStartup` **detached** (`void`, not
+- **`src/server/server.ts`** — calls `populateAtStartup` **detached** (`void`, not
   awaited) after the scanner is built, so scanning never delays the server
   becoming reachable. Variant list = manifest components × cases × configured
   themes (`config.a11y.themes ?? ['light','dark']`).
@@ -193,7 +193,7 @@ the optional Playwright + axe toolchain. See `openspec/changes/display-case-live
 
 Architecture:
 
-- **`src/a11y-scanner.ts`** — owns ONE lazily-launched render driver (reused, like
+- **`src/checks/a11y-scanner.ts`** — owns ONE lazily-launched render driver (reused, like
   `check.ts`) + a serial job queue, so scans never block request handling and the
   browser starts only on first scan. On-demand: only the viewed variant is
   scanned. Graceful degradation: if the driver can't launch, it flips to an
@@ -207,7 +207,7 @@ Architecture:
   **layered**: stat the stored file set first (mtime+size, no reads); only on a
   stat mismatch re-crawl + content-hash to confirm a real change (so a
   touch-without-change doesn't re-scan).
-- **Server (`src/server.ts`)**: `GET /a11y?component=&case=&theme=` →
+- **Server (`src/server/server.ts`)**: `GET /a11y?component=&case=&theme=` →
   cached result | `pending` (enqueued) | `unavailable`. Completed scans push an
   `a11y` SSE event. Watch + live-reload are now the **default** for the
   interactive server (port ≠ 0), not just `--dev`; the watcher is broadened to
@@ -322,7 +322,7 @@ switch wired to `goto`).
   **e2e + unit + visual-regression** (all green).
 - **Display Case `check --structure` supersedes a repo-local coverage lint.**
   The package ships a static structure-check phase
-  (`src/structure-check.ts`) whose `case-placard-coverage`
+  (`src/checks/structure-check.ts`) whose `case-placard-coverage`
   rule is a strict superset of a bare "case file present" coverage lint
   (it also requires a sibling `*.placard.md`, not just a `*.case.tsx`). Drive it
   with `display-case check --structure --tokens` in the lint pipeline. The
@@ -534,7 +534,7 @@ module evaluation, before React mounts).
 **Root cause:** a consuming package's API client ran `createApiClient(process.env.BUN_PUBLIC_API_URL
 ?? '…')` at module top-level. The consuming app inlines `BUN_PUBLIC_*` at build
 time (`bun build … --env='BUN_PUBLIC_*'`, run from the app dir so Bun auto-loads
-that app's `.env`). Display Case's `Bun.build` (`src/server.ts`) passed no env
+that app's `.env`). Display Case's `Bun.build` (`src/server/server.ts`) passed no env
 handling and runs from a different directory, so the app's `.env` was never loaded
 and `process.env.BUN_PUBLIC_API_URL` survived as a literal. In the browser
 `process` is undefined → `process is not defined` throws on bundle load. All cases
@@ -651,7 +651,7 @@ names from other design systems into a case.
    `var(--token)` in a showcased package that resolves to no custom property the
    package defines (in `globalStyles` or an inline `style` object). This catches
    the phantom-token half at commit time, before anything renders. The detection
-   is **owned by Display Case** (`src/tokens-check.ts`, exposed as the `--tokens`
+   is **owned by Display Case** (`src/checks/tokens-check.ts`, exposed as the `--tokens`
    phase of `display-case:check`); a consuming package's lint just drives that
    phase over its `display-case.config.ts` and re-roots the findings. It is
    deliberately opinionated: a `var(--x, fallback)` is flagged even though the

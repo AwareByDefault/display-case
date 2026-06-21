@@ -8,7 +8,7 @@ The authoritative testing reference for the Display Case repo. Rules are numbere
 
 Display Case has three independent test layers. Know which one a given check belongs to before you add to it.
 
-**1.1 `bun test` — unit/integration.** Colocated `*.test.ts` files under `src/`, run by Bun's built-in runner. These cover the library internals: config resolution, case discovery, the token scanner, the init scaffolder, codegen entries. They are filesystem-backed where the code under test reads real files (see [`src/test-helpers.ts`](../src/test-helpers.ts)), but never touch a browser or a network port. This is the fast, default gate — run it constantly.
+**1.1 `bun test` — unit/integration.** Colocated `*.test.ts` files under `src/`, run by Bun's built-in runner. These cover the library internals: config resolution, case discovery, the token scanner, the init scaffolder, codegen entries. They are filesystem-backed where the code under test reads real files (see [`src/testing/test-helpers.ts`](../src/testing/test-helpers.ts)), but never touch a browser or a network port. This is the fast, default gate — run it constantly.
 
 **1.2 `*.test-d.ts` — type tests.** Compile-time assertions about the public type surface. They are checked by `tsc --noEmit` (a lint concern, not a runtime one) — a type regression is a lint failure, not a test failure. See [linting-best-practices.md](linting-best-practices.md).
 
@@ -16,7 +16,7 @@ Display Case has three independent test layers. Know which one a given check bel
 
 **1.4 `display-case check` — the showcase's own correctness gate.** A separate runner (the product feature, fully documented in [../docs/testing.md](../docs/testing.md)) that audits the *cases themselves* across five phases. It is both a thing this repo ships and a thing this repo runs against its own showcase. See §5.
 
-**1.5 Publish / deploy coverage.** The `publish` command and its `prod-server` are covered by [`src/publish.test.ts`](../src/publish.test.ts) (part of `bun test`): the emitted artifacts, the served build booted in-process, and the static export. The real `docker build` of the generated Dockerfile is a separate, **Docker-gated** test ([`test/publish-container.test.ts`](../test/publish-container.test.ts), run via `bun run test:container`). See §11.
+**1.5 Publish / deploy coverage.** The `publish` command and its `prod-server` are covered by [`src/commands/publish.test.ts`](../src/commands/publish.test.ts) (part of `bun test`): the emitted artifacts, the served build booted in-process, and the static export. The real `docker build` of the generated Dockerfile is a separate, **Docker-gated** test ([`test/publish-container.test.ts`](../test/publish-container.test.ts), run via `bun run test:container`). See §11.
 
 ---
 
@@ -32,9 +32,9 @@ Display Case has three independent test layers. Know which one a given check bel
 
 **3.1 Colocation.** A unit test lives next to the module it tests: `discovery.ts` → `discovery.test.ts`. No separate `__tests__` tree.
 
-**3.2 Naming.** Name `describe` blocks after the exported symbol under test and `test` cases after the observable behavior, phrased as an assertion ("resolves globs to sorted absolute paths", "throws when no config file is present"). See [`src/discovery.test.ts`](../src/discovery.test.ts) for the house style.
+**3.2 Naming.** Name `describe` blocks after the exported symbol under test and `test` cases after the observable behavior, phrased as an assertion ("resolves globs to sorted absolute paths", "throws when no config file is present"). See [`src/core/discovery.test.ts`](../src/core/discovery.test.ts) for the house style.
 
-**3.3 Real-file scaffolding.** Modules that read the filesystem are tested against real temp directories, not mocks. Use `makeTempDir()` + `writeFiles()` from [`src/test-helpers.ts`](../src/test-helpers.ts) to build a throwaway package from a `{ relativePath: contents }` map, and clean it up in `afterEach` (`rm(dir, { recursive: true, force: true })`). Never share a temp dir across files.
+**3.3 Real-file scaffolding.** Modules that read the filesystem are tested against real temp directories, not mocks. Use `makeTempDir()` + `writeFiles()` from [`src/testing/test-helpers.ts`](../src/testing/test-helpers.ts) to build a throwaway package from a `{ relativePath: contents }` map, and clean it up in `afterEach` (`rm(dir, { recursive: true, force: true })`). Never share a temp dir across files.
 
 **3.4 Error-path coverage.** The loaders return errors rather than throwing (`{ modules, errors }`); assert on both the happy path and the captured-error path (no default export, non-string component, throwing import). Edge cases — empty input, missing files, duplicate/overlapping globs — are part of the contract, not extras.
 
@@ -111,7 +111,7 @@ These drive the same `/render/<component>/<case>` endpoint the browse iframe use
 
 ```bash
 bun test                      # unit/integration suite (src/ only)
-bun test src/discovery.test.ts  # a single file
+bun test src/core/discovery.test.ts  # a single file
 
 bun run e2e:install           # one-time: install the Chromium browser for Playwright
 bun run e2e                   # Playwright e2e — boots the server itself
@@ -137,7 +137,7 @@ A change is complete only when the unit suite, the static `display-case check` p
 
 The publish path produces a deployable artifact, so it is tested at three levels — the first two Docker-free and always-on, the third Docker-gated.
 
-**11.1 Artifacts (unit).** [`src/publish.test.ts`](../src/publish.test.ts) runs `publish` into a temp dir and asserts the build is what a deploy expects: content-hashed `browser`/`render` bundles, a frozen `manifest.json` + `dc-build.json` (with `a11y: false` — dev surfaces excluded), the built SSR renderers under `server/`, and the generated `server.ts` (imports `display-case/prod-server`, no `__livereload`), `package.json` (a `bun server.ts` service), and `Dockerfile` (Bun base + `/health` check). `--base` is asserted to prefix the asset URLs.
+**11.1 Artifacts (unit).** [`src/commands/publish.test.ts`](../src/commands/publish.test.ts) runs `publish` into a temp dir and asserts the build is what a deploy expects: content-hashed `browser`/`render` bundles, a frozen `manifest.json` + `dc-build.json` (with `a11y: false` — dev surfaces excluded), the built SSR renderers under `server/`, and the generated `server.ts` (imports `display-case/prod-server`, no `__livereload`), `package.json` (a `bun server.ts` service), and `Dockerfile` (Bun base + `/health` check). `--base` is asserted to prefix the asset URLs.
 
 **11.2 Served + static (integration).** The same file boots the served build **in-process** via `startProdServer(out, { port: 0 })` and asserts `/health`, a server-rendered shell that links the hashed bundle and carries no dev live-reload, a chrome-free pre-scripting `/render/...` document, and `immutable` asset caching — then asserts the `--static` export writes complete `index.html` + per-case render documents. Note the build dir is anchored **inside the repo** (`.tmp/`, gitignored): the SSR bundle keeps `react`/`react-dom` external, so resolution must reach the repo's `node_modules` (a real deploy installs them alongside the build); a `/tmp` dir would fail to resolve React.
 

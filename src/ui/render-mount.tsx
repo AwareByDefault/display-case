@@ -1,9 +1,9 @@
 import { flushSync } from 'react-dom'
 import type { Root } from 'react-dom/client'
 import { createRoot, hydrateRoot } from 'react-dom/client'
-import { slugify } from '../catalog'
+import { slugify } from '../core/catalog'
 import type { CaseModule, DisplayCaseConfig, GotoFn } from '../index'
-import { caseTree, encodeOverrides } from '../render-node'
+import { caseTree, encodeOverrides } from '../render/render-node'
 
 /**
  * Entry point for the isolated `/render/:component/:case` document. Renders

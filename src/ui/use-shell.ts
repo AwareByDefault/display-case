@@ -5,8 +5,8 @@ import type {
   RefCallback,
 } from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { Manifest, ManifestComponent } from '../core/manifest'
 import type { A11yViolation } from '../index'
-import type { Manifest, ManifestComponent } from '../manifest'
 import {
   buildAddressUrl,
   buildRenderSrc,

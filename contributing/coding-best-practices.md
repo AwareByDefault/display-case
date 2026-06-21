@@ -50,7 +50,7 @@ return step.render(ctx)
 - `src/cli.ts` — the CLI entrypoint (`bin`).
 - `src/*.ts` — the engine: discovery, catalog, manifest, the dev server, the check phases (`structure-check.ts`, `tokens-check.ts`, `ssr-check.ts`), `init`/`publish`.
 - `src/ui/` — the browse **chrome** (React 19 shell, hooks, the `/render` and primer mounts) and its design system under `src/ui/design-system/`.
-- `src/providers/` — the optional visual-regression backend (Playwright driver, pixelmatch diff).
+- `src/checks/providers/` — the optional visual-regression backend (Playwright driver, pixelmatch diff).
 - `docs/` — product docs · `e2e/` — Playwright e2e for the chrome · `skills/` — bundled agent skills.
 
 **2.2** **Tests are colocated** as `*.test.ts` next to the module they cover (`discovery.ts` → `discovery.test.ts`). Type-level tests use `*.test-d.ts`. See [testing-best-practices.md](testing-best-practices.md).
@@ -63,7 +63,7 @@ return step.render(ctx)
 
 ## 3. Render purity & determinism
 
-This is the central Display Case rule. Every surface — each isolated `/render/<component>/<case>`, the primer, and the published build — is **server-rendered to complete HTML before any script runs**, then the client *adopts* (hydrates) that markup. The server and client must produce **identical** output. The `ssr` check (`src/ssr-check.ts`) enforces it by rendering every case on the server with no browser.
+This is the central Display Case rule. Every surface — each isolated `/render/<component>/<case>`, the primer, and the published build — is **server-rendered to complete HTML before any script runs**, then the client *adopts* (hydrates) that markup. The server and client must produce **identical** output. The `ssr` check (`src/checks/ssr-check.ts`) enforces it by rendering every case on the server with no browser.
 
 **3.1** **Keep render pure.** A case's render function (and the components it renders) MUST NOT, *during render*:
 
@@ -125,7 +125,7 @@ The browse chrome has its **own** design system — *The Vitrine* — under `src
 
 **5.1** **Chrome styles reference only `--dc-*` tokens.** `chrome.css` is styled entirely from the Vitrine token layer (`src/ui/design-system/tokens/`: colours, typography, spacing). Do not hardcode colours/spacing in the chrome and do not reach for a consumer or host-app token name. The server inlines the token layer ahead of `chrome.css`.
 
-**5.2** **Every `var(--token)` must resolve to a token the package defines.** The `tokens` check (`src/tokens-check.ts`) statically parses `var()` references and flags any whose custom property is defined nowhere the package controls (in `globalStyles` or an inline `style` object). This catches foreign or typo'd names that silently fall back to a hardcoded value.
+**5.2** **Every `var(--token)` must resolve to a token the package defines.** The `tokens` check (`src/checks/tokens-check.ts`) statically parses `var()` references and flags any whose custom property is defined nowhere the package controls (in `globalStyles` or an inline `style` object). This catches foreign or typo'd names that silently fall back to a hardcoded value.
 
 **5.3** The rule is **vocabulary conformance, not CSS validity** — `var(--x, fallback)` is still flagged even though the fallback makes it valid CSS. Do not add a fallback to dodge the check; use the right token.
 
@@ -139,7 +139,7 @@ The browse chrome has its **own** design system — *The Vitrine* — under `src
 
 **6.2** **Stay dependency-light.** Keep `dependencies` minimal (today: the MDX/markdown stack and the file watcher). Prefer Bun built-ins (`Bun.serve`, `Bun.build`, `Bun.Glob`, `Bun.file`) and `node:*` over third-party packages. Adding a runtime dependency is a deliberate decision, not a convenience.
 
-**6.3** **The visual toolchain is optional and lazily loaded.** `playwright`, `@axe-core/playwright`, `pixelmatch`, and `pngjs` are `optionalDependencies` and MUST be imported only when a default-backed `check --a11y`/`--visual` (or the live a11y surface) actually runs — via dynamic `import()` inside `src/providers/`, never at module top level. Browsing, `--print-manifest`, `/render` snapshotting, `init`, and the three static check phases (`structure`, `tokens`, `ssr`) must work with none of them installed.
+**6.3** **The visual toolchain is optional and lazily loaded.** `playwright`, `@axe-core/playwright`, `pixelmatch`, and `pngjs` are `optionalDependencies` and MUST be imported only when a default-backed `check --a11y`/`--visual` (or the live a11y surface) actually runs — via dynamic `import()` inside `src/checks/providers/`, never at module top level. Browsing, `--print-manifest`, `/render` snapshotting, `init`, and the three static check phases (`structure`, `tokens`, `ssr`) must work with none of them installed.
 
 **6.4** **The authoring API stays environment-neutral** (see §2.3): `src/index.ts` imports no DOM, no server, no Node/Bun runtime globals — only `react` types.
 

@@ -183,7 +183,7 @@ export default defineConfig({
 
 When `providers` is omitted (or a half is left unset), Display Case falls back to its built-in default for that half. The default is **lazy and optional**: the Playwright/axe driver and pixelmatch/pngjs diff are imported only when a default-backed `check --a11y`/`--visual` actually runs, so browsing, snapshotting, and `init` never need them. See [Testing](testing.md#the-default-backend-is-lazy-and-optional). Setting a custom provider replaces the default for that half and removes the need for those packages entirely.
 
-The reference implementations are the built-ins themselves — [`src/providers/playwright-driver.ts`](../src/providers/playwright-driver.ts) and [`src/providers/pixelmatch-diff.ts`](../src/providers/pixelmatch-diff.ts). A custom provider need only satisfy the interface.
+The reference implementations are the built-ins themselves — [`src/checks/providers/playwright-driver.ts`](../src/checks/providers/playwright-driver.ts) and [`src/checks/providers/pixelmatch-diff.ts`](../src/checks/providers/pixelmatch-diff.ts). A custom provider need only satisfy the interface.
 
 #### The `CaseContext` argument
 
@@ -290,7 +290,7 @@ export default defineConfig({
 })
 ```
 
-Compare against the built-in [`createPlaywrightDriver`](../src/providers/playwright-driver.ts), which launches Chromium at a fixed 1024×768 viewport with reduced motion and runs a WCAG 2 A/AA axe audit.
+Compare against the built-in [`createPlaywrightDriver`](../src/checks/providers/playwright-driver.ts), which launches Chromium at a fixed 1024×768 viewport with reduced motion and runs a WCAG 2 A/AA axe audit.
 
 ### `check`
 

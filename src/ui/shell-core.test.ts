@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import type { Manifest } from '../manifest'
+import type { Manifest } from '../core/manifest'
 import { primerForLocation } from './shell-core'
 
 // `primerForLocation` reads `window.location.pathname`; stub a minimal window

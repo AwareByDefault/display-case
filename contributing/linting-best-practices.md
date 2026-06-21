@@ -110,7 +110,7 @@ effective rule set a contributor sees:
 - `noRestrictedImports` — **error** for the optional visual toolchain
   (`playwright`, `@axe-core/playwright`, `pixelmatch`, `pngjs`): these must be
   loaded **lazily** via `await import()` so browsing/manifest/render stay
-  dependency-light. `src/providers/**` is exempted (the lazy leaves that may
+  dependency-light. `src/checks/providers/**` is exempted (the lazy leaves that may
   statically import them). This is the Biome-expressed form of the monorepo's
   `import-boundaries` check — see [coding-best-practices.md](coding-best-practices.md) §6.
 - Two **GritQL plugins** run via `overrides[].plugins` (custom messages,
@@ -145,7 +145,7 @@ Pick the cheapest home that fits — in this order:
    non-JS files (e.g. `spec-purity` over Markdown).
 2. **A Display Case structure rule.** Rules about the *showcase* (coverage, catalog
    integrity, case content, composition) extend the structure phase in
-   [src/structure-check.ts](../src/structure-check.ts). Add the rule there, give it a
+   [src/checks/structure-check.ts](../src/checks/structure-check.ts). Add the rule there, give it a
    stable `<rule-id>` (so `// display-case: allow-<rule-id>` works), assign a
    severity (`error`/`warn`), and add a unit test next to it
    (`structure-check.test.ts`).

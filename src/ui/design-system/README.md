@@ -75,7 +75,7 @@ determinism, primer skeleton widths).
 
 ## How the chrome consumes the tokens
 
-`startDisplayCase` (in `../../server.ts`) inlines the token CSS into the
+`startDisplayCase` (in `../../server/server.ts`) inlines the token CSS into the
 browse-shell `<style>` ahead of `chrome.css`, and injects the webfont
 `<link>`s into the document head. Everything references `var(--dc-*)`; nothing
 hard-codes a color, radius, or font.

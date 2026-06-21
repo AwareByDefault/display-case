@@ -29,6 +29,31 @@ Vitrine" — under [`src/ui/design-system/`](src/ui/design-system/), and
 [`display-case.config.ts`](display-case.config.ts) points the showcase at those
 components. Full product overview: [README.md](README.md).
 
+## Source layout
+
+`src/` is grouped by concern; tests are colocated (`*.test.ts` next to the module).
+The two entry files sit at the root, everything else lives under a named group:
+
+```
+src/
+  index.ts        Public authoring API (the "." export): defineCases/defineFlow/tweak/defineConfig + types
+  cli.ts          The bin entry; dispatches to commands/ and checks/
+  core/           Data model + discovery: catalog, manifest, discovery, mdx-plugin
+  render/         Server-side rendering: ssr-render/shell/primer, render-node, the HTML documents
+  server/         The hosts: dev server + prod-server (the "./prod-server" export)
+  checks/         `display-case check` phases: check (runner), structure/tokens/ssr/check-text,
+                  a11y-scanner, and providers/ (the lazy, optional visual toolchain)
+  commands/       CLI subcommands: init (agent scaffolding), publish, agents
+  ui/             The browse chrome + the Vitrine design system (its own internal structure)
+  testing/        Shared test scaffolding (test-helpers)
+  types/          Ambient module declarations (*.d.ts)
+```
+
+The public surface is small and deliberate: only `index.ts`, `checks/tokens-check.ts`
+(`./tokens-check`), and `server/prod-server.ts` (`./prod-server`) are exported (see
+`package.json` `exports`); everything else is internal. Imports point "inward"
+(commands/server/checks → render/core → index); keep that direction.
+
 ## Display Case (for agents)
 
 Browse the component showcase with `bun run display-case`; `--print-manifest`

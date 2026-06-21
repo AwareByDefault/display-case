@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { useCallback, useEffect, useRef } from 'react'
-import { slugify } from '../catalog'
+import { slugify } from '../core/catalog'
 import { injectStyle } from './design-system/components/inject-style'
 
 /**

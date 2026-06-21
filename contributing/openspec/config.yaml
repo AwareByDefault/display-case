@@ -42,11 +42,13 @@ context: |
   -------------------------------------------------
   Single-package TypeScript project. Bun runtime: the dev server and bundler are
   Bun-native (`Bun.serve` + `Bun.build`); the CLI entry is `src/cli.ts`. React 19
-  is a peer dependency. Public API and CLI surface live in `src/`, with colocated
-  `*.test.ts` unit tests (run by `bun test`) and `*.test-d.ts` type tests. The
-  browse chrome and its "Vitrine" design system live in `src/ui/`. The optional
-  visual toolchain (Playwright, @axe-core/playwright, pixelmatch, pngjs) is
-  lazily loaded. A self-contained Playwright suite under `e2e/` drives the chrome.
+  is a peer dependency. `src/` is grouped by concern — `core/` (model +
+  discovery), `render/` (SSR), `server/` (dev + prod hosts), `checks/` (the
+  check phases + the lazy visual toolchain under `checks/providers/`),
+  `commands/` (CLI subcommands), `ui/` (browse chrome + "Vitrine" design
+  system), with `index.ts`/`cli.ts` at the root — and unit tests are colocated
+  (`*.test.ts`, plus `*.test-d.ts` type tests). A self-contained Playwright
+  suite under `e2e/` drives the chrome. See AGENTS.md → Source layout.
 
   Domain vocabulary
   -----------------

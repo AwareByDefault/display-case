@@ -53,10 +53,10 @@
           "level": "error",
           "options": {
             "paths": {
-              "playwright": "Optional visual toolchain — import lazily via `await import()` inside src/providers/ only, so browsing/manifest/render stay dependency-light.",
-              "@axe-core/playwright": "Optional visual toolchain — import lazily via `await import()` inside src/providers/ only.",
-              "pixelmatch": "Optional visual toolchain — import lazily via `await import()` inside src/providers/ only.",
-              "pngjs": "Optional visual toolchain — import lazily via `await import()` inside src/providers/ only."
+              "playwright": "Optional visual toolchain — import lazily via `await import()` inside src/checks/providers/ only, so browsing/manifest/render stay dependency-light.",
+              "@axe-core/playwright": "Optional visual toolchain — import lazily via `await import()` inside src/checks/providers/ only.",
+              "pixelmatch": "Optional visual toolchain — import lazily via `await import()` inside src/checks/providers/ only.",
+              "pngjs": "Optional visual toolchain — import lazily via `await import()` inside src/checks/providers/ only."
             }
           }
         },
@@ -101,7 +101,7 @@
       "plugins": ["./tools/lint/no-custom-svg.grit"]
     },
     {
-      "includes": ["src/providers/**"],
+      "includes": ["src/checks/providers/**"],
       "linter": {
         "rules": {
           "style": {

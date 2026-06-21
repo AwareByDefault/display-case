@@ -2,8 +2,8 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { readdir, rm, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { $ } from 'bun'
-import { publish } from '../src/publish'
-import { makeTempDir } from '../src/test-helpers'
+import { publish } from '../src/commands/publish'
+import { makeTempDir } from '../src/testing/test-helpers'
 
 /**
  * Level 3 of the publish coverage: build the generated Dockerfile into a real

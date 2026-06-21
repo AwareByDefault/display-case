@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
 import { existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { AGENT_TARGETS, DEFAULT_AGENT } from './agents'
-import { getManifest, startDisplayCase } from './server'
+import { AGENT_TARGETS, DEFAULT_AGENT } from './commands/agents'
+import { getManifest, startDisplayCase } from './server/server'
 
 /**
  * Display Case CLI.
@@ -99,7 +99,7 @@ if (argv[0] === 'init' || argv[0] === 'uninstall') {
     )
     process.exit(1)
   }
-  const { runInit, runUninstall, report } = await import('./init')
+  const { runInit, runUninstall, report } = await import('./commands/init')
   // init may set up the visual toolchain: explicit --with-visual, or an
   // interactive prompt when attached to a TTY (never in --json/--dry-run).
   let withVisual = flag('with-visual')
@@ -128,8 +128,8 @@ if (argv[0] === 'init' || argv[0] === 'uninstall') {
   report(result)
 } else if (argv[0] === 'check') {
   const pkgDir = resolvePkgDir(positionals()[1])
-  const { runChecks } = await import('./check')
-  const { resolveConfig } = await import('./discovery')
+  const { runChecks } = await import('./checks/check')
+  const { resolveConfig } = await import('./core/discovery')
   const { config } = await resolveConfig(pkgDir)
   // A named phase flag ⇒ run only the named phase(s). With no phase flag, run
   // every phase except those a config opts out of via `check.defaultPhases`.
@@ -162,7 +162,7 @@ if (argv[0] === 'init' || argv[0] === 'uninstall') {
   process.exit(ok ? 0 : 1)
 } else if (argv[0] === 'publish') {
   const pkgDir = resolvePkgDir(positionals()[1])
-  const { publish } = await import('./publish')
+  const { publish } = await import('./commands/publish')
   const isStatic = flag('static')
   console.log('Building deployable showcase…')
   const { out } = await publish(pkgDir, {

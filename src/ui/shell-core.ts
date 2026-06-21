@@ -1,6 +1,6 @@
+import type { Manifest, ManifestComponent } from '../core/manifest'
 import type { HierarchyLevel } from '../index'
 import { HIERARCHY_LEVELS } from '../index'
-import type { Manifest, ManifestComponent } from '../manifest'
 
 export type Theme = 'light' | 'dark'
 export type Mode = 'primer' | 'library'
