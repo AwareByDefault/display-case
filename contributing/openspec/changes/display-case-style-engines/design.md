@@ -207,12 +207,14 @@ failing the document).
 
 ## Migration Plan
 
-0. **Spike (de-risk the client-adoption claim first):** wire `styleEngines` end to
-   end for the isolated render only, add the emotion engine to a scratch MUI case,
-   and confirm `/render/<comp>/<case>?theme=dark` fetched **with scripts disabled**
-   is fully styled, and that **with** scripts there is no flash and no duplicated
-   `<style data-emotion>` (adoption works). This validates Decision 3 before
-   spending effort on the primer + prod paths.
+0. **Spike (de-risk the extraction first):** wire `styleEngines` end to end for the
+   isolated render only and validate against the **real emotion library** (added as
+   a **devDependency** — never a runtime dep) that the documented engine extracts
+   genuine `<style data-emotion>` styling, that it lands as a discrete head block,
+   and that renders stay isolated (`collect-styles.emotion.test.tsx`). Browser-level
+   client adoption (no-flash/no-duplicate on hydration) is emotion's own runtime
+   behavior — left to a consuming repo rather than pulling a headless-browser MUI
+   fixture into this repo.
 1. Add `StyleEngine` / `StyleCollector` types + `styleEngines` to `src/index.ts`;
    add `headStyles?` to `CaseHtmlResult` and the primer result type.
 2. Apply engines + collect in `ssr-render.tsx` and `ssr-primer.tsx` (inside the

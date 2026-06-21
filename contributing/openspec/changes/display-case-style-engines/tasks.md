@@ -3,7 +3,7 @@
 - [x] 1.1 Add `StyleEngine` / `StyleCollector` types and `styleEngines?: StyleEngine[]` to `DisplayCaseConfig` in `src/index.ts`; add `headStyles?: string` to `CaseHtmlResult` in `src/render/ssr-render.tsx`.
 - [x] 1.2 In `renderCaseToHtml` (`ssr-render.tsx`), inside the already-rendered branch (and inside the `try`): map `config.styleEngines` to collectors, `wrap` the tree in array order, `renderToString`, then concatenate each collector's `collect(html)` into `headStyles`. (Factored into `src/render/collect-styles.ts` `renderWithStyles`, shared with the primer.)
 - [x] 1.3 Add a discrete `headStyles` slot to the dev `renderHtml` builder (`src/server/server.ts`) — emitted after the base `<style>` block, before `</head>` — and thread `result.headStyles` from the `/render` route into it.
-- [~] 1.4 Authored the flagship `emotionEngine` recipe (in `docs/style-engines.md` / `design.md`) and validated the **server-side** seam end-to-end with a stub engine: `wrap` is applied, `collect` output lands as a discrete `<head>` tag in the served document (scripts-disabled), per-render isolation holds. **Deferred:** real-emotion/MUI **client adoption** in a browser — that requires adding MUI/emotion, which the design rules out as a tool dependency; it is validated in a consuming repo via the documented recipe.
+- [x] 1.4 Authored the flagship `emotionEngine` recipe (in `docs/style-engines.md` / `design.md`) and validated the **server-side** seam with the **real emotion library** (`@emotion/react` + `@emotion/server` as devDependencies): `src/render/collect-styles.emotion.test.tsx` runs the recipe verbatim through `makeCaseRenderer` + `renderDoc` and asserts real `<style data-emotion>` tags carry the rendered rule, land as a discrete head block after the static `<style>`, and stay per-render isolated. Emotion is a **devDependency only** — no runtime dep. (Browser **client adoption** of those `data-emotion` tags is emotion's own documented runtime behavior; left to a consuming repo per the no-runtime-dependency design.)
 
 ## 2. Primer path
 
@@ -27,6 +27,7 @@
 - [x] 5.2 Unit: two cases with different render-time styling get per-render-isolated head styling (no cross-bleed). (`ssr-render.test.tsx`.)
 - [x] 5.3 Unit: no engines ⇒ identical document; `browserOnly` case ⇒ empty `headStyles`. (`documents.test.ts` + `ssr-render.test.tsx`.)
 - [x] 5.4 Type test (`*.test-d.ts`): `StyleEngine` / `StyleCollector` shape and the `styleEngines` field type. (`src/style-engine.test-d.ts`.)
+- [x] 5.5 Real-library integration: the documented `emotionEngine` (emotion as a devDependency) extracts genuine `data-emotion` styling through the seam, placed as a discrete head block, per-render isolated. (`src/render/collect-styles.emotion.test.tsx`.)
 
 ## 6. Verification
 
@@ -34,7 +35,7 @@
 - [x] 6.2 `bun run check` (structure + tokens + ssr) passes.
 - [x] 6.3 `bun test` passes (335 tests).
 - [x] 6.4 `bun run e2e` (chrome suite) passes — 24/24, no regression in the iframed render.
-- [~] 6.5 Manual flagship **MUI** render verification (scripts disabled, light + dark) is **deferred** to a consuming repo: it requires MUI/emotion, which the design excludes as a tool dependency. The `server-rendering` scenarios are covered structurally by the stub-engine tests (styling present pre-script, isolation, browser-only exemption, inert-when-unused).
+- [x] 6.5 The flagship `server-rendering` scenarios (styling present pre-script, per-render isolation, discrete-head placement) are validated with the **real emotion library** in `collect-styles.emotion.test.tsx`, plus the stub-engine coverage for browser-only exemption and inert-when-unused. Browser-level client adoption (no-flash/no-duplicate on hydration) remains emotion's documented runtime behavior, verified in a consuming repo.
 
 ## 7. Documentation
 

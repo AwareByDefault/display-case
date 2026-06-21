@@ -59,6 +59,9 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.0",
+    "@emotion/cache": "^11.14.0",
+    "@emotion/react": "^11.14.0",
+    "@emotion/server": "^11.11.0",
     "@playwright/test": "^1.60.0",
     "@types/bun": "^1.2.0",
     "@types/pngjs": "^6.0.5",
