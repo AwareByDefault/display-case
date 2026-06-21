@@ -1,0 +1,74 @@
+name: CI
+
+# Backstop for the husky git hooks (which are bypassable / absent on bot &
+# GitHub-web edits). Runs the same browser-free gate as `.husky/pre-commit` plus
+# the e2e suite from `.husky/pre-push`, on every open pull request.
+# See contributing/linting-best-practices.md and contributing/testing-best-practices.md.
+on:
+  pull_request:
+  workflow_dispatch:
+
+# A new push to a PR cancels any in-flight run for that ref.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint & typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      # `lint` (not `lint:fix`) is the verification form — CI must fail on
+      # unformatted/unlinted code rather than silently fixing it.
+      - run: bun run lint
+      - run: bun run typecheck
+
+  check:
+    name: Static checks (structure + tokens + ssr)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      - run: bun run check
+
+  test:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      - run: bun test
+
+  e2e:
+    name: E2E (Playwright)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      # The Playwright browser + its OS deps (the e2e suite launches Chromium).
+      - run: bunx playwright install --with-deps chromium
+      - run: bun run e2e
+      - name: Upload Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+          if-no-files-found: ignore

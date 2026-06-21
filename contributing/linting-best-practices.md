@@ -16,7 +16,8 @@ remains is a lean set scoped to one package.
 
 ## 1. How linting is gated
 
-Quality gates run through **git hooks (husky)**, not a separate CI lint job.
+Quality gates run through **git hooks (husky)** locally, backstopped by a
+**GitHub Actions PR workflow** ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)).
 
 - **`.husky/pre-commit`** — on commits that touch code (not docs/specs only), runs
   the static, browser-free gate:
@@ -38,14 +39,19 @@ Quality gates run through **git hooks (husky)**, not a separate CI lint job.
   [../docs/testing.md](../docs/testing.md) — *The default backend is lazy and
   optional*).
 
-This husky-based model is the **recommended** gate for the standalone repo. There is
-intentionally no PR-CI workflow defined today.
+The husky model is the fast local gate; the **PR workflow is the backstop**.
+Hooks are bypassable (`--no-verify`), absent in a clone where `bun install` never
+ran, and skipped entirely for bot/GitHub-web edits and off-machine merges (the
+GitHub merge button) — any of which can land unlinted code. CI re-runs the same
+commands on every open pull request so nothing merges unchecked:
 
-**Residual risk.** Hooks are bypassable (`--no-verify`), absent in a clone where
-`bun install` never ran, and skipped entirely for bot/GitHub-web edits and
-off-machine merges (the GitHub merge button) — any of which can land unlinted code.
-If that ever matters, the aligned backstop is the same commands above run in a CI
-step on the default branch, not a parallel PR workflow.
+- **`lint`** — `bun run lint` (the `--no-fix` verification form, not `lint:fix`) + `bun run typecheck`
+- **`check`** — `bun run check` (structure + tokens + ssr)
+- **`test`** — `bun test`
+- **`e2e`** — `bun run e2e` (installs Chromium via `playwright install --with-deps chromium`)
+
+The four jobs run in parallel so each surfaces as its own PR check. The first
+three need no browser; only `e2e` provisions Chromium.
 
 ---
 

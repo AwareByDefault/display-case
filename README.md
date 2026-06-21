@@ -296,3 +296,5 @@ The live accessibility scanner is a dev-only surface and is omitted from a publi
 - [AI agents](docs/ai-agents.md) — the manifest, render snapshotting, recommended workflow.
 - [Configuration](docs/configuration.md) — full `defineConfig` reference.
 - [Examples](docs/examples/) — runnable example case and placard-doc files.
+
+<!-- scope-test -->

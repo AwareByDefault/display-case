@@ -8,6 +8,12 @@ import { defineConfig } from 'display-case'
 export default defineConfig({
   title: 'Display Case',
   roots: ['src/ui/design-system/components/**/*.case.tsx'],
+  // Commit visual-regression baselines (instead of the gitignored default under
+  // .display-case/) so the CI visual check has something to diff against. They
+  // are recorded in the same Linux Playwright image CI renders in — see
+  // scripts/record-baselines.ts and contributing/testing-best-practices.md — so
+  // they don't drift on macOS↔Linux font-rendering differences.
+  baselineDir: './test/visual-baselines',
   // The Primer "wall text": a long-form reading page with embedded live
   // specimens, authored in MDX and dogfooding the design system's own components.
   primer: './src/ui/design-system/primer.mdx',

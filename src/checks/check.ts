@@ -1,6 +1,9 @@
 import { mkdir } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { dirname, extname, join, relative, resolve, sep } from 'node:path'
+import { Glob } from 'bun'
+import { componentClosures } from '../core/affected'
 import { baselineDir, cacheDir, resolveConfig } from '../core/discovery'
+import type { ManifestComponent } from '../core/manifest'
 import type {
   A11yViolation,
   CaseContext,
@@ -38,6 +41,11 @@ export interface CheckOptions {
   update: boolean
   /** Treat structure warnings as errors (CLI `--strict`). */
   strict?: boolean
+  /** Restrict the render phases (a11y/visual) to these component ids or globs. */
+  only?: string[]
+  /** Restrict the render phases to components whose import closure touches a
+   *  file changed since this git ref (CLI `--changed[=ref]`). */
+  changedRef?: string
   port?: number
 }
 
@@ -110,6 +118,89 @@ async function resolveDiff(config: DisplayCaseConfig): Promise<DiffFn> {
       `${INSTALL_HINT}\n  (${err instanceof Error ? err.message : String(err)})`,
     )
   }
+}
+
+/**
+ * Absolute paths of files changed since `ref`, for `--changed` scoping. Unions
+ * the committed diff since the merge-base (`ref...HEAD`) with the working tree
+ * (`HEAD`), so a local run also sees staged/unstaged edits and CI sees the PR's
+ * commits. Returns an empty list when git is unavailable or `ref` can't be
+ * resolved (e.g. an over-shallow clone) — the caller treats "no changes" as
+ * "nothing affected".
+ */
+async function changedSince(pkgDir: string, ref: string): Promise<string[]> {
+  const top = await Bun.$`git -C ${pkgDir} rev-parse --show-toplevel`
+    .quiet()
+    .nothrow()
+  if (top.exitCode !== 0) return []
+  const root = top.stdout.toString().trim()
+  const names = new Set<string>()
+  for (const range of [`${ref}...HEAD`, 'HEAD']) {
+    const out = await Bun.$`git -C ${root} diff --name-only ${range}`
+      .quiet()
+      .nothrow()
+    if (out.exitCode !== 0) continue
+    for (const line of out.stdout.toString().split('\n')) {
+      if (line.trim()) names.add(resolve(root, line.trim()))
+    }
+  }
+  return [...names]
+}
+
+// Extensions whose change can alter a rendered case (markup, behaviour, style).
+const RENDER_EXTS = new Set(['.tsx', '.ts', '.jsx', '.js', '.css', '.mdx'])
+// Trees under the package that never feed a render (so a change there scopes to
+// nothing): docs, specs, the e2e suite, agent skills, build/CI tooling.
+const NON_RENDER_DIRS =
+  /^(\.github|\.claude|contributing|docs|e2e|skills|scripts|tools|node_modules)(\/|$)/
+
+/** Whether a changed file (absolute) can affect a rendered case. */
+function isRenderRelevant(file: string, pkgRoot: string): boolean {
+  if (file !== pkgRoot && !file.startsWith(pkgRoot + sep)) return false
+  const rel = relative(pkgRoot, file)
+  if (NON_RENDER_DIRS.test(rel)) return false
+  if (/\.(test|spec)\.[tj]sx?$/.test(rel) || /\.test-d\.ts$/.test(rel))
+    return false
+  if (rel.endsWith('.d.ts')) return false
+  return RENDER_EXTS.has(extname(file))
+}
+
+/**
+ * The components affected by the changes since `ref`. Render-irrelevant changes
+ * (docs, specs, tests, tooling) scope to nothing. A render-relevant change is
+ * attributed to a component when it lies in that component's import closure; a
+ * render-relevant change that *no* closure claims — globally-inlined component
+ * CSS, the render pipeline, shared source — conservatively affects every
+ * component, so a regression is never silently skipped.
+ */
+async function changedScope(
+  pkgDir: string,
+  ref: string,
+  comps: { id: string; caseFile: string }[],
+): Promise<Set<string>> {
+  const pkgRoot = resolve(pkgDir)
+  const changed = (await changedSince(pkgDir, ref)).filter((f) =>
+    isRenderRelevant(f, pkgRoot),
+  )
+  if (changed.length === 0) return new Set()
+  const closures = await componentClosures(comps)
+  const claimed = new Set<string>()
+  for (const files of closures.values()) for (const f of files) claimed.add(f)
+  // Any render-relevant change outside every closure ⇒ a global input changed.
+  if (changed.some((f) => !claimed.has(f))) {
+    return new Set(comps.map((c) => c.id))
+  }
+  const changedSet = new Set(changed)
+  const affected = new Set<string>()
+  for (const [id, files] of closures) {
+    for (const f of files) {
+      if (changedSet.has(f)) {
+        affected.add(id)
+        break
+      }
+    }
+  }
+  return affected
 }
 
 export async function runChecks(
@@ -193,8 +284,61 @@ export async function runChecks(
   const base = String(server.url).replace(/\/$/, '')
   const manifest = await fetch(`${base}/manifest.json`).then((r) => r.json())
 
+  // Resolve the change-scope for the render phases. `null` means no scoping —
+  // every component is checked (the default). Otherwise it is the set of
+  // component ids to check; an empty set short-circuits before any browser work.
+  let scope: Set<string> | null = null
+  if (opts.only || opts.changedRef) {
+    const comps = (manifest.components as ManifestComponent[]).map((c) => ({
+      id: c.id,
+      caseFile: resolve(pkgDir, c.caseFile),
+    }))
+    const sets: Set<string>[] = []
+    if (opts.only) {
+      const globs = opts.only.map((g) => new Glob(g))
+      sets.push(
+        new Set(
+          comps
+            .filter((c) => globs.some((g) => g.match(c.id)))
+            .map((c) => c.id),
+        ),
+      )
+    }
+    if (opts.changedRef) {
+      sets.push(await changedScope(pkgDir, opts.changedRef, comps))
+    }
+    // Both flags present ⇒ a component must satisfy both (intersection).
+    scope = sets[0]
+    for (const s of sets.slice(1)) {
+      const next = new Set<string>()
+      for (const id of scope) if (s.has(id)) next.add(id)
+      scope = next
+    }
+    const basis = [
+      opts.only ? '--only' : null,
+      opts.changedRef ? `--changed=${opts.changedRef}` : null,
+    ]
+      .filter(Boolean)
+      .join(' + ')
+    console.log(
+      `  scope: ${scope.size} of ${comps.length} component(s) (${basis})`,
+    )
+    if (scope.size === 0) {
+      server.stop(true)
+      const ok = staticErrors === 0
+      const warn = structureWarnings ? `, ${structureWarnings} warning(s)` : ''
+      console.log(
+        ok
+          ? `\n  ✓ checks passed — no affected components${warn}`
+          : `\n  ✗ ${tokenViolations} token violation(s), ${structureErrors} structure error(s), ${ssrErrors} ssr error(s)${warn}`,
+      )
+      return ok
+    }
+  }
+
   const targets: Target[] = []
   for (const c of manifest.components) {
+    if (scope && !scope.has(c.id)) continue
     for (const cs of c.cases) {
       for (const theme of THEMES) {
         targets.push({

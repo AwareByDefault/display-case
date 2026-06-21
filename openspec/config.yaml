@@ -37,6 +37,8 @@ context: |
   - server-rendering        — delivers every surface rendered before scripting (incl. render-time CSS-in-JS styling via style engines), plus the server-render (ssr) safety check
   - agent-init              — installs/removes Display Case's AI-agent integration into a target repo, idempotently
   - publishing              — keeps Display Case out of consuming apps while producing a standalone, deployable showcase build
+  - change-scoped-checks    — restricts the gating render checks (a11y/visual) to the components a change could affect, via each component's import closure, with a conservative fallback to all
+  - continuous-integration  — runs the repository's full quality suite (lint/typecheck, static checks, unit tests, e2e) against every proposed change before integration (repo engineering process, not tool runtime behavior)
 
   Tech stack (lives in design.md, NEVER in spec.md)
   -------------------------------------------------

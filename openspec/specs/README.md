@@ -21,3 +21,5 @@ The specification is split into discrete, per-capability files. Each describes t
 - **Server Rendering** — delivers every surface rendered before scripting, plus a server-render safety check. [server-rendering/spec.md](./server-rendering/spec.md)
 - **Agent Init** — installs and removes Display Case's AI-agent integration into a target repository, idempotently. [agent-init/spec.md](./agent-init/spec.md)
 - **Publishing** — keeps Display Case out of consuming applications while producing a standalone, deployable showcase build. [publishing/spec.md](./publishing/spec.md)
+- **Change-Scoped Checks** — restricts the gating render checks (a11y, visual) to the components a change could affect, derived from each component's import closure, with a conservative fallback to all. [change-scoped-checks/spec.md](./change-scoped-checks/spec.md)
+- **Continuous Integration** — runs the repository's full quality suite against every proposed change before it can be integrated. (Repository engineering process, not Display Case runtime behavior.) [continuous-integration/spec.md](./continuous-integration/spec.md)

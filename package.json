@@ -35,6 +35,7 @@
     "typecheck": "tsc --noEmit",
     "openspec": "openspec",
     "check": "bun src/cli.ts check . --structure --tokens --ssr",
+    "baselines:record": "bun scripts/record-baselines.ts",
     "test": "bun test",
     "test:container": "bun test ./test/publish-container.test.ts",
     "e2e": "playwright test",
