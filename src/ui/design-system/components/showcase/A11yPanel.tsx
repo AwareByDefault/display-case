@@ -295,6 +295,7 @@ export function A11yPanel({
               <li
                 key={v.id}
                 className="dcui-a11y-item"
+                data-testid={DcTestIds.a11yViolation(v.id)}
                 // Stagger the cascade; reduced-motion drops the animation, so this
                 // delay has no effect there (everything appears at once).
                 style={{ animationDelay: `${i * 100}ms` }}>

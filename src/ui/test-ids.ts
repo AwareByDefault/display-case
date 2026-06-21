@@ -47,4 +47,7 @@ export const DcTestIds = {
     `dc-nav-case-${componentId}-${caseId}`,
   /** A Primer ↔ Cases mode-switch tab, keyed by mode. */
   modeSwitch: (mode: 'primer' | 'library'): string => `dc-modeswitch-${mode}`,
+  /** A violation row in the accessibility panel, keyed by its axe rule id
+   *  (e.g. 'color-contrast'); present only for a failing variant. */
+  a11yViolation: (ruleId: string): string => `dc-a11y-violation-${ruleId}`,
 } as const

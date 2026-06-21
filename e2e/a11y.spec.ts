@@ -28,9 +28,10 @@ test.describe('live a11y surfacing', () => {
     await expect(panel).toHaveAttribute('data-state', 'fail', {
       timeout: SCAN_TIMEOUT,
     })
-    // Asserting the panel surfaces this axe rule id as content (not a nav
-    // locator) — matching the literal text is the point.
-    await expect(panel.getByText('color-contrast')).toBeVisible() // allow: locator-discipline
+    // The panel lists the known color-contrast violation as its own row.
+    await expect(
+      panel.getByTestId(DcTestIds.a11yViolation('color-contrast')),
+    ).toBeVisible()
     // The single-case leaf carries its violation count in the nav.
     await expect(page.getByTestId(DcTestIds.navAlert('broken'))).toBeVisible()
   })
