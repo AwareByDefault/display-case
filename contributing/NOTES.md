@@ -47,6 +47,16 @@ non-fatal, and "fixing" them would change behavior, so they stand.
 
 ---
 
+## 2026-06-21: A symlinked worktree `node_modules` corrupts the publish bundle (use `bun install`)
+
+**The trap.** A fresh `git worktree` has no `node_modules` (gitignored). Setting it up by **symlinking** to the main checkout's modules (`ln -s ../../../node_modules node_modules`) — i.e. a link that resolves *outside* the worktree's own directory tree — passes `bun test` for plain `renderToStaticMarkup`/unit work but **breaks `publish.test.ts`** with a baffling cascade: `EBADF reading file: node_modules/react-dom/index.js`, then parse errors like `Expected ";" but found "type"` / `Unexpected interface` blamed on `react-dom`, `react-markdown`, and `remark-gfm`.
+
+**Why it looks like remark-gfm but isn't.** The publish path runs **Bun's bundler** (`Bun.build`), not just the runtime resolver. Following a symlink that crosses the worktree boundary trips a file-descriptor bug in the bundler: it returns the *contents of a worktree source file* (`src/ui/use-shell.ts`, `test-ids.ts`) when asked to read a dependency path — so the error **path** (`react-dom/index.js`) and the error **content** (TS from our `src/`) don't match. The dependency names in the errors are red herrings; the unit tests pass because Bun's *runtime* module resolution tolerates the symlink while the *bundler* does not.
+
+**Fix / rule.** Set up a worktree's modules with a real **`bun install`** (~0.5s from Bun's global cache, leaves git status clean), never an out-of-tree symlink. This is what [worktree-safe-execution.md](worktree-safe-execution.md) and the `lint-in-worktree` / `test-in-worktree` skills already prescribe — follow them rather than hand-rolling a symlink. Quick tell: if only the bundling tests (`publish`/`--ssr`) fail with `EBADF` or mismatched path-vs-content parse errors, suspect the `node_modules` setup, not the dependency.
+
+---
+
 ## 2026-06-21: Import-graph rules use Bun's scanner; no native AST for keyed-cases
 
 **What changed.** The composition (import-graph) structure rules previously parsed each component's imports with a regex (`IMPORT_RE`), which also matched **commented-out** and **string-literal** imports and counted (erased) **type-only** ones — any of which could conjure a phantom composition dependency and a false `atom-purity`/`no-downward-dependency` finding. `parseImports` now first asks **`Bun.Transpiler().scan(code)`** for the authoritative set of real runtime import paths (Bun's parser ignores comments/strings and drops type-only), then keeps only the regex matches whose source is in that set; the regex still contributes the **named bindings** scan doesn't expose. Bun-native, zero new dependency. Regression test: `atom-purity: a commented-out or string-literal import is not a dependency` (fails on the old regex, passes now).
