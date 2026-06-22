@@ -4,6 +4,30 @@ Non-obvious decisions, debugging notes, and architectural context for the Displa
 
 ---
 
+## 2026-06-22: The compiled primer must self-resolve `markdown-to-jsx`
+
+**Symptom (found dogfooding in a consumer repo).** A consumer authoring a
+`primer.mdx`/`primer.md` got `Could not resolve "markdown-to-jsx"` at build time.
+Cause: the compiled primer module is loaded from inside the **consumer's** tree
+(its primer file *is* the bundle entry the `mdxPlugin` transforms in place), so
+the emitted `import __Md from 'markdown-to-jsx'` was a **bare** specifier that Bun
+resolved relative to the consumer. `markdown-to-jsx` is a private `dependency` of
+`@awarebydefault/display-case`, not hoisted into the consumer's scope, so it
+wasn't resolvable there. As a vendored workspace package it happened to work
+(deps hoisted to the repo root); as a published external dep it broke.
+
+**Fix.** `mdx-plugin.ts` now resolves `markdown-to-jsx` with
+`Bun.resolveSync('markdown-to-jsx', import.meta.dir)` (anchored at Display Case's
+own install) and passes the **absolute path** as `mdxToTsx`'s `markdownSpecifier`.
+The import then resolves regardless of the consumer's `node_modules` layout, so a
+consumer never needs to redeclare the dep. It resolves to the same physical
+module `ui/markdown.tsx` imports for placards, so Bun dedupes to one copy. The
+old per-package "declare `markdown-to-jsx` as a devDependency" workaround is no
+longer needed. `mdx-lite` itself stays portable: its default is still the bare
+`'markdown-to-jsx'`; the Display-Case-specific resolution lives in the plugin.
+Guarded by `mdx-plugin.test.ts` (asserts the emitted specifier is absolute, never
+bare) plus the unchanged build paths in `server.ts`.
+
 ## 2026-06-22: The markdown/MDX stack is gone — `markdown-to-jsx` + in-repo `mdx-lite`
 
 **What changed.** Three runtime deps — `react-markdown`, `remark-gfm`,
