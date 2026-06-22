@@ -39,6 +39,82 @@ Three things worth knowing for future edits:
   deterministic ordering when grepping; grep the `(pass)`/`(fail)` tags (plain
   text, no colour/glyphs) and the summary, which *are* deterministic.
 
+---
+
+## 2026-06-22: The compiled primer must self-resolve `markdown-to-jsx`
+
+**Symptom (found dogfooding in a consumer repo).** A consumer authoring a
+`primer.mdx`/`primer.md` got `Could not resolve "markdown-to-jsx"` at build time.
+Cause: the compiled primer module is loaded from inside the **consumer's** tree
+(its primer file *is* the bundle entry the `mdxPlugin` transforms in place), so
+the emitted `import __Md from 'markdown-to-jsx'` was a **bare** specifier that Bun
+resolved relative to the consumer. `markdown-to-jsx` is a private `dependency` of
+`@awarebydefault/display-case`, not hoisted into the consumer's scope, so it
+wasn't resolvable there. As a vendored workspace package it happened to work
+(deps hoisted to the repo root); as a published external dep it broke.
+
+**Fix.** `mdx-plugin.ts` now resolves `markdown-to-jsx` with
+`Bun.resolveSync('markdown-to-jsx', import.meta.dir)` (anchored at Display Case's
+own install) and passes the **absolute path** as `mdxToTsx`'s `markdownSpecifier`.
+The import then resolves regardless of the consumer's `node_modules` layout, so a
+consumer never needs to redeclare the dep. It resolves to the same physical
+module `ui/markdown.tsx` imports for placards, so Bun dedupes to one copy. The
+old per-package "declare `markdown-to-jsx` as a devDependency" workaround is no
+longer needed. `mdx-lite` itself stays portable: its default is still the bare
+`'markdown-to-jsx'`; the Display-Case-specific resolution lives in the plugin.
+Guarded by `mdx-plugin.test.ts` (asserts the emitted specifier is absolute, never
+bare) plus the unchanged build paths in `server.ts`.
+
+---
+
+## 2026-06-22: Browser bundles must pin React to the consumer (`pinReact`) — duplicate-React bug
+
+**Symptom.** Hook-using components don't render on the Stage; the browser console
+shows `Invalid hook call … more than one copy of React`, then
+`Cannot read properties of null (reading 'useEffect')`. Hook-*free* components
+(a presentational Badge) render fine and mask the bug.
+
+**Root cause.** Display Case's own client runtime (`ui/browser-entry.tsx`,
+`ui/render-mount.tsx`) statically imports `react-dom/client` + `react`. Those
+bare specifiers resolve relative to **where Display Case itself is installed**,
+while the consumer's `*.case.tsx` files and their deps resolve relative to the
+**consumer project**. When the two installs differ, the browser bundle ends up
+with **two** React copies — `react-dom` drives one React's dispatcher, the
+consumer's components read the other's (null) dispatcher → invalid hook call.
+This is the default for `bunx @awarebydefault/display-case <dir>` from a directory
+where the tool isn't installed: bunx installs the package — and its peer
+react/react-dom — into a temp prefix, distinct from the consumer's React.
+
+**Fix.** `src/core/pin-react.ts` — a Bun bundler plugin whose `onResolve`
+force-resolves every `react`/`react-dom`(`/…`) specifier via
+`Bun.resolveSync(spec, pkgDir)`, i.e. from the **consumer** project. Bun bundles
+one module per resolved absolute path, so pinning every specifier to one path
+collapses the two copies to one regardless of how the tool was invoked (bunx temp,
+global, npx, pnpm strict layout). Applied to the **browser** builds in both
+`server.ts` (dev) and `publish.ts`, and to the dev server's **in-process SSR**
+builds (so `renderToString` and the consumer's components share one React there
+too — the same hazard for the server render). Resolve from `pkgDir`, **not** the
+package dir: the renderer must bind to the React the consumer's components import.
+
+**Why `publish.ts`'s SSR build is deliberately left `external` (the one asymmetry).**
+A published build deploys with its own `bun install`, so the prod process already
+has a single React. `prod-server` renders the chrome with its own `ssr-shell`
+(which needs `react-dom/server` at runtime regardless); leaving the bundled case
+renderers `external` keeps them on that *same* one copy. Bundling React there
+would instead put a *second* copy in the prod process for no benefit — the
+dual-React hazard comes from a temp/global *tool* install, which a clean deploy
+doesn't have. Don't "fix" this to match the others.
+
+**Regression guard.** `src/core/pin-react.test.ts` proves the resolution mapping
+(the dedup guarantee). A genuine two-install reproduction (a "tool" React + a
+"consumer" React, an entry importing both) confirms the bundle pulls *both* without
+the plugin and *only the consumer's* with it. Note: pure-markup cases never catch
+this — any future end-to-end guard needs a hook-using fixture exercised over the
+temp-install path (`npm pack` → throwaway project with its own React), since local
+workspace dev always resolves one hoisted React and hides the bug.
+
+---
+
 ## 2026-06-22: The markdown/MDX stack is gone — `markdown-to-jsx` + in-repo `mdx-lite`
 
 **What changed.** Three runtime deps — `react-markdown`, `remark-gfm`,

@@ -57,4 +57,30 @@ describe('mdxPlugin', () => {
       await rm(dir, { recursive: true, force: true })
     }
   })
+
+  test('emits an absolute, self-resolved markdown-to-jsx specifier', async () => {
+    const { run } = captureOnLoad()
+    const dir = await makeTempDir()
+    try {
+      const file = join(dir, 'doc.mdx')
+      await Bun.write(file, '# Title\n\nSome prose.\n')
+      const result = await run({ path: file })
+      // The compiled primer is loaded from the consumer's tree, where a bare
+      // `markdown-to-jsx` would not resolve. The plugin anchors it at Display
+      // Case's own install so the consumer never needs to declare the dep.
+      const resolved = Bun.resolveSync('markdown-to-jsx', import.meta.dir)
+      expect(result.contents).toContain(
+        `import __Md from ${JSON.stringify(resolved)}`,
+      )
+      // Never a bare specifier — that is the bug this guards against.
+      expect(result.contents).not.toContain(
+        "import __Md from 'markdown-to-jsx'",
+      )
+      expect(result.contents).not.toContain(
+        'import __Md from "markdown-to-jsx"',
+      )
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
 })
