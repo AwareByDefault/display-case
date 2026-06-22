@@ -10,6 +10,7 @@ import {
   resolveConfig,
 } from '../core/discovery'
 import { mdxPlugin } from '../core/mdx-plugin'
+import { pinReact } from '../core/pin-react'
 import type { DisplayCaseConfig } from '../index'
 import { getManifest } from '../server/server'
 
@@ -166,7 +167,9 @@ export async function publish(
 
   const defines = await buildDefines(pkgDir)
 
-  // Browser bundle: minified, content-hashed, production React.
+  // Browser bundle: minified, content-hashed, production React. pinReact keeps
+  // Display Case's render runtime and the consumer's components on one React copy
+  // (see pinReact for the dual-React bug it prevents).
   const browserEntries = [BROWSER_ENTRY, renderEntry]
   if (primerEntry) browserEntries.push(primerEntry)
   const browser = await Bun.build({
@@ -175,7 +178,7 @@ export async function publish(
     target: 'browser',
     minify: true,
     sourcemap: 'none',
-    plugins: [mdxPlugin()],
+    plugins: [mdxPlugin(), pinReact(pkgDir)],
     define: defines,
     naming: {
       entry: '[name]-[hash].[ext]',
@@ -196,7 +199,15 @@ export async function publish(
   }
 
   // SSR renderers for the production server: built once (no watching), imported
-  // by `prod-server`. React stays external (resolved at runtime).
+  // by `prod-server`. React stays external here (unlike the browser bundle and
+  // the dev server's in-process SSR, which pin React to the consumer copy): a
+  // published build deploys with its own `bun install`, so the prod process has a
+  // single React already. Leaving it external keeps `prod-server`'s own chrome
+  // renderer (`ssr-shell`, which needs `react-dom/server` at runtime regardless)
+  // and these bundled case renderers on that one copy — bundling React here would
+  // instead put a second copy in the prod process for no benefit. The dual-React
+  // hazard pinReact addresses comes from a temp/global *tool* install resolving a
+  // different React than the consumer's components; a clean deploy has neither.
   const ssrEntries = [ssrEntry]
   if (ssrPrimerEntry) ssrEntries.push(ssrPrimerEntry)
   const ssr = await Bun.build({
