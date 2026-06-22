@@ -1,4 +1,4 @@
-import { defineCases } from 'display-case'
+import { defineCases } from '@awarebydefault/display-case'
 import { FontFamilies, type FontFamily } from './FontFamilies'
 
 const pairing: FontFamily[] = [

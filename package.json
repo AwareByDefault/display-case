@@ -1,10 +1,42 @@
 {
-  "name": "display-case",
-  "version": "0.0.0",
-  "private": true,
+  "name": "@awarebydefault/display-case",
+  "version": "0.0.0-development",
   "description": "A Bun-native, AI-friendly component showcase — a lightweight alternative to Storybook.",
   "license": "MIT",
+  "author": "Jake Uskoski <jake@awarebydefault.com>",
   "type": "module",
+  "sideEffects": false,
+  "homepage": "https://github.com/AwareByDefault/display-case#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AwareByDefault/display-case.git"
+  },
+  "bugs": {
+    "url": "https://github.com/AwareByDefault/display-case/issues"
+  },
+  "keywords": [
+    "bun",
+    "component",
+    "showcase",
+    "storybook",
+    "storybook-alternative",
+    "react",
+    "ssr",
+    "design-system",
+    "ai-agents",
+    "preview",
+    "playground",
+    "visual-regression",
+    "accessibility"
+  ],
+  "engines": {
+    "bun": ">=1.2.0"
+  },
+  "packageManager": "bun@1.3.14",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "bin": {
@@ -41,6 +73,8 @@
     "e2e": "playwright test",
     "e2e:headed": "playwright test --headed",
     "e2e:install": "playwright install chromium",
+    "release": "semantic-release",
+    "release:dry": "semantic-release --dry-run --no-ci",
     "prepare": "husky"
   },
   "peerDependencies": {
@@ -61,16 +95,21 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.0",
+    "@commitlint/cli": "^19.6.0",
+    "@commitlint/config-conventional": "^19.6.0",
     "@emotion/cache": "^11.14.0",
     "@emotion/react": "^11.14.0",
     "@emotion/server": "^11.11.0",
     "@fission-ai/openspec": "1.4.1",
     "@playwright/test": "^1.60.0",
+    "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/git": "^10.0.1",
     "@types/bun": "^1.2.0",
     "@types/pngjs": "^6.0.5",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "husky": "^9.1.7",
+    "semantic-release": "^25.0.5",
     "typescript": "^5.7.0"
   }
 }

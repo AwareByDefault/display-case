@@ -10,7 +10,7 @@ Display Case looks for a `display-case.config.ts` at the root of the package it 
 
 ```ts
 // display-case.config.ts
-import { defineConfig } from 'display-case'
+import { defineConfig } from '@awarebydefault/display-case'
 
 export default defineConfig({
   title: 'Display Case',
@@ -31,7 +31,7 @@ A case file is `*.case.tsx`, colocated with the component it showcases. It defau
 
 ```tsx
 // src/components/tweak-control.case.tsx
-import { defineCases } from 'display-case'
+import { defineCases } from '@awarebydefault/display-case'
 import { TweakControl } from './tweak-control'
 
 export default defineCases('TweakControl', {
@@ -52,7 +52,7 @@ The render functions are lazy thunks — they only run when a case is viewed or 
 Point the CLI at the package directory:
 
 ```bash
-bunx display-case .
+bunx @awarebydefault/display-case .
 ```
 
 Or wire up an npm script and use that:

@@ -13,7 +13,7 @@ Capture one component case as an image, deterministically, via Display Case.
 ## Steps
 
 1. **Ensure the server is running.** Start it if needed: `bun run display-case` (serves at `http://localhost:3100`). It needs no database or app — just the showcase.
-2. **Enumerate.** `GET http://localhost:3100/manifest.json` (or `bunx display-case <pkgDir> --print-manifest`, no server needed) to find the component and its cases. Each case has a `renderUrl` like `/render/tweak-control/playground` and an optional `tweaks` schema.
+2. **Enumerate.** `GET http://localhost:3100/manifest.json` (or `bunx @awarebydefault/display-case <pkgDir> --print-manifest`, no server needed) to find the component and its cases. Each case has a `renderUrl` like `/render/tweak-control/playground` and an optional `tweaks` schema.
 3. **Build the render URL.** Append query params to pin the exact state:
    - `theme=light|dark`
    - `width=<px>` (optional, constrains to a centered max-width)

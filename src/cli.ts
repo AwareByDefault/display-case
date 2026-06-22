@@ -4,6 +4,18 @@ import { join, resolve } from 'node:path'
 import { AGENT_TARGETS, DEFAULT_AGENT } from './commands/agents'
 import { getManifest, startDisplayCase } from './server/server'
 
+// Display Case is Bun-native at *runtime*, not just at install time: discovery,
+// bundling, and serving all use Bun's built-in bundler and `Bun.serve`. Running
+// the CLI under Node fails deep inside with an opaque `Bun is not defined`, so
+// detect it up front and point the user at Bun.
+if (typeof globalThis.Bun === 'undefined') {
+  console.error(
+    'display-case requires the Bun runtime (https://bun.sh).\n' +
+      'Run it with Bun — e.g. `bunx @awarebydefault/display-case .` or `bun run display-case` — not Node.',
+  )
+  process.exit(1)
+}
+
 /**
  * Display Case CLI.
  *

@@ -1,4 +1,4 @@
-import { defineCases, tweak } from 'display-case'
+import { defineCases, tweak } from '@awarebydefault/display-case'
 import { type DefEntry, DefinitionList } from './DefinitionList'
 
 const voice: DefEntry[] = [

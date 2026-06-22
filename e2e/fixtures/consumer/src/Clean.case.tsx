@@ -1,4 +1,4 @@
-import { defineCases } from 'display-case'
+import { defineCases } from '@awarebydefault/display-case'
 
 /** A component with no accessibility violations — high-contrast text — so the
  *  a11y e2e suite can assert the panel's clean "pass" state and no nav marker. */

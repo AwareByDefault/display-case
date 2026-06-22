@@ -1,4 +1,4 @@
-import { defineCases, tweak } from 'display-case'
+import { defineCases, tweak } from '@awarebydefault/display-case'
 import { Eyebrow } from './Eyebrow'
 import { NavItem } from './NavItem'
 import { Sidebar } from './Sidebar'

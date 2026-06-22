@@ -1,4 +1,4 @@
-import { defineConfig } from 'display-case'
+import { defineConfig } from '@awarebydefault/display-case'
 
 /**
  * Display Case dogfoods itself: it showcases its own design-system components

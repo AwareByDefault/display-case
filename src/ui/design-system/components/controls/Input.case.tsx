@@ -1,4 +1,4 @@
-import { defineCases, tweak } from 'display-case'
+import { defineCases, tweak } from '@awarebydefault/display-case'
 import { Input } from './Input'
 
 export default defineCases(

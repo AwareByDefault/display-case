@@ -1,4 +1,4 @@
-import { defineCases } from 'display-case'
+import { defineCases } from '@awarebydefault/display-case'
 import { Eyebrow } from '../showcase/Eyebrow'
 import { type WeightSpec, WeightSpecimen } from './WeightSpecimen'
 

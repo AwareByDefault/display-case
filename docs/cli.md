@@ -17,8 +17,8 @@ display-case uninstall <pkgDir> [--agent=claude] [--dry-run] [--json]
 Display Case requires Bun. Invoke it with `bunx`:
 
 ```bash
-bunx display-case <pkgDir>          # dev server
-bunx display-case check <pkgDir>    # checks
+bunx @awarebydefault/display-case <pkgDir>          # dev server
+bunx @awarebydefault/display-case check <pkgDir>    # checks
 ```
 
 For day-to-day use, add npm scripts and run them via `bun run`:

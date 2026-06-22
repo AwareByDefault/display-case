@@ -11,7 +11,7 @@
  * These fixed-input cases are the stable surface for visual regression — see
  * ../testing.md.
  */
-import { defineCases } from 'display-case'
+import { defineCases } from '@awarebydefault/display-case'
 import { FlowNav } from './flow-nav'
 
 const steps = ['Request link', 'Check email', 'Signed in']

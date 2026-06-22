@@ -30,7 +30,7 @@ The internal order is fixed as `atom, molecule, organism, template, page, flow`.
 A flow is a multi-step behavioural journey rather than a set of independent variants. Author it with `defineFlow` — it is always placed at the `flow` level, and you do not pass a `level` yourself.
 
 ```tsx
-import { defineFlow } from 'display-case'
+import { defineFlow } from '@awarebydefault/display-case'
 
 export default defineFlow('Sign-in flow', {
   steps: {

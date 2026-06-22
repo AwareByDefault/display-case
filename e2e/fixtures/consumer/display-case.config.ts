@@ -1,4 +1,4 @@
-import { defineConfig } from 'display-case'
+import { defineConfig } from '@awarebydefault/display-case'
 
 /**
  * A dummy consumer package for the a11y e2e suite: one component with a known,

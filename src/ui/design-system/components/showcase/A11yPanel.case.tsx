@@ -1,4 +1,4 @@
-import { type A11yViolation, defineCases } from 'display-case'
+import { type A11yViolation, defineCases } from '@awarebydefault/display-case'
 import type { ReactNode } from 'react'
 import { A11yPanel } from './A11yPanel'
 

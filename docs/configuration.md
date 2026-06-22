@@ -6,7 +6,7 @@ Display Case is configured by a single `display-case.config.ts` (or `.tsx`) file
 
 ```ts
 // display-case.config.ts
-import { defineConfig } from 'display-case'
+import { defineConfig } from '@awarebydefault/display-case'
 import { ThemeProvider } from './src/components/theme-provider'
 
 export default defineConfig({
@@ -248,7 +248,7 @@ A custom diff that loosens tolerance for one noisy case and leaves every other c
 ```ts
 import pixelmatch from 'pixelmatch'
 import { PNG } from 'pngjs'
-import { defineConfig, type DiffFn } from 'display-case'
+import { defineConfig, type DiffFn } from '@awarebydefault/display-case'
 
 const tolerantDiff: DiffFn = ({ baseline, actual }, ctx) => {
   const a = PNG.sync.read(Buffer.from(baseline))
@@ -296,7 +296,7 @@ interface A11yViolation {
 `driver` is a factory: it is called once, returns a `RenderDriver` reused across every case, and `close()` runs when the check finishes. Each `open()` yields a `RenderedPage` you can `screenshot()` and `audit()`, then `dispose()`. A sketch:
 
 ```ts
-import { defineConfig, type RenderDriver } from 'display-case'
+import { defineConfig, type RenderDriver } from '@awarebydefault/display-case'
 
 function myDriver(): RenderDriver {
   const browser = /* launch your headless browser once */

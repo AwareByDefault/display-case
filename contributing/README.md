@@ -19,6 +19,9 @@ here are the detail.
 - **[linting-best-practices.md](linting-best-practices.md)** — the gate (Biome +
   `tsc` + the static `display-case` checks), how it's wired into git hooks, and
   per-check escape hatches.
+- **[releasing.md](releasing.md)** — how versions and npm publishes happen
+  (semantic-release on `main`), the Conventional-Commit requirement, and the
+  one-time `NPM_TOKEN` / package-name setup.
 
 ## Working safely
 

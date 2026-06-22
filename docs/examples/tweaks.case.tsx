@@ -12,7 +12,7 @@
  *
  * See ../tweaks.md for the four control kinds and encoding rules.
  */
-import { defineCases, tweak } from 'display-case'
+import { defineCases, tweak } from '@awarebydefault/display-case'
 import { TweakControl } from './tweak-control'
 
 export default defineCases(
