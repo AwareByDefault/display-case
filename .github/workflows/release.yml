@@ -39,11 +39,21 @@ jobs:
     env:
       HUSKY: "0"
     steps:
+      # Mint a short-lived GitHub App installation token. semantic-release pushes
+      # its release commit + tag directly to `main`, which the branch ruleset
+      # gates behind a PR + status checks — so it must push as an actor on the
+      # ruleset's bypass list. The built-in GITHUB_TOKEN can't be a bypass actor;
+      # this App can. App perms: Contents R/W, Issues R/W, Pull requests R/W.
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
       - uses: actions/checkout@v4
         with:
           # Full history so semantic-release can read every tag/commit.
           fetch-depth: 0
-          # Let semantic-release auth its own pushes via GITHUB_TOKEN.
+          # Let semantic-release auth its own pushes via the App token below.
           persist-credentials: false
       - uses: oven-sh/setup-bun@v2
         with:
@@ -77,7 +87,9 @@ jobs:
       # Node ^22.14 || >=24.10), not bunx. The local install is resolved by npx.
       - run: npx semantic-release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # The App token (not the built-in GITHUB_TOKEN) so the release commit +
+          # tag push to `main` is attributed to the App, which the ruleset bypasses.
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
           # Bootstrap/fallback only — remove this (and the repo secret) once the
           # trusted publisher is configured on npmjs.com and OIDC is confirmed.
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
