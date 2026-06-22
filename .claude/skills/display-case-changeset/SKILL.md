@@ -55,5 +55,5 @@ updates) that file from the actual changes on the branch.
 - Bump = the highest across all changesets in the PR; multiple changesets are
   fine and each becomes its own changelog line.
 - Versioning is decoupled from commit messages — the changeset file is the source
-  of truth, so squash/rebase merge style doesn't affect the release.
+  of truth, so merge style doesn't affect the release (`main` is squash-only).
 - Full release flow: [`../../../contributing/releasing.md`](../../../contributing/releasing.md).

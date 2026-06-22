@@ -6,8 +6,8 @@ with [Changesets](https://github.com/changesets/changesets): **no manual version
 bumps and no manual `npm publish`**. `main` is the release branch.
 
 The version is **decoupled from commit messages** — it comes from the changeset
-file(s) a PR includes. Commit/merge style (squash or rebase) therefore has no
-effect on the release.
+file(s) a PR includes. Commit/merge style therefore has no effect on the release
+(`main` is squash-only).
 
 ## The model: a changeset per PR, publish on merge
 

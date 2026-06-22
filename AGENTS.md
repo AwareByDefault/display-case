@@ -128,8 +128,8 @@ not the `display-case` bin name. On merge to `main`, the release workflow consum
 the changesets, bumps `package.json` + `CHANGELOG.md`, and publishes — pushing the
 version commit to `main` as the `awarebydefault-release` GitHub App (the branch
 ruleset's bypass actor). Because versioning no longer depends on commit messages,
-merge style (squash or rebase — merge commits are disabled) doesn't affect
-releases. The [`display-case-changeset`](.claude/skills/display-case-changeset)
+merge style doesn't affect releases (`main` is squash-only — rebase and merge
+commits are disabled). The [`display-case-changeset`](.claude/skills/display-case-changeset)
 skill writes the right changeset from the branch diff. Full flow:
 [contributing/releasing.md](contributing/releasing.md).
 
