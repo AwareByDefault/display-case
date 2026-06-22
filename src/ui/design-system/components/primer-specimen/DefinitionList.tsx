@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 
 /**
  * Display Case — DefinitionList
@@ -31,7 +31,7 @@ export function DefinitionList({
         <div
           className="dcpl-defrow"
           key={e.term}
-          style={{ gridTemplateColumns: `${termWidth} 1fr` }}>
+          style={{ '--dcpl-term-width': termWidth } as CSSProperties}>
           <div className="dcpl-defterm">{e.term}</div>
           <div className="dcpl-defdesc">{e.description}</div>
         </div>
