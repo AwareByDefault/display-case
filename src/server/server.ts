@@ -20,6 +20,7 @@ import {
 } from '../core/discovery'
 import type { Manifest } from '../core/manifest'
 import { mdxPlugin } from '../core/mdx-plugin'
+import { pinReact } from '../core/pin-react'
 import type { DisplayCaseConfig } from '../index'
 import type { PrimerHtmlResult } from '../render/ssr-primer'
 import type { CaseRenderer } from '../render/ssr-render'
@@ -225,8 +226,10 @@ async function rebuild(
     outdir,
     target: 'browser',
     // The MDX plugin compiles the primer's `.mdx` (and any `.mdx` it imports)
-    // to JS on load; it's a no-op for builds without a primer entry.
-    plugins: [mdxPlugin()],
+    // to JS on load; it's a no-op for builds without a primer entry. pinReact
+    // collapses Display Case's render runtime and the consumer's components onto
+    // a single React copy — see pinReact for the dual-React bug it prevents.
+    plugins: [mdxPlugin(), pinReact(pkgDir)],
     // Inline the consumer's public env (BUN_PUBLIC_*) so a `process.env.*` read
     // in bundled code (e.g. the API base URL) doesn't survive as a literal that
     // throws `process is not defined` in the browser. See publicEnvDefines.
@@ -248,8 +251,10 @@ async function rebuild(
   // each rebuild because Bun caches imports by resolved path — a stable name
   // would return the stale renderer after an edit (the same staleness that forces
   // the manifest into a subprocess). The bundle inlines case source from disk, so
-  // importing the fresh file yields current modules. React stays external so the
-  // server resolves it from node_modules at import time.
+  // importing the fresh file yields current modules. pinReact bundles the
+  // consumer's React (instead of leaving it external) so `renderToString` and
+  // the consumer's components share one React — the same dual-React hazard the
+  // browser bundle faces, here for the in-process server render.
   const ssrEntry = await codegenSsrEntry(pkgDir, files, configPath)
   const ssrOutDir = join(cacheDir(pkgDir), 'ssr')
   const ssrName = `ssr-entry-${++ssrBuildSeq}`
@@ -257,15 +262,8 @@ async function rebuild(
     entrypoints: [ssrEntry],
     outdir: ssrOutDir,
     target: 'bun',
-    plugins: [mdxPlugin()],
+    plugins: [mdxPlugin(), pinReact(pkgDir)],
     define: await publicEnvDefines(pkgDir),
-    external: [
-      'react',
-      'react-dom',
-      'react-dom/server',
-      'react/jsx-runtime',
-      'react/jsx-dev-runtime',
-    ],
     naming: {
       entry: `${ssrName}.[ext]`,
       chunk: '[name]-[hash].[ext]',
@@ -297,15 +295,8 @@ async function rebuild(
       entrypoints: [ssrPrimerEntry],
       outdir: ssrOutDir,
       target: 'bun',
-      plugins: [mdxPlugin()],
+      plugins: [mdxPlugin(), pinReact(pkgDir)],
       define: await publicEnvDefines(pkgDir),
-      external: [
-        'react',
-        'react-dom',
-        'react-dom/server',
-        'react/jsx-runtime',
-        'react/jsx-dev-runtime',
-      ],
       naming: {
         entry: `${ssrPrimerName}.[ext]`,
         chunk: '[name]-[hash].[ext]',
