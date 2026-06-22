@@ -23,5 +23,5 @@
 
 ## 5. Close out
 
-- [ ] 5.1 Post-change review: update `contributing/coding-best-practices.md`, `contributing/NOTES.md`, and `docs/` only where the markdown-rendering swap actually affects them (e.g. the no-raw-HTML guarantee, the renderer choice rationale); skip files genuinely unaffected
+- [x] 5.1 Post-change review: updated `contributing/coding-best-practices.md` (§6.2 deps), `contributing/NOTES.md` (new dated entry), and `docs/documentation-panel.md` (renderer name) for the markdown-rendering swap; `docs/writing-placard-docs.md` needed no change (behaviour-described, not library-named)
 - [ ] 5.2 Validate the change with `openspec validate slim-markdown-rendering --strict` (done) and run `/openspec:archive slim-markdown-rendering` (pending)

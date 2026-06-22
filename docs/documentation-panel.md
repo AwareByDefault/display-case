@@ -15,7 +15,7 @@ There is nothing to wire up: the doc file is discovered automatically as the cas
 
 ## What renders
 
-The Markdown is rendered as **full CommonMark + GFM** (GitHub Flavored Markdown via `remark-gfm`), so you get tables, task lists, strikethrough, and autolinks in addition to the core syntax:
+The Markdown is rendered as **full CommonMark + GFM** (GitHub Flavored Markdown via `markdown-to-jsx`), so you get tables, task lists, strikethrough, and autolinks in addition to the core syntax:
 
 ```md
 # TweakControl

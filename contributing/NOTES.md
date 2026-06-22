@@ -4,6 +4,77 @@ Non-obvious decisions, debugging notes, and architectural context for the Displa
 
 ---
 
+## 2026-06-22: The markdown/MDX stack is gone — `markdown-to-jsx` + in-repo `mdx-lite`
+
+**What changed.** Three runtime deps — `react-markdown`, `remark-gfm`,
+`@mdx-js/mdx` — and the entire `unified`/`remark`/`rehype`/`micromark`/`mdast`
+subtree they pulled in are removed. All Markdown now renders through
+`markdown-to-jsx`; the `.mdx` Primer is compiled by an in-repo compiler,
+`src/core/mdx-lite/`. Production `dependencies` are now just `markdown-to-jsx`
+and `@parcel/watcher`. Measured: a **consumer** production install drops from
+**128 packages / 13 MB to 6 packages / 5.4 MB**.
+
+**Why the bundle barely moved but the dep graph collapsed.** `@mdx-js/mdx` runs
+at **build time** (the `.mdx` loader compiles to a module; the compiler never
+ships to the browser), so dropping it shrinks the *dependency graph*, not the
+shipped chrome bundle. The always-on win is only the placard swap
+(`react-markdown` → `markdown-to-jsx`): ~60 KB → ~26 KB gzipped of the chrome.
+Also note the ~8 MB of `@babel/*` in `node_modules` is **Emotion's**
+(`@emotion/*` devDep via `babel-plugin`), *not* MDX's — `@mdx-js/mdx` v3 is
+acorn/estree-based and pulls no Babel. And the repo's own `node_modules` does
+*not* shrink, because the `@fission-ai/openspec` devDep keeps a unified subtree
+for its own use; the 128→6 figure is consumer-facing (production deps only).
+
+**`markdown-to-jsx` gotchas.** (1) It parses **raw HTML by default** — we pass
+`options={{ disableParsingRawHTML: true }}` in `ui/markdown.tsx` to keep the
+long-standing "docs never inject markup" guarantee; the colocated test pins it.
+(2) Its real cost is ~26 KB gzipped, **not** the advertised ~6 KB: v9 bundles a
+~35 KB generated HTML-entities table that doesn't tree-shake. (3) On disk the
+package is ~4.3 MB unpacked (mostly source maps + unused per-framework/CJS dist
+variants the bundler never ships) — so removing `react-markdown` actually grew
+`node_modules` slightly; the payoff is the graph, not disk.
+
+**How `mdx-lite` works (and why it's not a real MDX parser).** It does **not**
+parse the combined Markdown+JSX grammar. It *segments* a document into three
+block kinds — `imports` / `markdown` / block-level `jsx` — and emits a `.tsx`
+module (loader `tsx`), then hands the hard parts back to the toolchain that
+already exists: author `import`s and JSX **expression props** (`style={{…}}`)
+pass through verbatim to Bun's TSX compiler; prose runs render via
+`markdown-to-jsx`. This is the whole reason `markdown-to-jsx` alone couldn't
+replace the Primer (it has no ES imports and no expression props) but `mdx-lite`
+can. Key implementation points:
+
+- The emitted default export keeps the **exact existing contract**:
+  `MDXContent({ components })`. Capitalized tags the document doesn't import
+  (only `<Display>`) are destructured from `components`; Markdown headings route
+  to `components.h1`/`h2` via `markdown-to-jsx` `overrides`. So the codegen,
+  `ssr-primer`, and `primer-mount` are untouched.
+- Markdown payloads are embedded as `<Markdown>{JSON.stringify(text)}</Markdown>`
+  — `JSON.stringify` makes a valid JS string literal, killing the entire
+  backtick / `${` / escape bug class that a template-literal embedding would hit.
+- The **only** hard part is the segmenter's JSX scanner (`scanElement` /
+  `scanBraces` / `scanString` in `mdx-lite/index.ts`): it tracks tag depth across
+  lines and ignores `<`/`>`/`{`/`}` inside attribute strings, expression braces,
+  and JSX comments. Fenced code is recognized first, so a ` ```mdx ` block
+  containing `<Display>` stays prose. Aggressively tested in `mdx-lite.test.ts`.
+- `mdx-lite` is **self-contained** (no imports from the rest of the repo) and
+  shaped like a standalone package — `mdxToTsx(source, opts) → string`, with the
+  Markdown import specifier as an option — so it can be extracted later if a
+  second consumer appears. No off-the-shelf parser fits this niche: every real
+  MDX is unified-based, and tiny Markdown parsers lack JSX/imports.
+- `structure-check`'s `primer-present-and-used` rule now shares the **same**
+  `segmentMdx` (counts `<Display>` tags + confirms a prose block) instead of the
+  `@mdx-js/mdx` AST — so an unsupported/unparseable Primer fails the gate via the
+  same code path the build uses, rather than mis-rendering.
+
+The supported dialect (and what's intentionally rejected — inline JSX in prose,
+Markdown inside JSX children, `{expr}` in prose) is documented for authors in
+[configuration.md → Supported Primer syntax](../docs/configuration.md#supported-primer-syntax).
+Relatedly,
+the `interactive-cases-keyed`/JSX-AST note below still holds — Bun has no usable
+JSX AST, so `mdx-lite` hand-rolls a scanner; but it only finds block extents, it
+is not a general TSX AST.
+
 ## 2026-06-21: OpenSpec workspace lives at the repo root, and the CLI is pinned
 
 The OpenSpec workspace is **`openspec/`** at the repo root — **not** under

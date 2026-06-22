@@ -139,7 +139,7 @@ The browse chrome has its **own** design system — *The Vitrine* — under `src
 
 **6.1** **No consuming-app imports, ever.** Display Case is a standalone tool. The package must never import from a package it showcases (e.g. `../ui`) in shipped code, and it is never bundled into a consuming app's build. A consumer points the CLI at *its* package; Display Case discovers and bundles the consumer's case files at runtime — it does not depend on them at build time.
 
-**6.2** **Stay dependency-light.** Keep `dependencies` minimal (today: the MDX/markdown stack and the file watcher). Prefer Bun built-ins (`Bun.serve`, `Bun.build`, `Bun.Glob`, `Bun.file`) and `node:*` over third-party packages. Adding a runtime dependency is a deliberate decision, not a convenience.
+**6.2** **Stay dependency-light.** Keep `dependencies` minimal (today: `markdown-to-jsx` for all Markdown rendering, and the file watcher — the `.mdx` Primer is compiled by the in-repo `mdx-lite`, not a third-party MDX stack). Prefer Bun built-ins (`Bun.serve`, `Bun.build`, `Bun.Glob`, `Bun.file`) and `node:*` over third-party packages. Adding a runtime dependency is a deliberate decision, not a convenience.
 
 **6.3** **The visual toolchain is optional and lazily loaded.** `playwright`, `@axe-core/playwright`, `pixelmatch`, and `pngjs` are `optionalDependencies` and MUST be imported only when a default-backed `check --a11y`/`--visual` (or the live a11y surface) actually runs — via dynamic `import()` inside `src/checks/providers/`, never at module top level. Browsing, `--print-manifest`, `/render` snapshotting, `init`, and the three static check phases (`structure`, `tokens`, `ssr`) must work with none of them installed.
 

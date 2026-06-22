@@ -91,6 +91,23 @@ The wall text that orients you before browsing the cases.
 
 The sidebar reflects each `<Display>` title as a table-of-contents entry, grouped under the `#`/`##` heading that precedes it — each heading is itself a navigable, collapsible group header (the `#` page title doubles as the "top of page" entry). Any `<Display>`s before the first heading fall into a leading "Contents" group. Long entries truncate with an ellipsis. Scrollspy highlights the heading or section in view. Toggling the chrome's light/dark theme drives the Primer too.
 
+#### Supported Primer syntax
+
+The Primer is compiled by Display Case's own small MDX compiler (`mdx-lite`), not the full MDX toolchain. It supports a **deliberately constrained dialect** — exactly enough for prose interleaved with live specimens — and nothing more. Within these rules a Primer behaves like ordinary TypeScript + Markdown:
+
+- **ES `import` / `export`** statements at the start of a line (column 0), single- or multi-line. They are passed through verbatim and resolved by the bundler, so a Primer imports components exactly like any `.tsx` module.
+- **Prose** in the same CommonMark + GFM flavour as [placard docs](documentation-panel.md) — headings, bold/italic, inline code, lists, links, GFM tables, strikethrough. Raw HTML is not rendered, and fenced code is not syntax-highlighted (the [same two limits](documentation-panel.md#two-intentional-limits)).
+- **Block-level specimens** — a JSX element that begins a line at column 0 (a capitalized tag like `<Display …>` or a `<>` fragment), consumed through its matching close. Standard JSX **expression props** work, e.g. `style={{ fontSize: '1rem' }}`. Author-imported components resolve through their imports; `<Display>` is provided automatically.
+- A fenced code block stays prose **even when its contents look like a specimen** — a ` ```mdx ` sample containing `<Display>` renders as code, never as a live element.
+
+Not supported (by construction — keep specimens as their own blocks):
+
+- **Inline JSX inside a prose paragraph.** Put a specimen on its own line at column 0, set off by blank lines.
+- **Markdown syntax inside JSX children.** Text inside a specimen is literal JSX, not Markdown.
+- **`{expression}` interpolation in prose.** Expressions belong inside a specimen's JSX, not in the surrounding text.
+
+These constraints are checked: a Primer that can't be parsed, or that has no `<Display>` specimen or no prose, fails the [`primer-present-and-used`](testing.md#structure-checks) structure check rather than rendering wrong.
+
 ### `landing`
 
 Which view the chrome shows first when you open the root path (`/`): the Primer reading page (`'primer'`, the default) or the Cases library (`'cases'`). Use `'cases'` when the components are the main event and the Primer is supplementary reference:

@@ -27,5 +27,5 @@
 
 - [x] 6.1 Run the gate: `bun run lint`, `bun run typecheck`, `bun run check`, `bun test`
 - [x] 6.2 Render the Primer and a placard (light + dark) and confirm content parity
-- [ ] 6.3 Document the supported Primer dialect in `docs/` and note it in `contributing/NOTES.md`
+- [x] 6.3 Document the supported Primer dialect in `docs/configuration.md` and note it in `contributing/NOTES.md` (+ fix `documentation-panel.md` / `coding-best-practices.md` renderer references)
 - [ ] 6.4 Validate `openspec validate bun-native-primer --strict` (done) and archive both changes (pending)
