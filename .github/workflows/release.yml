@@ -50,10 +50,14 @@ jobs:
       #   - bun publish --provenance:        https://github.com/oven-sh/bun/pull/30522 (open)
       #   - bun publish OIDC trusted publish: https://github.com/oven-sh/bun/issues/24855 (open)
       # #30522 alone only closes the provenance gap, not tokenless OIDC auth.
+      # NOTE: no `registry-url` — it makes setup-node write an .npmrc bound to
+      # NODE_AUTH_TOKEN (which defaults to a placeholder when unset) and points
+      # NPM_CONFIG_USERCONFIG at it, shadowing NPM_TOKEN and causing
+      # EINVALIDNPMTOKEN. @semantic-release/npm writes its own .npmrc from
+      # NPM_TOKEN, so setup-node only needs to provide the node/npm binaries.
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          registry-url: https://registry.npmjs.org
       - run: npm install -g npm@latest
       - run: npm --version # must be >= 11.5.1 for trusted publishing
       - run: bun install --frozen-lockfile
