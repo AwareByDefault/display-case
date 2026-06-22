@@ -3,9 +3,7 @@
 ## Purpose
 
 A showcase may include an authored primer — a single long-form reading surface that interleaves formatted prose with live component specimens drawn from the showcase.
-
 ## Requirements
-
 ### Requirement: Authored primer
 
 A showcase MAY include an authored primer — a single long-form reading surface that interleaves formatted prose with live component specimens drawn from the showcase. When a primer is authored, Display Case SHALL offer a way to switch the browsing surface between the component catalog and the primer, and SHALL render the primer's prose as formatted text with its embedded specimens live. Each specimen MAY carry a title, a subtitle, and a forced theme that applies to that specimen alone regardless of the surface's current theme. Display Case SHALL present the primer's titled sections as a navigable table of contents that reflects the section currently in view and lets a viewer jump to a section. The primer SHALL have an isolated rendering free of the browsing chrome. When no primer is authored, no switch is offered and the catalog is the only surface.
@@ -37,3 +35,18 @@ A showcase MAY include an authored primer — a single long-form reading surface
 - WHEN a viewer opens the browsing surface
 - THEN no primer switch is offered
 - AND the component catalog is the only surface
+
+### Requirement: Prose code samples are not executed as specimens
+
+A primer's prose MAY include fenced code samples. Such samples SHALL render as
+formatted, inert code and SHALL NOT be interpreted or executed as live component
+specimens, even when their contents resemble specimen markup.
+
+#### Scenario: A code sample that looks like a specimen
+
+- GIVEN a primer whose prose contains a fenced code sample that itself contains
+  component-specimen markup
+- WHEN the primer is rendered
+- THEN the sample appears as formatted code
+- AND it is not rendered as a live specimen
+
