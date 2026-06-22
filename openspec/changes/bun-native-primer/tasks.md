@@ -5,27 +5,27 @@
 
 ## 2. Add the renderer dependency
 
-- [ ] 2.1 `bun add markdown-to-jsx`
+- [x] 2.1 `bun add markdown-to-jsx`
 
 ## 3. Swap the placard renderer (prerequisite to dropping the old deps)
 
-- [ ] 3.1 Rewrite `src/ui/markdown.tsx` to render with `markdown-to-jsx` (`disableParsingRawHTML: true`)
-- [ ] 3.2 Update `src/ui/markdown.test.tsx`: placard subset (headings, bold, inline code, fenced code, lists, links, GFM tables, strikethrough) + no-raw-HTML guard
+- [x] 3.1 Rewrite `src/ui/markdown.tsx` to render with `markdown-to-jsx` (`disableParsingRawHTML: true`)
+- [x] 3.2 Update `src/ui/markdown.test.tsx`: placard subset (headings, bold, inline code, fenced code, lists, links, GFM tables, strikethrough) + no-raw-HTML guard
 
 ## 4. Wire the Primer to mdx-lite
 
-- [ ] 4.1 Rewrite `src/core/mdx-plugin.ts` to compile via `mdxToTsx` (loader `tsx`)
-- [ ] 4.2 Update `src/core/mdx-plugin.test.ts` to assert tsx output + `MDXContent` default export
-- [ ] 4.3 Repoint `src/checks/structure-check.ts` `primer-present-and-used` at `segmentMdx`
-- [ ] 4.4 Update `src/checks/structure-check.test.ts` for the new code path
+- [x] 4.1 Rewrite `src/core/mdx-plugin.ts` to compile via `mdxToTsx` (loader `tsx`)
+- [x] 4.2 Update `src/core/mdx-plugin.test.ts` to assert tsx output + `MDXContent` default export
+- [x] 4.3 Repoint `src/checks/structure-check.ts` `primer-present-and-used` at `segmentMdx`
+- [x] 4.4 Confirm `src/checks/structure-check.test.ts` covers the new code path (existing primer cases pass unchanged — no edit needed)
 
 ## 5. Drop the legacy deps
 
-- [ ] 5.1 `bun remove @mdx-js/mdx remark-gfm react-markdown`; verify nothing else imports them
+- [x] 5.1 `bun remove @mdx-js/mdx remark-gfm react-markdown`; verify nothing else imports them
 
 ## 6. Verify and document
 
-- [ ] 6.1 Run the gate: `bun run lint`, `bun run typecheck`, `bun run check`, `bun test`
-- [ ] 6.2 Render the Primer and a placard (light + dark) and confirm content parity
+- [x] 6.1 Run the gate: `bun run lint`, `bun run typecheck`, `bun run check`, `bun test`
+- [x] 6.2 Render the Primer and a placard (light + dark) and confirm content parity
 - [ ] 6.3 Document the supported Primer dialect in `docs/` and note it in `contributing/NOTES.md`
-- [ ] 6.4 Validate `openspec validate bun-native-primer --strict` and archive both changes
+- [ ] 6.4 Validate `openspec validate bun-native-primer --strict` (done) and archive both changes (pending)
