@@ -32,6 +32,12 @@ jobs:
   release:
     name: Release
     runs-on: ubuntu-latest
+    # Disable husky git hooks for this job. The gate below runs lint/typecheck/
+    # check/test as explicit steps, and @semantic-release/git's release commit
+    # must NOT trip the dev hooks — commitlint (commit-msg) would reject the
+    # multi-line release-notes body, and pre-commit would re-run the whole suite.
+    env:
+      HUSKY: "0"
     steps:
       - uses: actions/checkout@v4
         with:
