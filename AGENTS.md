@@ -110,6 +110,29 @@ bun run e2e          # Playwright chrome suite (setup installs the browser)
 
 Do not skip or suppress lint errors. Fix the root cause.
 
+### Releasing (Changesets)
+
+Versioning and npm publishing are automated with
+[Changesets](https://github.com/changesets/changesets) — **decoupled from commit
+messages**. Every PR **must** include a changeset declaring its release impact, or
+CI's `Changeset present` check fails the PR:
+
+```bash
+bun run changeset            # patch / minor / major + a CHANGELOG description
+bun run changeset --empty    # a no-release change (docs, CI, tests, refactor)
+bun run changeset:status     # preview what the pending changesets would release
+```
+
+The frontmatter package name is `@awarebydefault/display-case` (the npm scope),
+not the `display-case` bin name. On merge to `main`, the release workflow consumes
+the changesets, bumps `package.json` + `CHANGELOG.md`, and publishes — pushing the
+version commit to `main` as the `awarebydefault-release` GitHub App (the branch
+ruleset's bypass actor). Because versioning no longer depends on commit messages,
+merge style (squash or rebase — merge commits are disabled) doesn't affect
+releases. The [`display-case-changeset`](.claude/skills/display-case-changeset)
+skill writes the right changeset from the branch diff. Full flow:
+[contributing/releasing.md](contributing/releasing.md).
+
 ### Worktree-safe execution
 
 Display Case holds **no global or main-repo state** — resolution, the

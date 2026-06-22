@@ -14,6 +14,31 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Every PR must declare its release impact with a Changeset (versioning is
+  # decoupled from commit messages). Add one with `bun run changeset` (patch/
+  # minor/major + description), or `bun run changeset --empty` for a no-release
+  # change. See contributing/releasing.md.
+  changeset:
+    name: Changeset present
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Require a changeset in this PR
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only "$BASE_SHA" HEAD -- '.changeset/*.md' ':!.changeset/README.md' || true)"
+          if [ -z "$changed" ]; then
+            echo "::error::No changeset found. Run 'bun run changeset' to declare this PR's release impact (patch/minor/major + a description), or 'bun run changeset --empty' for a no-release change. See contributing/releasing.md."
+            exit 1
+          fi
+          echo "Changeset(s) in this PR:"
+          echo "$changed"
+
   lint:
     name: Lint & typecheck
     runs-on: ubuntu-latest

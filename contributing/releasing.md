@@ -1,32 +1,75 @@
 # Releasing Display Case
 
 Display Case publishes to the public **npm registry** (Bun has no registry of its
-own — `bun install` and `bun publish` both speak to npm). Releases are fully
-automated by [semantic-release](https://semantic-release.gitbook.io/): there are
-**no manual version bumps and no manual `npm publish`**. `main` is the release
-branch.
+own — `bun install` and `bun publish` both speak to npm). Releases are automated
+with [Changesets](https://github.com/changesets/changesets): **no manual version
+bumps and no manual `npm publish`**. `main` is the release branch.
 
-## How a release happens
+The version is **decoupled from commit messages** — it comes from the changeset
+file(s) a PR includes. Commit/merge style (squash or rebase) therefore has no
+effect on the release.
 
-1. You merge a PR (or push) to `main`.
-2. `.github/workflows/release.yml` runs the browser-free gate
-   (`lint` + `typecheck` + `check` + `test`), then `bunx semantic-release`.
-3. semantic-release reads every Conventional-Commit message since the last git
-   tag and decides the next version:
+## The model: a changeset per PR, publish on merge
 
-   | Commit type | Release |
-   | --- | --- |
-   | `fix:` | patch (`0.1.0` → `0.1.1`) |
-   | `feat:` | minor (`0.1.0` → `0.2.0`) |
-   | `feat!:` / `fix!:` / a `BREAKING CHANGE:` footer | major (`0.1.0` → `1.0.0`) |
-   | `chore:` `docs:` `refactor:` `test:` `ci:` `build:` `style:` `perf:` (alone) | **no release** |
+1. **In your PR**, add a changeset declaring the release impact:
 
-4. If (and only if) there is a release-worthy commit, it bumps `package.json`,
-   writes `CHANGELOG.md`, `npm publish`es the package (raw TS — see below), pushes
-   a `vX.Y.Z` git tag + the release commit, and opens a GitHub Release. A push
-   with only `chore`/`docs` commits is a clean no-op.
+   ```bash
+   bun run changeset      # interactive: pick patch / minor / major + write a description
+   ```
 
-The release commit is tagged `[skip ci]` so it doesn't retrigger the workflow.
+   This writes a file like `.changeset/cool-otters-sing.md`:
+
+   ```md
+   ---
+   "@awarebydefault/display-case": minor
+   ---
+
+   Add a `--static` flag to `display-case publish` for a server-less export.
+   ```
+
+   | Level | When | Example |
+   | --- | --- | --- |
+   | `patch` | bug fix / internal change, no API change | `0.1.0` → `0.1.1` |
+   | `minor` | backward-compatible new capability | `0.1.0` → `0.2.0` |
+   | `major` | breaking change to the public API or CLI | `0.1.0` → `1.0.0` |
+
+   For a change that should **not** release (docs, CI, tests, refactors), add an
+   empty changeset instead — it satisfies the PR check without bumping anything:
+
+   ```bash
+   bun run changeset --empty
+   ```
+
+   (The [`display-case-changeset`](../.claude/skills/display-case-changeset) skill
+   can write the right changeset from your branch's diff.)
+
+2. **A PR check enforces it.** The `Changeset present` CI job fails any PR that
+   adds no `.changeset/*.md`, so release impact is always declared (use an empty
+   changeset to opt out of a release).
+
+3. **On merge to `main`**, [`.github/workflows/release.yml`](../.github/workflows/release.yml)
+   runs the browser-free gate (`lint` + `typecheck` + `check` + `test`), then —
+   only if the merged changes carried any changesets — runs `changeset version`
+   (bumps `package.json`, prepends `CHANGELOG.md`, deletes the consumed
+   changesets), commits that back to `main` as `chore(release): version packages
+   [skip ci]`, and `changeset publish`es to npm. A push carrying no changesets is
+   a clean no-op. Multiple changesets in one release collapse to the highest
+   level, and each description becomes its own changelog line.
+
+The version commit is tagged `[skip ci]` so it doesn't retrigger the workflow.
+
+## Branch protection: the release pushes as a GitHub App
+
+The version commit + git tags push **directly to `main`**, which the `Protect
+main` ruleset gates behind a PR. The release job therefore pushes as the
+**`awarebydefault-release` GitHub App** — the ruleset's sole bypass actor — via a
+short-lived token minted with `actions/create-github-app-token`. The built-in
+`GITHUB_TOKEN` can't be a ruleset bypass actor, which is why the App exists.
+
+Setup (one-time, already done): the App has **Contents: Read & write**, is
+installed on this repo only, and its `RELEASE_APP_ID` + `RELEASE_APP_PRIVATE_KEY`
+are repo secrets. The `update-baselines` workflow uses the same App for the same
+reason.
 
 ## What ships, and why it's raw TypeScript
 
@@ -34,47 +77,30 @@ Display Case is **Bun-native at runtime**, not just at install time — the CLI,
 the dev/prod server, and the checks call `Bun.serve` / `Bun.build` / `Bun.file`
 directly. Transpiling to JS would not make it Node-runnable (those globals are
 still required), so we ship the `src/**/*.ts` sources verbatim and Bun runs them.
-The package therefore declares `"engines": { "bun": ">=1.2.0" }`, and the CLI
-exits early with a friendly message if launched under Node (`src/cli.ts`). The
-`files` allowlist in `package.json` controls the published tarball; verify it
-with `npm pack --dry-run` (or `bun pm pack --dry-run`).
-
-## Conventional Commits are mandatory
-
-Because the version is derived from commit messages, every commit must follow
-[Conventional Commits](https://www.conventionalcommits.org/). This is enforced
-locally by the `commit-msg` husky hook (`commitlint.config.js`) and is the input
-semantic-release relies on. Examples:
-
-```
-feat: add --static flag to publish
-fix(server): release the port on SIGTERM
-feat!: rename defineCases options.level → tier   # BREAKING — major bump
-docs: clarify the tweak vocabulary               # no release
-```
+The package declares `"engines": { "bun": ">=1.2.0" }`, and the CLI exits early
+with a friendly message if launched under Node (`src/cli.ts`). The `files`
+allowlist in `package.json` controls the published tarball; verify it with
+`npm pack --dry-run` (or `bun pm pack --dry-run`).
 
 ## Publishing auth: OIDC trusted publishing (token-bootstrapped)
 
 The package publishes with **[npm trusted publishing](https://docs.npmjs.com/trusted-publishers)** —
 GitHub Actions authenticates to npm over OIDC, so no long-lived publish token
-lives in the repo. `@semantic-release/npm` (≥ 13.1, shipped with semantic-release
-≥ 25) attempts an OIDC token exchange first and **falls back to `NPM_TOKEN`** only
-if that fails. The workflow runs on **Node 24 with npm ≥ 11.5.1** (both required
-for trusted publishing) and runs `semantic-release` under Node, not bunx.
+lives in the repo. The release job runs on **Node 24 with npm ≥ 11.5.1** (both
+required for trusted publishing); `changeset publish` shells out to that `npm`
+for the registry handshake.
 
-There's a chicken-and-egg: npm can only configure a trusted publisher on a
-package that **already exists**, so the rollout is two phases.
+npm can only configure a trusted publisher on a package that **already exists**,
+so the rollout is two phases.
 
 ### Phase 1 — bootstrap the first release with a token
 
 1. Mint an npm **Automation** token (Automation/Granular tokens bypass any
-   2FA-on-publish requirement; a classic token that needs an OTP will fail in CI)
-   scoped to the `@awarebydefault` org with publish rights.
-2. Add it as the **`NPM_TOKEN`** repo secret under *Settings → Secrets and
-   variables → Actions*. (`GITHUB_TOKEN` is automatic.)
-3. Land a release-worthy commit on `main`. The OIDC exchange returns "package not
-   found", so the publish falls back to `NPM_TOKEN` and creates
-   `@awarebydefault/display-case`.
+   2FA-on-publish requirement) scoped to `@awarebydefault` with publish rights.
+2. Add it as the **`NPM_TOKEN`** repo secret. When set, the release job writes a
+   one-line `~/.npmrc` from it; when unset, the publish uses OIDC.
+3. Land a release-worthy change on `main`; the publish falls back to `NPM_TOKEN`
+   and creates `@awarebydefault/display-case`.
 
 ### Phase 2 — switch to OIDC and delete the token
 
@@ -84,49 +110,39 @@ package that **already exists**, so the rollout is two phases.
    - **Repository:** `display-case`
    - **Workflow filename:** `release.yml` (filename only, not the path)
    - **Allowed actions:** `npm publish`
-5. The next release exchanges the OIDC token successfully and publishes
-   tokenlessly. Confirm the run log shows *"OIDC token exchange with the npm
-   registry succeeded"*.
-6. **Delete the `NPM_TOKEN` secret** (and the `NPM_TOKEN:` env line in
-   `release.yml`). From here, releases need no npm secret at all.
+5. **Delete the `NPM_TOKEN` secret.** With it gone the job writes no `.npmrc` and
+   `npm publish` uses OIDC tokenlessly. Confirm the run log shows the OIDC
+   exchange succeeded.
 
 ### Future: dropping npm and going bun-only
 
 The Node/npm step in `release.yml` is the only non-Bun part of the pipeline — it
-exists solely to provide the `npm` CLI for the registry handshake (`bun publish`
-can't yet do OIDC trusted publishing, and semantic-release shells out to `npm`).
-Two upstream Bun changes must both land before the job could be fully bun-native:
+exists solely to provide the `npm` CLI `changeset publish` calls. Two upstream
+Bun changes must both land before the job could be fully bun-native:
 
 - **Provenance:** [oven-sh/bun#30522](https://github.com/oven-sh/bun/pull/30522)
-  adds `bun publish --provenance` (Sigstore keyless signing). *Open.*
+  adds `bun publish --provenance`. *Open.*
 - **Tokenless OIDC auth:** [oven-sh/bun#24855](https://github.com/oven-sh/bun/issues/24855)
   adds trusted publishing. *Open.*
 
-#30522 alone closes only the provenance gap, not authentication — don't switch on
-its merge. Revisit when both ship (and semantic-release can drive `bun publish`,
-or we hand-roll the publish step).
+#30522 alone closes only the provenance gap, not authentication.
 
 ### Other requirements
 
-- **Scoped, public package** — the package is `@awarebydefault/display-case`
-  (the bare `display-case` name is taken). Scoped packages default to *private*,
-  so `publishConfig.access = public` (already set) is required for the publish to
-  succeed. The CLI **command** is still `display-case` (the `bin` name is
-  independent of the package scope); a cold one-off uses the full name —
-  `bunx @awarebydefault/display-case`.
-- **Provenance** — generated automatically. With trusted publishing, npm emits
-  provenance attestations without the `--provenance` flag; `publishConfig.provenance`
-  also covers the Phase-1 token publish. Both rely on the workflow's
-  `id-token: write` permission.
-- **Branch protection** — if `main` requires PRs, allow semantic-release's
-  release commit through (it pushes directly). The `[skip ci]` tag prevents a
-  loop, but a hard "require PR for all pushes" rule will block the bot; grant it
-  an exception or use a PAT/GitHub App token in place of `GITHUB_TOKEN`.
+- **Scoped, public package** — `@awarebydefault/display-case`. Scoped packages
+  default to *private*, so `publishConfig.access = public` (set in
+  `package.json`) is required. The CLI **command** is still `display-case`.
+- **Provenance** — `publishConfig.provenance = true` plus the workflow's
+  `id-token: write` permission emit provenance attestations on publish.
 
-## Dry run
-
-Preview what the next release would be without publishing:
+## Inspecting and recovering
 
 ```bash
-bun run release:dry   # semantic-release --dry-run --no-ci
+bun run changeset:status   # what would the pending changesets release?
 ```
+
+If a release run fails **after** `changeset publish` succeeds but **before** the
+push lands, npm has the new version while `main` lacks the bump. Re-run the
+workflow (`workflow_dispatch`): `changeset publish` skips versions already on the
+registry, the changesets are still on `main`, so the version + push are recreated
+idempotently.
