@@ -34,7 +34,7 @@ The CLI looks for `display-case.config.ts` then `display-case.config.tsx` in the
 | `baselineDir` | `string` | no | `.display-case/baselines` | Where visual-regression baselines are stored. |
 | `tokens` | `{ allow?: string[] }` | no | none | Design-token conformance options for `--tokens`. `allow` lists custom-property names the package may reference but does not itself define (e.g. host-app-provided tokens). See [Testing](testing.md#token-conformance). |
 | `providers` | `{ driver?, diff? }` | no | built-in | Override the visual-regression backend. When unset, the built-in Playwright/axe driver and pixelmatch/pngjs diff are loaded lazily. See [`providers`](#providers). |
-| `check` | `{ defaultPhases?, structure? }` | no | none | Tune the `check` command: which phases run by default, and the structure phase's rules and severities. See [`check`](#check). |
+| `check` | `{ defaultPhases?, concurrency?, structure? }` | no | none | Tune the `check` command: which phases run by default, how many variants the a11y/visual phases scan concurrently, and the structure phase's rules and severities. See [`check`](#check). |
 | `a11y` | `{ enabled?, themes?, exclude?, startup? }` | no | off | Live accessibility surfacing in the running browse chrome. See [`a11y`](#a11y). |
 
 ### `title`
@@ -349,6 +349,9 @@ check: {
   // opt out. An opted-out phase still runs when named explicitly (e.g. --visual).
   defaultPhases: { visual: false },
 
+  // How many variants the a11y/visual phases scan concurrently. Default 4.
+  concurrency: 4,
+
   structure: {
     // Treat every structure warning as an error for the run (same as --strict).
     strict: false,
@@ -365,6 +368,7 @@ check: {
 ```
 
 - **`defaultPhases`** — a `Partial<Record<'tokens' | 'a11y' | 'visual' | 'structure', boolean>>`. Drop a phase from the bare `check` run (e.g. `visual` when no baselines are committed) while keeping it available via its flag.
+- **`concurrency`** — how many variants the render phases (a11y/visual) scan at once, each on its own page from a shared browser. Default `4`; override per run with `--concurrency=N`. A custom `providers.driver` must tolerate concurrent `open()` calls (set `1` if it can't). See [Testing → Reporting and concurrency](testing.md#reporting-and-concurrency).
 - **`structure.rules[id]`** — `false` disables the rule; `'warn'`/`'error'` enables it at that severity; an options object (`{ severity?, ignore?, thresholds? }`) enables it with overrides. Unset ⇒ the rule's default. The rule ids, defaults, and escape-hatch markers are listed in [Testing → Structure checks](testing.md#structure-checks).
 - **`structure.strict`** — escalate all structure warnings to errors (the config equivalent of `check --strict`).
 

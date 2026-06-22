@@ -4,6 +4,43 @@ Non-obvious decisions, debugging notes, and architectural context for the Displa
 
 ---
 
+## 2026-06-22: `check` a11y/visual report as `bun test` — per-variant pass/fail, timing, concurrency
+
+The a11y and visual phases of `display-case check` used to print only failures
+(`a11y ✗ …`, `visual ✗ …`), silently and serially. They now report like
+`bun test`: every variant is a "test" with a `(pass)`/`(fail)`/`(record)` tag, its
+own elapsed time, and a rolled-up summary (per-phase counts, overall `N pass`/`N
+fail`, and a `Ran N checks [wall-clock] (concurrency K)` line). The formatting
+lives in **`src/checks/check-reporter.ts`** — kept pure/side-effect-free so it's
+unit-tested (`check-reporter.test.ts`), the same split as `a11yDetailLines`.
+`check.ts` owns the timing, the browser, and the `console` writes.
+
+Three things worth knowing for future edits:
+
+- **Timing is `Bun.nanoseconds()`, per phase-per-variant.** Each a11y audit and
+  each visual diff is timed independently (not the page-open). The summary's
+  `Ran …` time is the **wall-clock** of the whole render run, which is *less* than
+  the sum of per-variant times because variants run concurrently — that gap is
+  expected, not a bug.
+
+- **Variants scan concurrently via a small `mapPool` (default 4).** The built-in
+  Playwright driver opens one page per variant from a shared `BrowserContext`, so
+  concurrent pages overlap the browser-bound work cleanly. JS stays
+  single-threaded, so the shared counters/tallies/`a11yReport` the workers mutate
+  need **no locking** — only one worker runs between any two awaits. Configurable
+  via `--concurrency=N` / `check.concurrency`; a custom `providers.driver` that
+  can't handle concurrent `open()` must set concurrency to `1`.
+
+- **Each variant's lines are buffered and flushed as one `console.log`.** Under
+  concurrency, printing incrementally would interleave one variant's a11y/visual
+  lines with another's mid-test. So a variant collects its lines into an array and
+  emits them atomically when done — blocks stay contiguous, but **block order is
+  completion order, not target order** (like `bun test` across files). Don't assume
+  deterministic ordering when grepping; grep the `(pass)`/`(fail)` tags (plain
+  text, no colour/glyphs) and the summary, which *are* deterministic.
+
+---
+
 ## 2026-06-22: The compiled primer must self-resolve `markdown-to-jsx`
 
 **Symptom (found dogfooding in a consumer repo).** A consumer authoring a

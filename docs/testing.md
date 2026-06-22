@@ -139,10 +139,12 @@ Escapes:
 
 ## Accessibility
 
-For every case in every theme, the runner analyzes the page with axe-core and reports each violation, followed by the affected nodes — for colour-contrast, the failing element and the exact measured-vs-required pair, so a finding is fixable without re-running a browser:
+For every case in every theme, the runner analyzes the page with axe-core. Each variant is reported as a test — `(pass)` or `(fail)`, with its own timing — in the shape of `bun test`, so a CI log can be grepped and summarized the same way a test run is. A failing variant is followed by each violation and its affected nodes; for colour-contrast, the failing element and the exact measured-vs-required pair, so a finding is fixable without re-running a browser:
 
 ```
-a11y ✗ tweak-control/variants [dark] color-contrast: Elements must meet contrast ratio (2 node(s))
+a11y   (pass) eyebrow/tones [light] [270.84ms]
+a11y   (fail) tweak-control/variants [dark] [412.30ms]
+         serious color-contrast: Elements must meet contrast ratio (2 node(s))
       ↳ .dcui-tweak-label  #8a8073 on #ffffff = 3.87:1 (need 4.5:1)  [12.0pt (16px) normal]
       ↳ .dcui-tweak-url  #8a8073 on #ffffff = 3.87:1 (need 4.5:1)  [12.0pt (16px) normal]
 ```
@@ -155,15 +157,17 @@ The isolated render document is a complete page (a `<title>`, `lang`, and a sing
 
 ## Visual regression
 
-For every case in every theme, the runner takes a screenshot and compares it to a baseline PNG:
+For every case in every theme, the runner takes a screenshot and compares it to a baseline PNG. Each variant is reported as a `bun test`-style test with its own timing:
 
-- **No baseline yet** → the screenshot is recorded as the new baseline (counted as "recorded", not a failure).
-- **Baseline matches** → pass.
-- **Baseline differs** → failure. A `<case>.<theme>.diff.png` is written next to the baseline so you can inspect the change.
-- **Dimensions changed** → failure. The new render is saved as `<case>.<theme>.actual.png` for inspection.
+- **No baseline yet** → the screenshot is recorded as the new baseline, reported `(record)` (counted as "recorded", not a failure).
+- **Baseline matches** → `(pass)`.
+- **Baseline differs** → `(fail)`. A `<case>.<theme>.diff.png` is written next to the baseline (its path is printed under the failing line) so you can inspect the change.
+- **Dimensions changed** → `(fail)`. The new render is saved as `<case>.<theme>.actual.png` for inspection.
 
 ```
-visual ✗ tweak-control/variants [light] differs from baseline
+visual (pass) eyebrow/tones [light] [87.75ms]
+visual (fail) tweak-control/variants [light] [203.86ms]
+         differs from baseline → test/visual-baselines/tweak-control/variants.light.diff.png
 ```
 
 The diff threshold is strict: any differing pixel counts as a change.
@@ -210,6 +214,39 @@ export default defineConfig({
 > machine doesn't report off-platform false diffs. Set
 > [`check.defaultPhases`](configuration.md)`: { visual: false }`; the phase still
 > runs when asked explicitly (`--visual`) and in CI. This repo does exactly that.
+
+## Reporting and concurrency
+
+The a11y and visual phases report in the shape of `bun test`: one `(pass)` /
+`(fail)` / `(record)` line per variant, each tagged with its own elapsed time
+(high-resolution, via `Bun.nanoseconds()`), then a rolled-up summary — per-phase
+counts, the overall `N pass` / `N fail`, and a `Ran N checks [time]` line whose
+time is the **wall-clock** for the whole render run:
+
+```
+a11y   42 pass  0 fail
+visual 40 pass  2 fail  3 recorded
+
+82 pass
+2 fail
+3 recorded
+Ran 87 checks [12.41s] (concurrency 4)
+```
+
+Because the variants are scanned concurrently, the wall-clock is well below the
+sum of the per-variant times. The fixed `(pass)`/`(fail)` tags are plain text (no
+colour or glyphs to parse), so a CI step can grep and tally them like any test
+run.
+
+The render phases scan multiple variants at once — each on its own page from a
+shared browser — to cut wall-clock. The default concurrency is **4**; override it
+per run with `--concurrency=N` or globally with `check.concurrency` in the config.
+A custom [`providers.driver`](configuration.md#providers) must tolerate
+concurrent `open()` calls (set concurrency to `1` if it can't).
+
+```bash
+display-case check . --a11y --visual --concurrency=8
+```
 
 ## Change-scoped checks
 
