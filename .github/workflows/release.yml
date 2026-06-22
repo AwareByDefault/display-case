@@ -1,17 +1,16 @@
 name: Release
 
-# Automated publish on every push to main. semantic-release reads the
-# Conventional-Commit history since the last git tag, decides the next version,
-# then: bumps package.json, writes CHANGELOG.md, npm-publishes (with provenance),
-# tags the commit, and opens a GitHub Release. No manual version bumps.
-# A release that finds no release-worthy commits (only chore/docs/etc.) is a no-op.
+# Publish-on-merge with Changesets. Every push to main runs the browser-free
+# gate, then — only if the merged changes carried any changesets — consumes them
+# with `changeset version` (bumps package.json + CHANGELOG.md), commits that back
+# to main, and `changeset publish`es to npm. A push that carries no changesets is
+# a clean no-op. The version comes from the changeset files a PR includes, not
+# from commit messages.
 #
-# Auth is OIDC trusted publishing (no long-lived token), with a token fallback:
-# @semantic-release/npm tries an OIDC token exchange first and only falls back to
-# NPM_TOKEN if that fails. The npm registry can't configure a trusted publisher
-# until the package exists, so the FIRST release bootstraps via NPM_TOKEN; once
-# the trusted publisher is set up on npmjs.com, OIDC takes over and the secret can
-# be deleted. See contributing/releasing.md for the two-phase setup.
+# The version commit + tags push DIRECTLY to main, which the 'Protect main'
+# ruleset gates behind a PR. So this job pushes as the awarebydefault-release
+# GitHub App (the ruleset's sole bypass actor) via a minted App token; the
+# version commit is tagged [skip ci] so it doesn't retrigger this workflow.
 on:
   push:
     branches: [main]
@@ -23,44 +22,43 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: write # push the release commit + tag, create the GitHub Release
-  issues: write # comment on released issues
-  pull-requests: write # comment on released PRs
-  id-token: write # OIDC token exchange for trusted publishing + provenance
+  contents: write # push the version commit + tags
+  id-token: write # npm OIDC trusted publishing + provenance
 
 jobs:
   release:
     name: Release
     runs-on: ubuntu-latest
-    # Disable husky git hooks for this job. The gate below runs lint/typecheck/
-    # check/test as explicit steps, and @semantic-release/git's release commit
-    # must NOT trip the dev hooks — commitlint (commit-msg) would reject the
-    # multi-line release-notes body, and pre-commit would re-run the whole suite.
+    # The release commit is pushed with explicit git config below; disable the
+    # husky hooks (commitlint would reject the generated message, pre-commit
+    # would re-run the whole suite).
     env:
       HUSKY: "0"
     steps:
+      # Mint a short-lived GitHub App installation token. The version commit +
+      # tags push directly to `main`, which the branch ruleset gates behind a PR;
+      # the built-in GITHUB_TOKEN can't be a bypass actor, this App can.
+      # App perms: Contents R/W (the Issues/PR perms are unused now but harmless).
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
       - uses: actions/checkout@v4
         with:
-          # Full history so semantic-release can read every tag/commit.
+          # Full history so changeset can resolve tags, and credentials persisted
+          # so the version commit + tags push as the App.
           fetch-depth: 0
-          # Let semantic-release auth its own pushes via GITHUB_TOKEN.
-          persist-credentials: false
+          persist-credentials: true
+          token: ${{ steps.app-token.outputs.token }}
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.14
-      # Node 24 + npm >=11.5.1 are required for OIDC trusted publishing; the npm
-      # binary here is what @semantic-release/npm shells out to for the publish.
-      # This Node step is the ONLY non-Bun part of the pipeline — it exists purely
-      # to provide a known-good `npm` for the registry handshake (install + gate
-      # run under Bun). To eventually drop it and go bun-only, BOTH need to land:
-      #   - bun publish --provenance:        https://github.com/oven-sh/bun/pull/30522 (open)
-      #   - bun publish OIDC trusted publish: https://github.com/oven-sh/bun/issues/24855 (open)
-      # #30522 alone only closes the provenance gap, not tokenless OIDC auth.
-      # NOTE: no `registry-url` — it makes setup-node write an .npmrc bound to
-      # NODE_AUTH_TOKEN (which defaults to a placeholder when unset) and points
-      # NPM_CONFIG_USERCONFIG at it, shadowing NPM_TOKEN and causing
-      # EINVALIDNPMTOKEN. @semantic-release/npm writes its own .npmrc from
-      # NPM_TOKEN, so setup-node only needs to provide the node/npm binaries.
+      # Node 24 + npm >=11.5.1 provide the `npm` binary `changeset publish` shells
+      # out to for the OIDC trusted-publishing handshake. This is the only non-Bun
+      # part of the pipeline; drop it once `bun publish` gains provenance + OIDC
+      # (oven-sh/bun#30522 and #24855, both open). No `registry-url` — it would
+      # write an .npmrc that shadows NPM_TOKEN / OIDC.
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -73,11 +71,56 @@ jobs:
       - run: bun run typecheck
       - run: bun run check
       - run: bun test
-      # Run semantic-release under Node (its @semantic-release/npm engine requires
-      # Node ^22.14 || >=24.10), not bunx. The local install is resolved by npx.
-      - run: npx semantic-release
+      # Consume changesets → version + changelog, commit to main, publish to npm.
+      - name: Version & publish
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Bootstrap/fallback only — remove this (and the repo secret) once the
-          # trusted publisher is configured on npmjs.com and OIDC is confirmed.
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          # Fallback only — npm OIDC trusted publishing is used when this is unset
+          # (delete the secret once OIDC is confirmed). See contributing/releasing.md.
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+        run: |
+          set -euo pipefail
+
+          # Any pending changesets? (.changeset/*.md other than the README)
+          shopt -s nullglob
+          pending=()
+          for f in .changeset/*.md; do
+            [ "$(basename "$f")" = "README.md" ] || pending+=("$f")
+          done
+          if [ ${#pending[@]} -eq 0 ]; then
+            echo "No changesets pending — nothing to release."
+            exit 0
+          fi
+          echo "Found ${#pending[@]} changeset(s)."
+
+          # Commit as the release App's bot identity (the push auth — the App
+          # token — is what the ruleset bypasses, independent of commit author).
+          bot_id="$(gh api "/users/${APP_SLUG}[bot]" --jq .id)"
+          git config user.name "${APP_SLUG}[bot]"
+          git config user.email "${bot_id}+${APP_SLUG}[bot]@users.noreply.github.com"
+
+          # Bump package.json + CHANGELOG.md and delete the consumed changesets.
+          bun run changeset:version
+
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Versioning produced no file changes — nothing to release."
+            exit 0
+          fi
+          git commit -m "chore(release): version packages [skip ci]"
+
+          # npm auth: prefer OIDC trusted publishing (no token). Only write an
+          # .npmrc when NPM_TOKEN is set (bootstrap/fallback).
+          if [ -n "${NPM_TOKEN:-}" ]; then
+            echo "Using NPM_TOKEN for npm auth (delete the secret to use OIDC)."
+            echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" >> "$HOME/.npmrc"
+          fi
+
+          # Publish BEFORE pushing: `changeset publish` skips versions already on
+          # the registry, so a push failure here is recoverable by re-running
+          # (the changesets are still on main until the push lands).
+          bun run changeset:publish
+
+          git push origin HEAD:main
+          git push origin --tags
