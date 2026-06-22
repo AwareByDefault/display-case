@@ -1,0 +1,73 @@
+name: Release
+
+# Automated publish on every push to main. semantic-release reads the
+# Conventional-Commit history since the last git tag, decides the next version,
+# then: bumps package.json, writes CHANGELOG.md, npm-publishes (with provenance),
+# tags the commit, and opens a GitHub Release. No manual version bumps.
+# A release that finds no release-worthy commits (only chore/docs/etc.) is a no-op.
+#
+# Auth is OIDC trusted publishing (no long-lived token), with a token fallback:
+# @semantic-release/npm tries an OIDC token exchange first and only falls back to
+# NPM_TOKEN if that fails. The npm registry can't configure a trusted publisher
+# until the package exists, so the FIRST release bootstraps via NPM_TOKEN; once
+# the trusted publisher is set up on npmjs.com, OIDC takes over and the secret can
+# be deleted. See contributing/releasing.md for the two-phase setup.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Never run two releases against main at once.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write # push the release commit + tag, create the GitHub Release
+  issues: write # comment on released issues
+  pull-requests: write # comment on released PRs
+  id-token: write # OIDC token exchange for trusted publishing + provenance
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history so semantic-release can read every tag/commit.
+          fetch-depth: 0
+          # Let semantic-release auth its own pushes via GITHUB_TOKEN.
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      # Node 24 + npm >=11.5.1 are required for OIDC trusted publishing; the npm
+      # binary here is what @semantic-release/npm shells out to for the publish.
+      # This Node step is the ONLY non-Bun part of the pipeline — it exists purely
+      # to provide a known-good `npm` for the registry handshake (install + gate
+      # run under Bun). To eventually drop it and go bun-only, BOTH need to land:
+      #   - bun publish --provenance:        https://github.com/oven-sh/bun/pull/30522 (open)
+      #   - bun publish OIDC trusted publish: https://github.com/oven-sh/bun/issues/24855 (open)
+      # #30522 alone only closes the provenance gap, not tokenless OIDC auth.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - run: npm install -g npm@latest
+      - run: npm --version # must be >= 11.5.1 for trusted publishing
+      - run: bun install --frozen-lockfile
+      # Browser-free correctness gate (mirrors .husky/pre-commit). The e2e +
+      # a11y/visual suites already gate every PR; main lands pre-reviewed.
+      - run: bun run lint
+      - run: bun run typecheck
+      - run: bun run check
+      - run: bun test
+      # Run semantic-release under Node (its @semantic-release/npm engine requires
+      # Node ^22.14 || >=24.10), not bunx. The local install is resolved by npx.
+      - run: npx semantic-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Bootstrap/fallback only — remove this (and the repo secret) once the
+          # trusted publisher is configured on npmjs.com and OIDC is confirmed.
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

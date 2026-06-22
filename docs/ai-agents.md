@@ -11,10 +11,10 @@ Together these let an agent discover what exists, read the source it points to, 
 
 ## Running the tool
 
-Display Case requires Bun. Invoke it with `bunx display-case <pkgDir>` (or wrap it in a `bun run display-case` npm script — see [CLI](cli.md)).
+Display Case requires Bun. Invoke it with `bunx @awarebydefault/display-case <pkgDir>` (or wrap it in a `bun run display-case` npm script — see [CLI](cli.md)).
 
-- **Enumerate without a browser or server:** `bunx display-case <pkgDir> --print-manifest` prints the manifest JSON to stdout and exits. This is the cheapest way to discover what exists.
-- **Start the server** (needed for `/render`, `/manifest.json`, `/doc`): `bunx display-case <pkgDir>` serves at `http://localhost:3100` (override with `--port`). It needs no database or app — only the showcased package. It runs until killed.
+- **Enumerate without a browser or server:** `bunx @awarebydefault/display-case <pkgDir> --print-manifest` prints the manifest JSON to stdout and exits. This is the cheapest way to discover what exists.
+- **Start the server** (needed for `/render`, `/manifest.json`, `/doc`): `bunx @awarebydefault/display-case <pkgDir>` serves at `http://localhost:3100` (override with `--port`). It needs no database or app — only the showcased package. It runs until killed.
 - **Accessibility result for a variant** (only when `a11y.enabled`): `GET /a11y?component=<id>&case=<id>&theme=light|dark` returns `{ status: 'ok', violations: [{ id, help, nodes, impact, details? }] }` when cached, `{ status: 'pending' }` when a scan was just enqueued (poll again, or it's pushed over the SSE stream as an `a11y` event), or `{ status: 'unavailable', reason }` when the scan toolchain can't run. The headless CI form is `display-case check --a11y` (exits non-zero on any violation).
 - **Read the full a11y findings without re-running:** `display-case check --a11y` prints each violation's affected nodes and writes the complete run to `.display-case/a11y/last-check.json` — `{ scannedAt, total, results: [{ component, case, theme, violations }] }`, where each violation carries `details: [{ target, html, failureSummary?, contrast?: { foreground, background, ratio, required, fontSize?, fontWeight? } }]`. For a colour-contrast finding this is the exact element and failing pair; read this file to fix violations without driving a browser yourself.
 - **Rasterize a render:** `/render/...` returns a complete **HTML document**, not an image. To capture it, drive a headless browser with Playwright:
@@ -119,8 +119,8 @@ Cases render in an isolated browser bundle, which shapes a few behaviors worth k
 
 ## Recommended agent workflow
 
-1. **Enumerate.** Run `bunx display-case <pkgDir> --print-manifest` (no server needed), or `GET /manifest.json` against a running server.
+1. **Enumerate.** Run `bunx @awarebydefault/display-case <pkgDir> --print-manifest` (no server needed), or `GET /manifest.json` against a running server.
 2. **Locate.** From the manifest, pick the `caseFile` / `placardDoc` paths to read for source and guidance, and note each case's `renderUrl` and `tweaks`.
 3. **Snapshot.** Hit `renderUrl` with the desired `theme`, `width`, and `t.*` parameters to render exactly the variant you want — then screenshot or scrape it.
 4. **Document.** When a component has no `placardDoc` (or a thin one), author `<name>.placard.md` per [Writing placard docs](writing-placard-docs.md) so the next agent can use it without reading the source.
-5. **Verify.** Use `bunx display-case check <pkgDir>` to confirm the structure best-practice rules, a11y, and visual baselines still pass after a change; `bunx display-case check <pkgDir> --structure --tokens` runs just the fast, browser-free phases (see [Testing](testing.md)).
+5. **Verify.** Use `bunx @awarebydefault/display-case check <pkgDir>` to confirm the structure best-practice rules, a11y, and visual baselines still pass after a change; `bunx @awarebydefault/display-case check <pkgDir> --structure --tokens` runs just the fast, browser-free phases (see [Testing](testing.md)).

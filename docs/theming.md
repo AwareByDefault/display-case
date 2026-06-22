@@ -10,7 +10,7 @@ List your CSS entrypoints in the config. Their contents are concatenated and inj
 
 ```ts
 // display-case.config.ts
-import { defineConfig } from 'display-case'
+import { defineConfig } from '@awarebydefault/display-case'
 
 export default defineConfig({
   title: 'Display Case',
@@ -47,7 +47,7 @@ A decorator is a single React wrapper rendered around every case — the place f
 
 ```tsx
 // display-case.config.ts
-import { defineConfig } from 'display-case'
+import { defineConfig } from '@awarebydefault/display-case'
 import { ThemeProvider } from './src/components/theme-provider'
 
 export default defineConfig({

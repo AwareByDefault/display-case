@@ -10,7 +10,7 @@
  *
  * See ../writing-cases.md for the full authoring API.
  */
-import { defineCases } from 'display-case'
+import { defineCases } from '@awarebydefault/display-case'
 import { TweakControl } from './tweak-control'
 
 export default defineCases(

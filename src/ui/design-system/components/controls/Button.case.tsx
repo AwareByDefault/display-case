@@ -1,4 +1,4 @@
-import { defineCases, tweak } from 'display-case'
+import { defineCases, tweak } from '@awarebydefault/display-case'
 import { Button } from './Button'
 
 export default defineCases(

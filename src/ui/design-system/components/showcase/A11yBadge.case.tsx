@@ -1,4 +1,4 @@
-import { defineCases } from 'display-case'
+import { defineCases } from '@awarebydefault/display-case'
 import { A11yBadge } from './A11yBadge'
 import { NavItem } from './NavItem'
 import { Sidebar } from './Sidebar'

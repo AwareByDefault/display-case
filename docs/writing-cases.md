@@ -6,7 +6,7 @@ A case file is the unit of the showcase: a `*.case.tsx` file colocated with the 
 
 ```tsx
 // src/components/tweak-control.case.tsx
-import { defineCases } from 'display-case'
+import { defineCases } from '@awarebydefault/display-case'
 import { TweakControl } from './tweak-control'
 
 export default defineCases('TweakControl', {
@@ -60,7 +60,7 @@ For behavioural multi-step flows — a wizard, a sign-in sequence — use `defin
 
 ```tsx
 // src/components/sign-in-flow.case.tsx
-import { defineFlow } from 'display-case'
+import { defineFlow } from '@awarebydefault/display-case'
 import { RequestLink, CheckEmail, SignedIn } from './sign-in-screens'
 
 export default defineFlow('Sign-in flow', {
@@ -89,7 +89,7 @@ export default defineFlow('Checkout', { area: 'app', steps: { /* … */ } })
 **Typed step values.** A bare step object has loosely-typed `values`. To read typed preset values (`values.error` as `boolean`), wrap the step in the `flowStep` helper, which infers the step's own tweak schema:
 
 ```tsx
-import { defineFlow, flowStep, tweak } from 'display-case'
+import { defineFlow, flowStep, tweak } from '@awarebydefault/display-case'
 
 export default defineFlow('Sign-in', {
   steps: {

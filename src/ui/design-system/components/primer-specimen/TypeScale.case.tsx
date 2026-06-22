@@ -1,4 +1,4 @@
-import { defineCases } from 'display-case'
+import { defineCases } from '@awarebydefault/display-case'
 import { TypeScale, type TypeStep } from './TypeScale'
 
 const scale: TypeStep[] = [

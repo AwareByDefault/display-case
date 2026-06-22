@@ -11,11 +11,11 @@ Run the Display Case `check` runner and turn its output into actionable fixes.
 
 ## Steps
 
-1. **Run the checks**: `bun run display-case:check` (or `bunx display-case check <pkgDir>`). Phases:
+1. **Run the checks**: `bun run display-case:check` (or `bunx @awarebydefault/display-case check <pkgDir>`). Phases:
    - **a11y** — axe, WCAG 2 A/AA, per case × theme.
    - **visual** — pixel-diff each case (light + dark) against recorded baselines.
    - **tokens** — design-token conformance.
-   - Run one phase with a flag, e.g. `bunx display-case check <pkgDir> --a11y`.
+   - Run one phase with a flag, e.g. `bunx @awarebydefault/display-case check <pkgDir> --a11y`.
 2. **Triage each finding** by category:
    - **a11y** (`label`, `color-contrast`, `aria-*`, …): if the case renders a bare control, fix the *case* (add a label/`aria-label`); if the component itself fails (contrast tokens, missing accessible name), fix the *component*/tokens.
    - **visual** diffs: inspect the written `*.diff.png`; if the change is intended, re-record with `--update`; otherwise it's a regression to fix.

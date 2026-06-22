@@ -1,4 +1,4 @@
-import { type A11yImpact, defineCases } from 'display-case'
+import { type A11yImpact, defineCases } from '@awarebydefault/display-case'
 import { ImpactTag } from './ImpactTag'
 
 const IMPACTS: A11yImpact[] = ['critical', 'serious', 'moderate', 'minor']

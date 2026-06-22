@@ -1,4 +1,4 @@
-import { defineCases } from 'display-case'
+import { defineCases } from '@awarebydefault/display-case'
 import { type SpaceStep, SpacingScale } from './SpacingScale'
 
 const steps: SpaceStep[] = [

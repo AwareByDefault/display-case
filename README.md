@@ -4,7 +4,7 @@ A Bun-native, AI-friendly component showcase — a lightweight alternative to St
 
 ```tsx
 // tweak-control.case.tsx — colocated with tweak-control.tsx
-import { defineCases } from 'display-case'
+import { defineCases } from '@awarebydefault/display-case'
 import { TweakControl } from './tweak-control'
 
 export default defineCases('TweakControl', {
@@ -14,7 +14,7 @@ export default defineCases('TweakControl', {
 ```
 
 ```bash
-bunx display-case .         # browse at http://localhost:3100
+bunx @awarebydefault/display-case .         # browse at http://localhost:3100
 ```
 
 > Display Case **dogfoods itself**: the example above (and throughout these docs) showcases its own UI parts — `TweakControl`, `FlowNav`, `TweaksPanel`, `Sidebar`, `Shell`.
@@ -26,9 +26,20 @@ bunx display-case .         # browse at http://localhost:3100
 - **Built for machine readers.** A single `/manifest.json` enumerates every component, case, doc, and tweak as file references. Any case renders in isolation at a deterministic URL, so an AI agent (or a screenshot tool) can snapshot exactly one variant. See [AI agents](docs/ai-agents.md).
 - **Atomic Design hierarchy.** Cases declare a `level` (`atom` → `flow`); the sidebar groups by it. Each component's variants collapse under its name (collapsed by default — the chevron toggles them); clicking the name opens its first variant, so [order the most exploratory variant first](docs/writing-cases.md#order-the-default-landing-variant-first). Multi-step behavioural flows are first-class via `defineFlow`.
 
+## Install
+
+```bash
+bun add -D @awarebydefault/display-case   # dev dependency — it never ships in your app build
+```
+
+Display Case is **Bun-native at runtime**, so it is published as TypeScript
+source that Bun runs directly. It requires the [Bun](https://bun.sh) runtime
+(not just Bun as an installer); running the CLI under Node exits with a notice.
+
 ## Prerequisites
 
-- [Bun](https://bun.sh) (the dev server and bundler are Bun-native).
+- [Bun](https://bun.sh) ≥ 1.2 (the dev server and bundler are Bun-native, and
+  the CLI runs on the Bun runtime).
 - React 19 (peer dependency).
 - For a default-backed `check` (a11y + visual regression): the visual toolchain (`playwright`, `@axe-core/playwright`, `pixelmatch`, `pngjs` + Chromium). These are **optional** and loaded lazily — browsing, `--print-manifest`, and `/render` snapshotting need none of them. Set it up on demand with `display-case init <pkgDir> --with-visual` (or `bunx playwright install chromium` after adding the deps), or replace it entirely with a custom `providers` backend. See [Testing](docs/testing.md#the-default-backend-is-lazy-and-optional).
 
@@ -59,15 +70,15 @@ Display Case is a per-package tool: one config, one manifest, one port. Point it
    Or invoke the CLI directly without scripts:
 
    ```bash
-   bunx display-case .              # dev server
-   bunx display-case check .        # all checks
+   bunx @awarebydefault/display-case .              # dev server
+   bunx @awarebydefault/display-case check .        # all checks
    ```
 
    The target is `.` for the current package or an explicit `<pkgDir>`. `.`
    resolves the nearest `display-case.config.ts` walking up from the current
    directory, so it works from a package root or any subdirectory. The bare
-   `bunx display-case` (no argument) is **identical to `.`** — same cwd-based
-   resolution — so `bunx display-case` and `bunx display-case .` behave the same.
+   `bunx @awarebydefault/display-case` (no argument) is **identical to `.`** — same cwd-based
+   resolution — so `bunx @awarebydefault/display-case` and `bunx @awarebydefault/display-case .` behave the same.
 
 Display Case **dogfoods itself**: its own UI parts — `TweakControl`, `FlowNav`, `TweaksPanel`, `DocPanel`, `Sidebar`, `Shell` — are the kind of components you would case, and the [examples](docs/examples/) use them as their subjects. Page/flow cases that need app chrome typically live in a dedicated `page-cases/` directory (not colocated with route files) so the coverage lint isn't forced onto every route.
 
@@ -153,7 +164,7 @@ The one rule: launch it from inside the worktree (cwd within the checkout), or p
 
    ```ts
    // display-case.config.ts
-   import { defineConfig } from 'display-case'
+   import { defineConfig } from '@awarebydefault/display-case'
 
    export default defineConfig({
      title: 'Display Case',
@@ -166,7 +177,7 @@ The one rule: launch it from inside the worktree (cwd within the checkout), or p
 
    ```tsx
    // src/components/tweak-control.case.tsx
-   import { defineCases } from 'display-case'
+   import { defineCases } from '@awarebydefault/display-case'
    import { TweakControl } from './tweak-control'
 
    export default defineCases('TweakControl', {
@@ -182,7 +193,7 @@ The one rule: launch it from inside the worktree (cwd within the checkout), or p
 3. Start the server and open the printed URL:
 
    ```bash
-   bunx display-case .            # or `bun run display-case` once the script is wired up
+   bunx @awarebydefault/display-case .            # or `bun run display-case` once the script is wired up
    ```
 
 Full walkthrough: [Quick start](docs/quick-start.md).
@@ -192,7 +203,7 @@ Full walkthrough: [Quick start](docs/quick-start.md).
 **Typed tweaks** — interactive controls whose values are URL-encoded, so a tweaked state is shareable and snapshottable.
 
 ```tsx
-import { defineCases, tweak } from 'display-case'
+import { defineCases, tweak } from '@awarebydefault/display-case'
 import { TweakControl } from './tweak-control'
 
 export default defineCases('TweakControl', {
@@ -216,7 +227,7 @@ export default defineCases('TweakControl', {
 **Flows** — interactive multi-step flows, each step individually addressable, with in-step `goto` transitions and preset step state.
 
 ```tsx
-import { defineFlow } from 'display-case'
+import { defineFlow } from '@awarebydefault/display-case'
 
 export default defineFlow('Sign-in flow', {
   steps: {

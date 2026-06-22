@@ -1,4 +1,4 @@
-import { defineConfig } from 'display-case'
+import { defineConfig } from '@awarebydefault/display-case'
 
 /**
  * A dummy consumer for the start-up population e2e: same Broken/Clean components

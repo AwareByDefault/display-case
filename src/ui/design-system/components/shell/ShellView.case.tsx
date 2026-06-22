@@ -1,4 +1,4 @@
-import { defineFlow } from 'display-case'
+import { defineFlow } from '@awarebydefault/display-case'
 import { Button } from '..'
 import { ShellView } from './ShellView'
 import { makeModel, RealPrimer, StageSlot } from './shell-fixtures'

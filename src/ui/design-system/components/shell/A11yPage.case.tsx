@@ -1,4 +1,4 @@
-import { defineCases } from 'display-case'
+import { defineCases } from '@awarebydefault/display-case'
 import { useState } from 'react'
 import type { A11yViolation } from '../../../../index'
 import { Button, Input, RenderAddress } from '..'

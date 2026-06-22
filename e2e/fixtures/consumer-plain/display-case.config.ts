@@ -1,4 +1,4 @@
-import { defineConfig } from 'display-case'
+import { defineConfig } from '@awarebydefault/display-case'
 
 /**
  * A dummy consumer package WITHOUT a11y configured — the control case for the

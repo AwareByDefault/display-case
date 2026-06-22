@@ -5,7 +5,7 @@
 A case file is colocated next to its component: `tweak-control.tsx` → `tweak-control.case.tsx`. It **default-exports** `defineCases(...)`. Every showcased component must have one (the `display-case-coverage` lint enforces it).
 
 ```tsx
-import { defineCases, tweak } from 'display-case'
+import { defineCases, tweak } from '@awarebydefault/display-case'
 import { TweakControl } from './tweak-control'
 
 export default defineCases(

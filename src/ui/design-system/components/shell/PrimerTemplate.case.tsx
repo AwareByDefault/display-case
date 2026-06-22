@@ -1,4 +1,4 @@
-import { defineCases } from 'display-case'
+import { defineCases } from '@awarebydefault/display-case'
 import { ShellView } from './ShellView'
 import { makeModel, PlaceholderPrimer } from './shell-fixtures'
 

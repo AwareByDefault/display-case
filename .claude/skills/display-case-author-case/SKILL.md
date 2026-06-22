@@ -14,7 +14,7 @@ Author a colocated `*.case.tsx` for a component so it shows up in Display Case.
 1. **Read the component source** (`<name>.tsx`) to get the exact exported name and prop types. Read the sibling `<name>.placard.md` if present for realistic usage.
 2. **Create `<name>.case.tsx`** next to it, default-exporting `defineCases`:
    ```tsx
-   import { defineCases, tweak } from 'display-case'
+   import { defineCases, tweak } from '@awarebydefault/display-case'
    import { TweakControl } from './tweak-control'
 
    export default defineCases(

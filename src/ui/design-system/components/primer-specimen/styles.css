@@ -122,6 +122,10 @@
 }
 .dcpl-defrow {
   display: grid;
+  /* Column widths come from a custom property set per-row (see DefinitionList),
+     not an inline grid-template — so the responsive override below wins through
+     the normal cascade instead of needing !important to beat an inline style. */
+  grid-template-columns: var(--dcpl-term-width, 7.5rem) 1fr;
   gap: var(--dc-space-8);
   padding: var(--dc-space-6) var(--dc-space-8);
   border-top: var(--dc-border-line);
@@ -459,11 +463,11 @@
 
 @media (max-width: 680px) {
   .dcpl-defrow {
-    grid-template-columns: 1fr !important;
+    grid-template-columns: 1fr;
     gap: var(--dc-space-2);
   }
   .dcpl-ovrow {
-    grid-template-columns: 1fr !important;
+    grid-template-columns: 1fr;
     gap: var(--dc-space-3);
   }
   .dcpl-sc-cols {

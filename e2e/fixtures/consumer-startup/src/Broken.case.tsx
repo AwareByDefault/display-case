@@ -1,4 +1,4 @@
-import { defineCases } from 'display-case'
+import { defineCases } from '@awarebydefault/display-case'
 
 /**
  * A component with a deterministic axe violation: text whose colour contrast is

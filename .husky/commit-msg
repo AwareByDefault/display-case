@@ -1,0 +1,4 @@
+#!/usr/bin/env sh
+# Enforce Conventional Commits so semantic-release can derive the next version
+# and changelog from the history. See contributing/releasing.md.
+bunx commitlint --edit "$1"

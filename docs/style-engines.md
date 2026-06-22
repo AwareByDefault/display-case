@@ -18,7 +18,7 @@ that render's critical CSS back into the document head **before scripting**.
 ## The shape of an engine
 
 ```ts
-import type { StyleEngine } from 'display-case'
+import type { StyleEngine } from '@awarebydefault/display-case'
 
 // A StyleEngine is a factory called once per server render. It returns a
 // collector with two methods:
@@ -48,7 +48,7 @@ Two pieces, working together:
 import createCache from '@emotion/cache'
 import { CacheProvider } from '@emotion/react'
 import createEmotionServer from '@emotion/server/create-instance'
-import type { StyleEngine } from 'display-case'
+import type { StyleEngine } from '@awarebydefault/display-case'
 
 export const emotionEngine: StyleEngine = () => {
   // A fresh cache per render → per-render isolation. Key `css` is emotion's
@@ -69,7 +69,7 @@ export const emotionEngine: StyleEngine = () => {
 
 ```tsx
 // display-case.config.tsx
-import { defineConfig } from 'display-case'
+import { defineConfig } from '@awarebydefault/display-case'
 import { ThemeProvider, createTheme } from '@mui/material/styles'
 import CssBaseline from '@mui/material/CssBaseline'
 import { emotionEngine } from './display-case.style-engine'
@@ -120,7 +120,7 @@ CSS" fits the same `wrap` + `collect` contract.
 
 ```tsx
 import { ServerStyleSheet, StyleSheetManager } from 'styled-components'
-import type { StyleEngine } from 'display-case'
+import type { StyleEngine } from '@awarebydefault/display-case'
 
 export const styledComponentsEngine: StyleEngine = () => {
   const sheet = new ServerStyleSheet()

@@ -5,7 +5,7 @@
 Tweaks are typed, interactive controls attached to a case. Instead of writing one variant per prop combination, declare the props as tweaks and let the viewer adjust them live.
 
 ```tsx
-import { defineCases, tweak } from 'display-case'
+import { defineCases, tweak } from '@awarebydefault/display-case'
 import { TweakControl } from './tweak-control'
 
 export default defineCases('TweakControl', {

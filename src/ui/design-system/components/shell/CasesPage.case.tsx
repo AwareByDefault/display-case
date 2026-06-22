@@ -1,4 +1,4 @@
-import { defineCases } from 'display-case'
+import { defineCases } from '@awarebydefault/display-case'
 import { Button } from '..'
 import { ShellView } from './ShellView'
 import {
