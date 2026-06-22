@@ -35,17 +35,24 @@ describe('mdxPlugin', () => {
     expect(filter.test('doc.tsx')).toBe(false)
   })
 
-  test('compiles an .mdx document to a JS module on load', async () => {
+  test('compiles an .mdx document to a TSX module on load', async () => {
     const { run } = captureOnLoad()
     const dir = await makeTempDir()
     try {
       const file = join(dir, 'doc.mdx')
-      await Bun.write(file, '# Title\n\nSome **bold** text.\n')
+      await Bun.write(
+        file,
+        "import { Button } from './c'\n\n# Title\n\nSome **bold** text.\n\n<Display><Button/></Display>\n",
+      )
       const result = await run({ path: file })
-      expect(result.loader).toBe('js')
-      // Automatic React runtime + the standard MDX component entrypoint.
-      expect(result.contents).toContain('jsx-runtime')
-      expect(result.contents).toContain('MDXContent')
+      // mdx-lite emits TSX so Bun handles imports + JSX expression props.
+      expect(result.loader).toBe('tsx')
+      expect(result.contents).toContain('export default function MDXContent')
+      // Author imports pass through; <Display> resolves from the components prop.
+      expect(result.contents).toContain("import { Button } from './c'")
+      expect(result.contents).toContain('const { Display } = __components')
+      // Emitted TSX is syntactically valid.
+      new Bun.Transpiler({ loader: 'tsx' }).transformSync(result.contents)
     } finally {
       await rm(dir, { recursive: true, force: true })
     }

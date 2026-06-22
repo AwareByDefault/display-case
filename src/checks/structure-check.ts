@@ -6,6 +6,7 @@ import {
   loadModules,
   resolveConfig,
 } from '../core/discovery'
+import { segmentMdx } from '../core/mdx-lite'
 import type {
   CaseModule,
   DisplayCaseConfig,
@@ -291,37 +292,20 @@ async function rulePrimerPresentAndUsed(
     return find(`configured primer does not exist: ${s.config.primer}`)
   }
   const text = await Bun.file(path).text()
-  let tree: unknown
+  let blocks: ReturnType<typeof segmentMdx>
   try {
-    const { createProcessor } = await import('@mdx-js/mdx')
-    tree = createProcessor().parse(text)
+    blocks = segmentMdx(text)
   } catch (err) {
     return find(
       `could not parse primer: ${err instanceof Error ? err.message : String(err)}`,
     )
   }
-  let displays = 0
-  let hasContent = false
-  const walk = (node: unknown): void => {
-    if (!node || typeof node !== 'object') return
-    const n = node as {
-      type?: string
-      name?: string
-      value?: string
-      children?: unknown[]
-    }
-    if (
-      (n.type === 'mdxJsxFlowElement' || n.type === 'mdxJsxTextElement') &&
-      n.name === 'Display'
-    ) {
-      displays++
-    }
-    if (n.type === 'text' && typeof n.value === 'string' && n.value.trim()) {
-      hasContent = true
-    }
-    if (Array.isArray(n.children)) n.children.forEach(walk)
-  }
-  walk(tree)
+  // Count <Display> specimens across the document's block-level JSX, and confirm
+  // the primer has at least one prose block alongside them.
+  const displays = blocks
+    .filter((b) => b.kind === 'jsx')
+    .reduce((n, b) => n + b.tags.filter((t) => t === 'Display').length, 0)
+  const hasContent = blocks.some((b) => b.kind === 'markdown')
   if (displays === 0) {
     return find('primer embeds no <Display> specimen')
   }
