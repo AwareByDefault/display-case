@@ -411,6 +411,14 @@ export interface CheckConfig {
    * still be invoked explicitly by naming its flag.
    */
   defaultPhases?: Partial<Record<CheckPhase, boolean>>
+  /**
+   * How many variants the render phases (a11y/visual) scan concurrently. The
+   * built-in Playwright driver opens one page per variant from a shared browser
+   * context, so concurrent pages overlap the browser-bound work. Default 4; CLI
+   * `--concurrency=N` overrides. A custom `providers.driver` MUST tolerate
+   * concurrent `open()` calls for values above 1 (set this to `1` if it can't).
+   */
+  concurrency?: number
   /** Structure-phase rule configuration; each rule is on (at its default severity) unless overridden. */
   structure?: {
     /** Treat every structure warning as an error for the run (CI strict mode). */

@@ -12,6 +12,12 @@ import type {
   RenderDriver,
 } from '../index'
 import { startDisplayCase } from '../server/server'
+import {
+  emptyTally,
+  type PhaseTally,
+  summaryLines,
+  testLine,
+} from './check-reporter'
 import { checkSsr } from './ssr-check'
 import { checkStructure } from './structure-check'
 import { checkTokens } from './tokens-check'
@@ -46,7 +52,39 @@ export interface CheckOptions {
   /** Restrict the render phases to components whose import closure touches a
    *  file changed since this git ref (CLI `--changed[=ref]`). */
   changedRef?: string
+  /** How many variants the render phases (a11y/visual) scan concurrently.
+   *  CLI `--concurrency=N`; defaults to {@link DEFAULT_CONCURRENCY}. */
+  concurrency?: number
   port?: number
+}
+
+/** Default render-phase concurrency — modest, so a stock laptop isn't swamped by
+ *  parallel headless pages while still cutting wall-clock well below serial. */
+const DEFAULT_CONCURRENCY = 4
+
+/**
+ * Run `worker` over `items` with at most `limit` in flight at once. Drives the
+ * a11y/visual phases: the browser work is I/O-bound, so concurrent pages overlap
+ * almost entirely. JS stays single-threaded, so the shared counters/arrays the
+ * workers mutate need no locking — only one worker runs between any two awaits.
+ */
+async function mapPool<T>(
+  items: T[],
+  limit: number,
+  worker: (item: T) => Promise<void>,
+): Promise<void> {
+  let next = 0
+  const lanes = Array.from(
+    { length: Math.max(1, Math.min(limit, items.length)) },
+    async () => {
+      while (true) {
+        const i = next++
+        if (i >= items.length) return
+        await worker(items[i])
+      }
+    },
+  )
+  await Promise.all(lanes)
 }
 
 interface Target {
@@ -359,43 +397,65 @@ export async function runChecks(
 
   const driver = await resolveDriver(config)
   const diff = opts.visual ? await resolveDiff(config) : null
+  const requested =
+    opts.concurrency ?? config.check?.concurrency ?? DEFAULT_CONCURRENCY
+  const concurrency =
+    Number.isFinite(requested) && requested > 0
+      ? Math.floor(requested)
+      : DEFAULT_CONCURRENCY
 
   let a11yViolations = 0
   let visualChanges = 0
-  let recorded = 0
   const a11yReport: A11yReportEntry[] = []
+  const a11yTally = emptyTally()
+  const visualTally = emptyTally()
+  const rel = (p: string) =>
+    p.startsWith(`${pkgDir}/`) ? p.slice(pkgDir.length + 1) : p
 
-  try {
-    for (const t of targets) {
-      const ctx: CaseContext = {
-        componentId: t.componentId,
-        caseId: t.caseId,
-        theme: t.theme,
-        width: VIEWPORT_WIDTH,
-      }
-      const page = await driver.open(t.renderUrl, ctx)
-
+  // Each variant is reported as a test — `(pass)`/`(fail)`/`(record)` with its own
+  // timing, in `bun test`'s shape — so a CI log can be grepped and summarized. The
+  // a11y and visual phases run together on one shared page per variant; the whole
+  // set is scanned with bounded concurrency (`mapPool`) since the work is
+  // browser-I/O-bound. A variant's lines are buffered and flushed as one block so
+  // concurrent variants never interleave mid-test.
+  async function scan(t: Target): Promise<void> {
+    const ctx: CaseContext = {
+      componentId: t.componentId,
+      caseId: t.caseId,
+      theme: t.theme,
+      width: VIEWPORT_WIDTH,
+    }
+    const name = `${t.componentId}/${t.caseId} [${t.theme}]`
+    const out: string[] = []
+    const page = await driver.open(t.renderUrl, ctx)
+    try {
       if (opts.a11y && a11yThemes.includes(t.theme)) {
+        const t0 = Bun.nanoseconds()
         const violations = await page.audit({ exclude: a11yExclude })
+        const dur = Bun.nanoseconds() - t0
         if (violations.length) {
+          a11yTally.fail++
           a11yReport.push({
             component: t.componentId,
             case: t.caseId,
             theme: t.theme,
             violations,
           })
-        }
-        for (const v of violations) {
-          a11yViolations++
-          const sev = v.impact ? `${v.impact} ` : ''
-          console.error(
-            `  a11y ✗ ${t.componentId}/${t.caseId} [${t.theme}] ${sev}${v.id}: ${v.help} (${v.nodes} node(s))`,
-          )
-          for (const line of a11yDetailLines(v)) console.error(line)
+          out.push(testLine('a11y', name, 'fail', dur))
+          for (const v of violations) {
+            a11yViolations++
+            const sev = v.impact ? `${v.impact} ` : ''
+            out.push(`         ${sev}${v.id}: ${v.help} (${v.nodes} node(s))`)
+            for (const line of a11yDetailLines(v)) out.push(line)
+          }
+        } else {
+          a11yTally.pass++
+          out.push(testLine('a11y', name, 'pass', dur))
         }
       }
 
       if (opts.visual && diff) {
+        const t0 = Bun.nanoseconds()
         const shot = await page.screenshot()
         const file = join(
           baselines,
@@ -405,36 +465,52 @@ export async function runChecks(
         if (opts.update || !(await Bun.file(file).exists())) {
           await mkdir(dirname(file), { recursive: true })
           await Bun.write(file, shot)
-          recorded++
+          visualTally.record++
+          out.push(testLine('visual', name, 'record', Bun.nanoseconds() - t0))
         } else {
           const baseline = new Uint8Array(await Bun.file(file).arrayBuffer())
           const res = await diff(
             { baseline, actual: shot },
             { ...ctx, baselinePath: file },
           )
+          const dur = Bun.nanoseconds() - t0
           if (res.changed) {
             visualChanges++
+            visualTally.fail++
+            let where = ''
             if (res.diffImage) {
-              await Bun.write(
-                file.replace(/\.png$/, '.diff.png'),
-                res.diffImage,
-              )
+              const diffPath = file.replace(/\.png$/, '.diff.png')
+              await Bun.write(diffPath, res.diffImage)
+              where = ` → ${rel(diffPath)}`
             }
-            console.error(
-              `  visual ✗ ${t.componentId}/${t.caseId} [${t.theme}] differs from baseline`,
-            )
+            out.push(testLine('visual', name, 'fail', dur))
+            out.push(`         differs from baseline${where}`)
+          } else {
+            visualTally.pass++
+            out.push(testLine('visual', name, 'pass', dur))
           }
         }
       }
-
+    } finally {
       await page.dispose()
     }
+    if (out.length) console.log(out.join('\n'))
+  }
+
+  const startedAt = Bun.nanoseconds()
+  try {
+    await mapPool(targets, concurrency, scan)
   } finally {
     await driver.close()
     server.stop(true)
   }
+  const totalNs = Bun.nanoseconds() - startedAt
 
-  if (opts.visual && recorded) console.log(`  recorded ${recorded} baseline(s)`)
+  const phases: { phase: string; tally: PhaseTally }[] = []
+  if (opts.a11y) phases.push({ phase: 'a11y', tally: a11yTally })
+  if (opts.visual) phases.push({ phase: 'visual', tally: visualTally })
+  for (const line of summaryLines(phases, totalNs, concurrency))
+    console.log(line)
 
   // Persist the full run (every failing variant, with per-node detail) so an
   // agent or human can read the exact failing colours/elements later without
@@ -446,15 +522,19 @@ export async function runChecks(
     await Bun.write(
       reportPath,
       `${JSON.stringify(
-        { scannedAt: Date.now(), total: a11yViolations, results: a11yReport },
+        {
+          scannedAt: Date.now(),
+          durationMs: Math.round(totalNs / 1e6),
+          total: a11yViolations,
+          results: a11yReport,
+        },
         null,
         2,
       )}\n`,
     )
-    const rel = reportPath.startsWith(`${pkgDir}/`)
-      ? reportPath.slice(pkgDir.length + 1)
-      : reportPath
-    console.log(`  a11y detail → ${rel}${a11yViolations ? '' : ' (clean run)'}`)
+    console.log(
+      `  a11y detail → ${rel(reportPath)}${a11yViolations ? '' : ' (clean run)'}`,
+    )
   }
 
   const ok =

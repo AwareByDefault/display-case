@@ -21,7 +21,7 @@ if (typeof globalThis.Bun === 'undefined') {
  *
  *   display-case <pkgDir> [--port=N]        start the dev server
  *   display-case <pkgDir> --print-manifest  print the manifest JSON and exit
- *   display-case check <pkgDir> [--a11y] [--visual] [--tokens] [--structure] [--ssr] [--update] [--strict] [--only=ids] [--changed[=ref]] [--port=N]
+ *   display-case check <pkgDir> [--a11y] [--visual] [--tokens] [--structure] [--ssr] [--update] [--strict] [--only=ids] [--changed[=ref]] [--concurrency=N] [--port=N]
  *   display-case init <pkgDir> [--agent=claude] [--with-visual] [--dry-run] [--json]
  *   display-case uninstall <pkgDir> [--agent=claude] [--dry-run] [--json]
  *
@@ -182,6 +182,10 @@ if (argv[0] === 'init' || argv[0] === 'uninstall') {
         process.env.DISPLAY_CASE_BASE_REF ??
         'origin/main')
       : undefined,
+    concurrency: (() => {
+      const n = Number.parseInt(option('concurrency') ?? '', 10)
+      return Number.isInteger(n) && n > 0 ? n : undefined
+    })(),
     port,
   })
   process.exit(ok ? 0 : 1)
