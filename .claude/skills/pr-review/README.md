@@ -35,9 +35,14 @@ review", "is this PR ready to merge", or "what's missing in this change".
 2. Walk the OpenSpec chain (proposal → design → tasks → specs → code → archive),
    then dogfood, unit tests, e2e, quality/ethos/best-practices, and docs — citing
    the specific numbered rule each finding violates.
-3. Post one review to the PR (`gh api .../reviews`): code-tied findings as
-   resolvable inline line comments (always preferred), plus a terse summary at top
-   — verdict, per-consideration pass/fail/n/a, one line per finding. Brevity throughout.
+3. Post findings to the PR: code-tied findings as resolvable inline line comments
+   (always preferred), plus a terse summary comment at top — verdict,
+   per-consideration pass/fail/n/a, one line per finding. Brevity throughout.
+
+**Re-runnable.** Hidden markers make a second run on the same PR idempotent: it
+updates the one summary in place, replies "Resolved 👍" and resolves threads whose
+findings are now fixed, opens new resolvable comments for new findings, and leaves
+still-open prior findings alone (kept in the summary, never re-commented).
 
 Grounded in [`../../../contributing/`](../../../contributing/), the
 [`openspec/`](../../../openspec/) workspace, and [`CLAUDE.md`](../../../CLAUDE.md).

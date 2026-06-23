@@ -3,10 +3,12 @@ name: pr-review
 description: >
   Adversarially review a GitHub pull request against Display Case for code
   quality, completeness, OpenSpec discipline, dogfooding, test coverage, and
-  docs — assuming the PR is incomplete until the diff proves otherwise. Use when
-  given a PR URL or number and asked to "review this PR", "do a thorough/
-  adversarial review", "is this PR ready to merge", or "what's missing in this
-  change".
+  docs — assuming the PR is incomplete until the diff proves otherwise. Posts
+  findings as resolvable PR comments and is re-runnable: a second run updates the
+  summary, resolves fixed threads, and opens only new ones. Use when given a PR
+  URL or number and asked to "review this PR", "do a thorough/adversarial
+  review", "re-review / update the review", "is this PR ready to merge", or
+  "what's missing in this change".
 ---
 
 Review a GitHub PR against Display Case's engineering bar. The posture is
@@ -212,49 +214,98 @@ verify each that should have moved did:
 - Don't demand doc churn for genuinely doc-irrelevant changes; *do* flag the doc
   that silently went stale.
 
-### 11. Post the review to the PR
+### 11. Post the review to the PR — idempotently
 
-Findings go **on the PR**, not just back to chat. Post **one review** in a
-single API call — a terse summary body plus line-attached inline comments. **Be
-terse everywhere**: one line per finding where possible, `severity (rule):
-problem → fix`. No preamble, no restating the diff.
+Findings go **on the PR**, not just back to chat, and the skill is **re-runnable
+on the same PR**: a second run reconciles against what the first run posted
+rather than duplicating it. **Be terse everywhere** — one line per finding,
+`severity (rule): problem → fix`. No preamble, no restating the diff.
 
 **Resolvable inline comments are ALWAYS preferred.** Every finding that maps to a
 changed line goes inline so the author can resolve the thread. Only a finding
 with **no** diff line to point at (missing proposal, absent dogfood case, a
 stale doc not in the diff) lives solely in the summary — never drop it.
 
+**Markers make re-runs idempotent** (hidden HTML comments, invisible when
+rendered):
+- The summary is **one issue comment** ending with `<!-- pr-review:summary -->`.
+- Each inline finding's comment ends with `<!-- pr-review:finding:<key> -->`,
+  where `<key>` is a **stable, line-independent** id — `<rule>@<path>#<anchor>`,
+  the anchor a symbol/function name or a 2–3-word slug. Anchor on rule + path +
+  symbol, **never** the prose or the line number (both drift), so the same issue
+  yields the same key next run.
+
+**Resolve `<owner>/<repo>` once:**
 ```bash
-OWNER_REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)   # base repo
-gh api "repos/$OWNER_REPO/pulls/<pr>/reviews" --input review.json
+OR=$(gh repo view --json nameWithOwner -q .nameWithOwner); O=${OR%/*}; R=${OR#*/}
 ```
 
-`review.json` — summary body + inline comments, posted atomically:
-
-```json
-{
-  "event": "COMMENT",
-  "body": "**Request changes** · 2 blockers, 1 should-fix\n\n| # | Consideration | Verdict |\n|---|---|---|\n| 3 | code↔design | fail |\n| 6 | unit tests | fail |\n\n**Findings**\n- blocker (coding §3.1): `Date.now()` in render — src/foo.tsx:42\n- blocker (consideration 6): error path untested in src/bar.ts\n- should-fix: `--static` flag undocumented in docs/cli.md",
-  "comments": [
-    { "path": "src/foo.tsx", "line": 42, "side": "RIGHT", "body": "blocker (coding §3.1): `Date.now()` in render → adopt mismatch. Pass as a fixed tweak." },
-    { "path": "docs/cli.md", "start_line": 10, "line": 14, "side": "RIGHT", "body": "should-fix: document the `--static` flag here." }
-  ]
-}
+**a. Gather prior state** (skip on a clean first run — nothing matches):
+```bash
+# Our existing inline threads: key, resolved?, top-comment id (for replies), thread node id (to resolve)
+gh api graphql -f query='query($o:String!,$r:String!,$p:Int!){repository(owner:$o,name:$r){
+  pullRequest(number:$p){reviewThreads(first:100){nodes{
+    id isResolved comments(first:1){nodes{databaseId body}}}}}}}' \
+  -F o="$O" -F r="$R" -F p=<pr> \
+  --jq '.data.repository.pullRequest.reviewThreads.nodes[]
+        | select(.comments.nodes[0].body|test("pr-review:finding:"))
+        | {thread:.id, resolved:.isResolved, commentId:.comments.nodes[0].databaseId,
+           key:(.comments.nodes[0].body|capture("pr-review:finding:(?<k>[^ ]+)").k)}'
+# Our summary issue comment id (empty on first run):
+SUMMARY_ID=$(gh api "repos/$O/$R/issues/<pr>/comments" --paginate \
+  --jq 'map(select(.body|contains("pr-review:summary")))|.[0].id // empty')
 ```
 
-- **Inline comment** per code-tied finding: `path` + `line` on the new version
-  (`side: "RIGHT"`; use `side: "LEFT"` + the old line for a deletion,
-  `start_line`+`line` for a range). The line **must** fall inside a diff hunk or
-  the API 422s — if it doesn't, move that finding to the summary.
-- **Summary body** is the top comment: one-line verdict
-  (`Approve` / `Approve with nits` / `Request changes` / `Blocked`), a compact
-  per-consideration verdict line/table (`pass`/`fail`/`n/a`, `n/a` justified),
-  then one terse bullet per finding — briefly covering **all** of them, so the
-  whole picture reads in one place.
-- Keep `event: "COMMENT"` — never auto-`APPROVE`/`REQUEST_CHANGES` a review
-  unprompted; state the verdict in the body. Map the event to the verdict only if
-  the user asks.
-- Then report the posted-review URL back here, one line. Don't re-paste the body.
+**b. Reconcile** the current run's code-tied findings (`CURRENT`, by key) against
+those prior threads (`PRIOR`, by key):
+
+| | in `CURRENT` | not in `CURRENT` (fixed) |
+|---|---|---|
+| **not in `PRIOR`** | **new** → open an inline comment (with marker) | — |
+| **in `PRIOR`, open** | **leave untouched** — no new comment; keep it in the summary | **reply then resolve** |
+| **in `PRIOR`, resolved** | regressed → reply "Reopened: …" (note it; leave resolved unless obvious) | skip |
+
+- **Fixed → resolve with a 👍.** For each prior open thread whose key is gone from
+  `CURRENT`, reply then resolve:
+  ```bash
+  gh api "repos/$O/$R/pulls/<pr>/comments/<commentId>/replies" \
+    -f body="Resolved 👍 — fixed in the latest push."
+  gh api graphql -f query='mutation($id:ID!){resolveReviewThread(input:{threadId:$id}){thread{isResolved}}}' \
+    -F id=<thread>
+  ```
+- **New findings → one batched review** (skip if none). Omit the body so no
+  duplicate summary lands in the timeline; the summary issue comment owns that.
+  Each comment body ends with its `<!-- pr-review:finding:<key> -->`:
+  ```json
+  { "event": "COMMENT", "comments": [
+    { "path": "src/foo.tsx", "line": 42, "side": "RIGHT",
+      "body": "blocker (coding §3.1): `Date.now()` in render → adopt mismatch. Pass as a fixed tweak. <!-- pr-review:finding:coding-3.1@src/foo.tsx#render-date-now -->" }
+  ]}
+  ```
+  `gh api "repos/$O/$R/pulls/<pr>/reviews" --input new.json`. Line rules: `path` +
+  `line` on the new version (`side:"RIGHT"`; `side:"LEFT"` + old line for a
+  deletion, `start_line`+`line` for a range). The line **must** fall in a diff
+  hunk or it 422s — if not, demote that finding to the summary.
+- **Never re-comment a still-open prior finding** — that's the duplicate the
+  marker exists to prevent. It stays in the summary, not as a fresh thread.
+
+**c. Write the summary** (create on first run, else `PATCH` in place):
+```bash
+# body ends with <!-- pr-review:summary -->
+[ -n "$SUMMARY_ID" ] \
+  && gh api -X PATCH "repos/$O/$R/issues/comments/$SUMMARY_ID" --input summary.json \
+  ||  gh api "repos/$O/$R/issues/<pr>/comments" --input summary.json
+```
+The summary always reflects the **current** state: one-line verdict
+(`Approve` / `Approve with nits` / `Request changes` / `Blocked`), a compact
+per-consideration `pass`/`fail`/`n/a` table (`n/a` justified), then one terse
+bullet per **open** finding — both still-open-prior and new, so the whole picture
+reads in one place — and a short "Resolved this run" line for what you just
+closed. Never `APPROVE`/`REQUEST_CHANGES` the PR's review state unprompted; the
+verdict lives in the text. Map a real review event to the verdict only if asked.
+
+Then report one line back here: counts (new / still-open / resolved) and the
+summary-comment URL. Don't re-paste the body.
 
 ## Notes
 
@@ -276,6 +327,12 @@ gh api "repos/$OWNER_REPO/pulls/<pr>/reviews" --input review.json
 - **Output is the PR review, terse.** Resolvable inline comments first, a brief
   summary at top, one line per finding. Brevity is a feature — every extra word
   is a word the author skims past.
+- **Re-runs reconcile, never duplicate.** Hidden markers
+  (`pr-review:summary`, `pr-review:finding:<key>`) let a second run update the
+  one summary in place, resolve fixed threads with a 👍 reply, open threads only
+  for genuinely new findings, and leave still-open prior threads alone (carried
+  in the summary, not re-commented). Keep finding keys stable across runs — anchor
+  on rule + path + symbol, not prose or line number.
 - This skill **reviews**; it doesn't fix. Hand the changeset to
   `display-case-changeset`, accessibility/visual/token triage to
   `display-case-review`, and an isolated component look to `display-case-snapshot`.
