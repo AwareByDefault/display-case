@@ -34,6 +34,7 @@ export interface Manifest {
   /** Present browse modes, e.g. ['primer','components','exhibits']. */
   modes: ('primer' | 'components' | 'exhibits')[]
   landing: 'primer' | 'components' | 'exhibits'
+  flowMarker?: 'glyph' | 'tag'
 }
 
 export async function fetchManifest(

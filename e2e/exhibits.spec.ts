@@ -101,15 +101,19 @@ test.describe('Components / Exhibits modes', () => {
     if (!flow || !pageSurface) return
 
     await page.goto(`/e/${flow.id}/${flow.cases[0].id}`)
-    // The default marker is a leading glyph on the flow row; a page row has none.
+    // This showcase marks flows with the `flow` tag pill; a page row has neither
+    // a tag nor a glyph.
+    const m2 = await fetchManifest(request)
+    const markerClass =
+      m2.flowMarker === 'tag' ? '.dcui-nav-tag' : '.dcui-nav-icon'
     await expect(
       page.locator(
-        `[data-testid="${DcTestIds.navComponent(flow.id)}"] .dcui-nav-icon`,
+        `[data-testid="${DcTestIds.navComponent(flow.id)}"] ${markerClass}`,
       ),
     ).toHaveCount(1)
     await expect(
       page.locator(
-        `[data-testid="${DcTestIds.navComponent(pageSurface.id)}"] .dcui-nav-icon`,
+        `[data-testid="${DcTestIds.navComponent(pageSurface.id)}"] .dcui-nav-tag, [data-testid="${DcTestIds.navComponent(pageSurface.id)}"] .dcui-nav-icon`,
       ),
     ).toHaveCount(0)
     // The active flow's step rows are numbered.

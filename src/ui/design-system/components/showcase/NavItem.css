@@ -74,25 +74,37 @@
 .dcui-nav-name:hover {
   background: var(--dc-hover);
 }
-/* Decorative leading flow glyph (component rows) / step index (flow case rows):
-   mono, dimmed, non-shrinking so the label keeps the room to truncate. */
+/* Leading flow glyph (component rows) / step index (flow case rows): mono,
+   non-shrinking so the label keeps the room to truncate. */
 .dcui-nav-icon,
 .dcui-nav-index {
   flex: 0 0 auto;
   font-family: var(--dc-font-mono);
-  font-size: var(--dc-text-xs);
   line-height: 1;
+}
+/* Step index on a flow's case rows — quiet, like the count. */
+.dcui-nav-index {
+  font-size: var(--dc-text-xs);
   color: var(--dc-fg-subtle);
 }
-/* A small trailing kind tag (e.g. "flow"), rendered as a hairline pill. */
+/* Flow glyph (the default marker) — brand marigold and a touch larger so a flow
+   reads at a glance against the calm rail. */
+.dcui-nav-icon {
+  font-size: var(--dc-text-base);
+  color: var(--dc-brand);
+}
+/* Flow tag (the `'tag'` marker) — a high-visibility marigold pill, matching the
+   accent Chip, so a flow stands out from the pages around it. */
 .dcui-nav-tag {
   flex: 0 0 auto;
   font-family: var(--dc-font-mono);
   font-size: var(--dc-text-2xs);
+  font-weight: var(--dc-weight-medium);
   letter-spacing: var(--dc-tracking-label);
   text-transform: uppercase;
-  color: var(--dc-fg-subtle);
-  border: var(--dc-border-line);
+  color: var(--dc-brand);
+  background: var(--dc-brand-subtle);
+  border: 1px solid var(--dc-brand);
   border-radius: var(--dc-radius-sm);
   padding: 0 var(--dc-space-1);
 }
