@@ -32,6 +32,10 @@ export interface NavItemProps {
   index?: ReactNode
   /** A small trailing pill after the label (e.g. a `flow` tag). */
   tag?: ReactNode
+  /** `data-testid` for the leading `icon`/trailing `tag` marker slot. */
+  markerTestId?: string
+  /** `data-testid` for the leading `index` slot. */
+  indexTestId?: string
   onSelect?: () => void
   onToggle?: () => void
   /** `data-testid` for the select (name) button. */
@@ -52,6 +56,8 @@ export function NavItem({
   icon,
   index,
   tag,
+  markerTestId,
+  indexTestId,
   onSelect,
   onToggle,
   testId,
@@ -95,17 +101,27 @@ export function NavItem({
         data-testid={testId}
         onClick={onSelect}>
         {index != null ? (
-          <span className="dcui-nav-index" aria-hidden="true">
+          <span
+            className="dcui-nav-index"
+            data-testid={indexTestId}
+            aria-hidden="true">
             {index}
           </span>
         ) : null}
         {icon != null ? (
-          <span className="dcui-nav-icon" aria-hidden="true">
+          <span
+            className="dcui-nav-icon"
+            data-testid={markerTestId}
+            aria-hidden="true">
             {icon}
           </span>
         ) : null}
         <span className="dcui-nav-label">{label}</span>
-        {tag != null ? <span className="dcui-nav-tag">{tag}</span> : null}
+        {tag != null ? (
+          <span className="dcui-nav-tag" data-testid={markerTestId}>
+            {tag}
+          </span>
+        ) : null}
         {showAlert && alert !== undefined && (
           <A11yBadge value={alert} testId={alertTestId} />
         )}

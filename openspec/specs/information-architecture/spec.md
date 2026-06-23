@@ -1,7 +1,9 @@
 # information-architecture Specification
 
 ## Purpose
-TBD - created by archiving change add-surface-information-architecture. Update Purpose after archive.
+
+Display Case organizes the application's page and flow surfaces — browsed in the Exhibits mode — along a nestable information-architecture group axis that mirrors the app's own feature/route structure, independent of the design-hierarchy level. A surface's group is resolved from an explicit declaration, its source location, or showcase configuration, with a default group as a fallback; groups can be ordered, relabelled, and collapsed, and a flow is visually distinguished from a page. This keeps a large catalog of surfaces navigable where a single flat list would not.
+
 ## Requirements
 ### Requirement: Surface grouping by information architecture
 

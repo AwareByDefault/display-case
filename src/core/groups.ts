@@ -34,7 +34,7 @@ function normalizeSegment(raw: string): string {
   return s
     .split(/[-_\s]+/)
     .filter(Boolean)
-    .map((w) => w[0].toUpperCase() + w.slice(1))
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(' ')
 }
 

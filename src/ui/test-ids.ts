@@ -56,6 +56,11 @@ export const DcTestIds = {
   sidebarResize: 'dc-sidebar-resize',
   /** An Exhibits-mode group row, keyed by its lowercased `/`-joined path. */
   navGroup: (path: string): string => `dc-nav-group-${path}`,
+  /** A flow's marker (the `flow` tag or leading glyph) on its component row. */
+  navMarker: (componentId: string): string => `dc-nav-marker-${componentId}`,
+  /** A flow step row's leading index, keyed by component + case. */
+  navStepIndex: (componentId: string, caseId: string): string =>
+    `dc-nav-step-${componentId}-${caseId}`,
   /** The active surface's group-path breadcrumb in the stage header. */
   breadcrumb: 'dc-breadcrumb',
   /** A violation row in the accessibility panel, keyed by its axe rule id

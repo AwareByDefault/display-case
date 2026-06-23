@@ -101,26 +101,14 @@ test.describe('Components / Exhibits modes', () => {
     if (!flow || !pageSurface) return
 
     await page.goto(`/e/${flow.id}/${flow.cases[0].id}`)
-    // This showcase marks flows with the `flow` tag pill; a page row has neither
-    // a tag nor a glyph.
-    const m2 = await fetchManifest(request)
-    const markerClass =
-      m2.flowMarker === 'tag' ? '.dcui-nav-tag' : '.dcui-nav-icon'
+    // The flow carries a marker (tag or glyph, same test id); the page has none.
+    await expect(page.getByTestId(DcTestIds.navMarker(flow.id))).toBeVisible()
     await expect(
-      page.locator(
-        `[data-testid="${DcTestIds.navComponent(flow.id)}"] ${markerClass}`,
-      ),
-    ).toHaveCount(1)
-    await expect(
-      page.locator(
-        `[data-testid="${DcTestIds.navComponent(pageSurface.id)}"] .dcui-nav-tag, [data-testid="${DcTestIds.navComponent(pageSurface.id)}"] .dcui-nav-icon`,
-      ),
+      page.getByTestId(DcTestIds.navMarker(pageSurface.id)),
     ).toHaveCount(0)
     // The active flow's step rows are numbered.
     await expect(
-      page.locator(
-        `[data-testid="${DcTestIds.navCase(flow.id, flow.cases[0].id)}"] .dcui-nav-index`,
-      ),
+      page.getByTestId(DcTestIds.navStepIndex(flow.id, flow.cases[0].id)),
     ).toHaveText('1')
   })
 

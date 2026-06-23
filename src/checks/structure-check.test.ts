@@ -667,4 +667,17 @@ describe('checkStructure', () => {
     expect(f[0].message).toContain('Nope')
     expect(f[0].severity).toBe('warn')
   })
+
+  test('nav-groups-resolve stays silent when every group ref resolves', async () => {
+    const dir = await setup({
+      'display-case.config.ts': config(
+        { 'nav-groups-resolve': true },
+        ", nav: { groups: { order: ['Marketing'] } }",
+      ),
+      'marketing/Pricing.case.tsx': caseFile(
+        "defineCases('Pricing', { Default: () => null }, { level: 'page' })",
+      ),
+    })
+    expect(only(await run(dir), 'nav-groups-resolve')).toHaveLength(0)
+  })
 })

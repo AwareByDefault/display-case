@@ -387,6 +387,7 @@ function NavContents(props: ShellViewProps) {
           label={c.name}
           icon={flowIcon}
           tag={flowTag}
+          markerTestId={c.isFlow ? DcTestIds.navMarker(c.id) : undefined}
           count={single ? undefined : c.cases.length}
           alert={parentAlert}
           current={sel?.componentId === c.id}
@@ -404,6 +405,9 @@ function NavContents(props: ShellViewProps) {
               kind="case"
               label={cs.name}
               index={c.isFlow ? i + 1 : undefined}
+              indexTestId={
+                c.isFlow ? DcTestIds.navStepIndex(c.id, cs.id) : undefined
+              }
               alert={variants?.[cs.id]}
               current={sel?.componentId === c.id && sel?.caseId === cs.id}
               testId={DcTestIds.navCase(c.id, cs.id)}
