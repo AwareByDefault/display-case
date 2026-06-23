@@ -4,6 +4,47 @@ Non-obvious decisions, debugging notes, and architectural context for the Displa
 
 ---
 
+## 2026-06-23: The dev watcher follows the module graph, not just the target's `src`
+
+The dev server (`--dev`, and any interactive run) watches `<pkgDir>/src` (plus
+Display Case's own UI under `--dev`). That misses **workspace siblings resolved
+to source**: a package whose `exports`/`main` points at `./src/index.ts` with no
+build step is a first-class bundle input, but it lives outside `<pkgDir>/src`, so
+editing it never triggered a rebuild — the served bundle silently went stale
+until an unrelated edit inside the target forced a re-bundle. (Reported against
+the design-system loop: edit a shared component, view it through a consuming
+app's cases, see nothing change.)
+
+Fix: watch the bundler's **actual inputs**, not a fixed directory.
+`src/core/graph-recorder.ts`:
+
+- `graphRecorder(into)` is a Bun plugin with a catch-all `onLoad` that records
+  `args.path` into a set and returns `undefined` (pure observation — the load
+  falls through to the default loader or another plugin). It's registered
+  **first** in every `Bun.build` plugin list in `rebuild` so paths the MDX plugin
+  ultimately handles still get recorded. The union across the render/SSR/primer
+  passes is the real module graph.
+- `graphWatchDirs(inputs, {srcDir, hereDir, repoRoot})` maps each in-repo input
+  outside `srcDir`/`hereDir` to its owning package, collapsed to that package's
+  `src` when present, and the server reconciles a `@parcel/watcher` subscription
+  per dir after every rebuild (graph can shift as imports change).
+
+Two traps that cost real debugging time:
+
+1. **`REPO_ROOT` is the wrong bound.** `REPO_ROOT` in `server.ts` is found by
+   walking up from where **Display Case itself** lives to a `.git` — that's
+   Display Case's repo (or `process.cwd()` when installed as a dep), *not* the
+   target's monorepo. Bounding the watch by it drops every sibling in the
+   target's repo. `findWatchRoot(pkgDir)` derives the **target's** workspace root
+   (nearest `.git`, else topmost ancestor with a `package.json`); pass that as
+   `repoRoot`.
+2. **Bun records the symlink's real path.** A Bun-workspace sibling is symlinked
+   into `node_modules/<name> -> ../../packages/<name>`, but `onLoad` reports the
+   resolved **real** path (`packages/<name>/src/...`), not the `node_modules`
+   one. So the `node_modules` exclusion in `graphWatchDirs` does **not** swallow
+   workspace deps (good), and genuinely-installed deps (real `node_modules`
+   files, pnpm store) stay excluded (also good).
+
 ## 2026-06-22: `check` a11y/visual report as `bun test` — per-variant pass/fail, timing, concurrency
 
 The a11y and visual phases of `display-case check` used to print only failures
