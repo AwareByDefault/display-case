@@ -20,7 +20,9 @@ cares about specifically:
 8. Is the code **worth shipping to the world**?
 9. Does it respect the **Display Case ethos** (render purity, quiet chrome, no
    dev machinery in builds, no consuming-app code pulled in)?
-10. Does it follow coding / testing / linting **best practices** (and pass the gates)?
+10. Does it follow coding / testing / linting **best practices**? (A full sweep of
+    **every** numbered rule in the three `contributing/*-best-practices.md` files,
+    not a spot-check — and the gates pass.)
 11. Is the **documentation** fully updated?
 
 ## When it triggers
@@ -37,7 +39,9 @@ review", "is this PR ready to merge", or "what's missing in this change".
    the specific numbered rule each finding violates.
 3. Post findings to the PR: code-tied findings as resolvable inline line comments
    (always preferred), plus a terse summary comment at top — verdict,
-   per-consideration pass/fail/n/a, one line per finding. Brevity throughout.
+   per-consideration pass/fail/n/a, one line per finding. Inline comments are
+   ≤2 lines; a best-practice violation leads with the rule (number + name + a link
+   to its line on `main`) before the what's-wrong and fix.
 
 **Re-runnable.** Hidden markers make a second run on the same PR idempotent: it
 updates the one summary in place, replies "Resolved 👍" and resolves threads whose

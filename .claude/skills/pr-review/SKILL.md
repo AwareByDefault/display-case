@@ -164,8 +164,36 @@ new surface, nav, panel, control):
 
 ### 9. Code quality, ethos, and best practices *(considerations 8, 9, 10)*
 
-Is this **worth shipping to the world**, and is it true to Display Case? Weigh
-against the coding rules and the Core Philosophy in `CLAUDE.md`:
+Is this **worth shipping to the world**, and is it true to Display Case?
+
+**Sweep every numbered rule — don't spot-check.** Open all three references and
+test the diff against **each** rule in them, not just the famous ones:
+- [`contributing/coding-best-practices.md`](../../../contributing/coding-best-practices.md) (§§1–9)
+- [`contributing/testing-best-practices.md`](../../../contributing/testing-best-practices.md) (§§1–11)
+- [`contributing/linting-best-practices.md`](../../../contributing/linting-best-practices.md) (§3 + the `biome.json` rule list)
+
+For every numbered rule ask "does this diff break it?" On a large diff, fan out
+subagents — one per file or section — each returning `{rule, file:line,
+violation, fix}` for any breach. Miss none; the rule numbers are stable handles.
+
+**Citing a rule violation — required format.** When a finding breaks a numbered
+rule, the comment **leads** with the rule (number + name + a link to its line on
+`main`), *then* the one-line what's-wrong and the fix:
+
+> [coding §3.1 Keep render pure](https://github.com/OWNER/REPO/blob/main/contributing/coding-best-practices.md#L68): `Date.now()` in render → adopt mismatch. Pass a fixed tweak.
+
+Resolve the line against the **main branch**, so the link survives the PR's own
+edits. Rule anchors are bold and start the line in either form — `**3.1**` or
+`**3.1 Colocation.**` — so match the number followed by a space or `*`:
+```bash
+n=$(git show origin/main:contributing/coding-best-practices.md \
+    | grep -nE '^\*\*3\.1[ *]' | head -1 | cut -d: -f1)
+echo "https://github.com/$O/$R/blob/main/contributing/coding-best-practices.md#L$n"
+```
+A finding with **no** numbered rule behind it (a plain bug, a missing test) just
+describes the issue — don't manufacture a citation.
+
+**Where to hunt hardest** (rules most often broken here):
 
 - **Render purity / SSR determinism (coding §3)** — the central rule. No
   clock/random/locale/browser API *during render*; browser work lives in
@@ -218,8 +246,15 @@ verify each that should have moved did:
 
 Findings go **on the PR**, not just back to chat, and the skill is **re-runnable
 on the same PR**: a second run reconciles against what the first run posted
-rather than duplicating it. **Be terse everywhere** — one line per finding,
-`severity (rule): problem → fix`. No preamble, no restating the diff.
+rather than duplicating it.
+
+**Inline comments are as short as possible** — the minimum of *what's wrong*
+plus a *recommended fix when it's simple*. **≤2 lines is the target**; spend more
+only on a genuinely complex problem. No preamble, no restating the diff. Shape:
+
+- Breaks a numbered rule → **lead with the linked rule** (§9 format), then the
+  one-liner: `[coding §3.1 Keep render pure](<main-link>): <what's wrong>. <fix>.`
+- No rule behind it → `severity: <what's wrong>. <fix>.`
 
 **Resolvable inline comments are ALWAYS preferred.** Every finding that maps to a
 changed line goes inline so the author can resolve the thread. Only a finding
@@ -279,7 +314,7 @@ those prior threads (`PRIOR`, by key):
   ```json
   { "event": "COMMENT", "comments": [
     { "path": "src/foo.tsx", "line": 42, "side": "RIGHT",
-      "body": "blocker (coding §3.1): `Date.now()` in render → adopt mismatch. Pass as a fixed tweak. <!-- pr-review:finding:coding-3.1@src/foo.tsx#render-date-now -->" }
+      "body": "[coding §3.1 Keep render pure](https://github.com/OWNER/REPO/blob/main/contributing/coding-best-practices.md#L68): `Date.now()` in render → adopt mismatch. Pass a fixed tweak. <!-- pr-review:finding:coding-3.1@src/foo.tsx#render-date-now -->" }
   ]}
   ```
   `gh api "repos/$O/$R/pulls/<pr>/reviews" --input new.json`. Line rules: `path` +
@@ -313,9 +348,10 @@ summary-comment URL. Don't re-paste the body.
   "Adds X" in the body means nothing until you see X built, tested, dogfooded,
   spec'd (if behavioral), and documented. Enumerate gaps; don't assume good faith
   closes them.
-- **Cite rules, not vibes.** Tie every finding to a numbered rule
-  (`coding §3.1`, `testing §6.1`, `linting §3`) or a `CLAUDE.md` principle so the
-  author can act and argue precisely.
+- **Cite rules, not vibes.** Sweep *every* numbered rule in the three
+  best-practices files (§9), not a favourite few. A rule violation leads with the
+  rule — number, name, and a link to its line on `main` — before the what's-wrong
+  and fix, so the author can act and argue precisely.
 - **OpenSpec is the load-bearing axis** of considerations 1–3: behavioral change
   → proposal; proposal internally complete (design ⊇ proposal, tasks ⊇ design,
   specs ⊇ behavior); code matches design. Walk that chain in order. Archival
@@ -325,8 +361,9 @@ summary-comment URL. Don't re-paste the body.
   cases; a docs-only PR skips changesets-with-bump and specs. State *why* it's
   out of scope so a reader can't mistake an omission for an oversight.
 - **Output is the PR review, terse.** Resolvable inline comments first, a brief
-  summary at top, one line per finding. Brevity is a feature — every extra word
-  is a word the author skims past.
+  summary at top. Inline comments target **≤2 lines** — what's wrong + a simple
+  fix — more only for a genuinely complex problem. Every extra word is a word the
+  author skims past.
 - **Re-runs reconcile, never duplicate.** Hidden markers
   (`pr-review:summary`, `pr-review:finding:<key>`) let a second run update the
   one summary in place, resolve fixed threads with a 👍 reply, open threads only
