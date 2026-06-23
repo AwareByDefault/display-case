@@ -37,9 +37,9 @@ appears when one is configured):
   by level but by their **information-architecture group**: a nestable path that
   mirrors the app's own feature/route structure (e.g. `App / Settings /
   Billing`). This scales where a single flat "Pages" list would not. Within a
-  group, a **flow** is distinguished from a page by a leading glyph (or a `flow`
-  tag — see [`nav.flowMarker`](configuration.md#nav)) and numbered step rows;
-  pages render plain.
+  group, a **flow** is distinguished from a page by a high-vis `flow` tag (or a
+  leading glyph — see [`nav.flowMarker`](configuration.md#nav)) and numbered step
+  rows; pages render plain.
 
 The mode switch shows only the modes that have content, so a pure design-system
 package shows just Components and a surfaces-only package shows just Exhibits.

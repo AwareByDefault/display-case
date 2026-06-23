@@ -205,7 +205,7 @@ function buildManifest(
       groups,
       modes,
       landing,
-      flowMarker: config.nav?.flowMarker ?? 'glyph',
+      flowMarker: config.nav?.flowMarker ?? 'tag',
     },
     placardById,
   }

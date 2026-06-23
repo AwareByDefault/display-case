@@ -29,9 +29,6 @@ export default defineConfig({
   // Land on the Primer (the default) — the wall text orients you before you
   // browse the cases. Switch to 'cases' to open the library first instead.
   landing: 'primer',
-  // Mark flows in the Exhibits sidebar with a high-vis `flow` tag pill (the
-  // alternative is a leading glyph). Dogfoods the `nav.flowMarker` option.
-  nav: { flowMarker: 'tag' },
   // The server inlines the components' (dcui-*) CSS into every document; the
   // cases here only need the design system's --dc-* tokens + fonts so the
   // isolated /render doc resolves those custom properties. globalStyles are

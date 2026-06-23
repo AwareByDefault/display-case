@@ -62,7 +62,7 @@ export interface Manifest {
    *  else the first present mode. Always one of `modes`. A deep-linked case opens
    *  that case regardless. */
   landing: BrowseMode
-  /** How flows are distinguished from pages in the Exhibits sidebar: a leading
-   *  glyph (default) or a trailing `flow` tag. Resolved from `nav.flowMarker`. */
+  /** How flows are distinguished from pages in the Exhibits sidebar: a trailing
+   *  `flow` tag (default) or a leading glyph. Resolved from `nav.flowMarker`. */
   flowMarker?: 'glyph' | 'tag'
 }
