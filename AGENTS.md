@@ -185,7 +185,13 @@ for the map. The full change history lives under
 3. Implement: `/openspec:apply {change-name}`.
 4. Verify: run tests + the static checks, hit the running showcase, confirm
    scenarios pass.
-5. Archive: `/openspec:archive {change-name}`.
+5. Archive: `/openspec:archive {change-name}`. A proposal may stay open while its
+   PR is under review, but it must not land on `main` unarchived — the `openspec`
+   CI job ([`tools/openspec-merge-guard.ts`](tools/openspec-merge-guard.ts))
+   fails any PR whose diff adds or modifies an active proposal under
+   `openspec/changes/<name>/`. The only OpenSpec content a PR may merge is
+   archived proposals (`openspec/changes/archive/`) and spec changes
+   (`openspec/specs/`), so archive before merging.
 6. Post-change review: update any of
    `contributing/coding-best-practices.md`,
    `contributing/testing-best-practices.md`,

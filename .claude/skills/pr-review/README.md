@@ -12,7 +12,8 @@ cares about specifically:
 1. Does the change deserve an **OpenSpec proposal** — and does it include one?
 2. If proposed: do **design ⊇ proposal**, **tasks ⊇ design**, **specs ⊇ behavior**?
 3. Does the **code match** the design/tasks?
-4. Is a complete change **archived** (moved to `archive/`, `openspec/specs/` updated)?
+4. *(Archival is **not** reviewed — the `openspec` CI merge guard blocks an
+   unarchived proposal from merging; the skill just reads that check's status.)*
 5. Are the changes reflected in the repo's own **dogfood** showcase?
 6. Appropriate **unit-test** coverage (happy *and* error paths, deterministic)?
 7. Appropriate **e2e** coverage for chrome changes (`getByTestId`, no sleeps)?

@@ -105,21 +105,15 @@ Cross-read the diff against `design.md` and `tasks.md`:
 - Behavior the spec promises should be exercised somewhere (a test, a case, the
   CLI path). Spec'd-but-unbuilt is incomplete.
 
-### 5. If the proposal's code is here, is the change archived correctly? *(consideration 4)*
+### 5. Archival — not your job *(consideration 4)*
 
-Archival is the **last** step of the OpenSpec workflow: a fully-implemented
-change moves from `openspec/changes/<name>/` to
-`openspec/changes/archive/YYYY-MM-DD-<name>/`, and its spec deltas are folded
-into `openspec/specs/`. Adversarial checks:
-
-- If the PR delivers the *complete* implementation of a change, the diff should
-  **either** archive it (move to `archive/`, dated, with `openspec/specs/`
-  updated) **or** the PR should explicitly state archival is deferred to a
-  follow-up. A finished change left un-archived in `changes/` → **finding**.
-- A change moved to `archive/` whose implementation is **not** actually complete
-  (unchecked tasks, unbuilt spec lines) → **finding** (premature archive).
-- Confirm `openspec/specs/` actually absorbed the change's spec deltas — an
-  archive that didn't update the canonical specs leaves them stale.
+Don't review whether the change is archived. CI does: the `openspec` merge guard
+(`tools/openspec-merge-guard.ts`) **blocks merge** unless the only OpenSpec
+content the PR adds/modifies is archived proposals (`openspec/changes/archive/`)
+and spec changes (`openspec/specs/`). An open, unarchived proposal during review
+is **expected and fine** — it just can't land. So glance at `gh pr checks <pr>`:
+a red `OpenSpec merge guard` means "archive before merge" (`bun run openspec
+archive <name>`), already enforced — don't restate it as a finding.
 
 ### 6. Are the changes reflected in the dogfood? *(consideration 5)*
 
@@ -227,9 +221,8 @@ problem → fix`. No preamble, no restating the diff.
 
 **Resolvable inline comments are ALWAYS preferred.** Every finding that maps to a
 changed line goes inline so the author can resolve the thread. Only a finding
-with **no** diff line to point at (missing proposal, absent dogfood case,
-premature archive, a stale doc not in the diff) lives solely in the summary —
-never drop it.
+with **no** diff line to point at (missing proposal, absent dogfood case, a
+stale doc not in the diff) lives solely in the summary — never drop it.
 
 ```bash
 OWNER_REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)   # base repo
@@ -241,7 +234,7 @@ gh api "repos/$OWNER_REPO/pulls/<pr>/reviews" --input review.json
 ```json
 {
   "event": "COMMENT",
-  "body": "**Request changes** · 2 blockers, 1 should-fix\n\n| # | Consideration | Verdict |\n|---|---|---|\n| 3 | code↔design | fail |\n| 6 | unit tests | fail |\n\n**Findings**\n- blocker (coding §3.1): `Date.now()` in render — src/foo.tsx:42\n- blocker: change implemented but left un-archived in `openspec/changes/`\n- should-fix: `--static` flag undocumented in docs/cli.md",
+  "body": "**Request changes** · 2 blockers, 1 should-fix\n\n| # | Consideration | Verdict |\n|---|---|---|\n| 3 | code↔design | fail |\n| 6 | unit tests | fail |\n\n**Findings**\n- blocker (coding §3.1): `Date.now()` in render — src/foo.tsx:42\n- blocker (consideration 6): error path untested in src/bar.ts\n- should-fix: `--static` flag undocumented in docs/cli.md",
   "comments": [
     { "path": "src/foo.tsx", "line": 42, "side": "RIGHT", "body": "blocker (coding §3.1): `Date.now()` in render → adopt mismatch. Pass as a fixed tweak." },
     { "path": "docs/cli.md", "start_line": 10, "line": 14, "side": "RIGHT", "body": "should-fix: document the `--static` flag here." }
@@ -272,10 +265,11 @@ gh api "repos/$OWNER_REPO/pulls/<pr>/reviews" --input review.json
 - **Cite rules, not vibes.** Tie every finding to a numbered rule
   (`coding §3.1`, `testing §6.1`, `linting §3`) or a `CLAUDE.md` principle so the
   author can act and argue precisely.
-- **OpenSpec is the load-bearing axis** of considerations 1–4: behavioral change
+- **OpenSpec is the load-bearing axis** of considerations 1–3: behavioral change
   → proposal; proposal internally complete (design ⊇ proposal, tasks ⊇ design,
-  specs ⊇ behavior); code matches design; complete change archived with
-  `openspec/specs/` updated. Walk that chain in order.
+  specs ⊇ behavior); code matches design. Walk that chain in order. Archival
+  (consideration 4) is **not** reviewed — the `openspec` CI guard blocks an
+  unarchived proposal from merging, so just read its check status.
 - **Scope `n/a` honestly.** A pure-engine PR legitimately skips e2e and dogfood
   cases; a docs-only PR skips changesets-with-bump and specs. State *why* it's
   out of scope so a reader can't mistake an omission for an oversight.
