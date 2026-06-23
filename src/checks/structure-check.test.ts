@@ -23,6 +23,7 @@ const ALL_RULES: StructureRuleId[] = [
   'flow-multi-step',
   'unique-slugs',
   'tweak-defaults-valid',
+  'nav-groups-resolve',
   'interactive-cases-keyed',
   'atom-purity',
   'no-downward-dependency',
@@ -647,5 +648,23 @@ describe('checkStructure', () => {
       'Widget.tsx': 'export const Widget = () => null\n',
     })
     expect(await run(dir)).toHaveLength(0)
+  })
+
+  test('nav-groups-resolve warns on a group no surface resolves to', async () => {
+    const dir = await setup({
+      'display-case.config.ts': config(
+        { 'nav-groups-resolve': true },
+        ", nav: { groups: { order: ['Marketing', 'Nope'] } }",
+      ),
+      // A page under marketing/ resolves to the 'Marketing' group; 'Nope' has no
+      // surface, so only it is reported — at warning severity.
+      'marketing/Pricing.case.tsx': caseFile(
+        "defineCases('Pricing', { Default: () => null }, { level: 'page' })",
+      ),
+    })
+    const f = only(await run(dir), 'nav-groups-resolve')
+    expect(f).toHaveLength(1)
+    expect(f[0].message).toContain('Nope')
+    expect(f[0].severity).toBe('warn')
   })
 })

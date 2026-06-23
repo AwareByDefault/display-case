@@ -28,7 +28,7 @@
 
 ## 5. Checks
 
-- [ ] 5.1 Add a static check (structure phase) that reports `nav` config naming a group no surface resolves to, at warning severity; make it independently disablable.
+- [x] 5.1 Add a static check (structure phase) that reports `nav` config naming a group no surface resolves to, at warning severity; make it independently disablable.
 - [x] 5.2 Confirm the existing structure checks (composition, level) are unaffected — they continue to read `level`, which pages/flows retain.
 
 ## 6. Verification against spec
@@ -36,12 +36,12 @@
 - [x] 6.1 Verify the mode switch offers Primer · Components · Exhibits, omits any empty mode, and that switching lists the kit by level (Components) and surfaces by IA (Exhibits).
 - [x] 6.2 Verify resolution precedence end-to-end (explicit overrides folder; folder overrides config-less; config assigns when neither; fallback otherwise) and that an ungrouped surface lands in the default group and still appears.
 - [x] 6.3 Verify the filter narrows and restores each mode, reaches cross-mode matches, and does not affect deep-linking; verify the breadcrumb shows the active surface's group path.
-- [ ] 6.4 Verify `nav.groups.order`/`labels`/`collapsed` are honored and that an unknown group reference warns without failing the run.
+- [x] 6.4 Verify `nav.groups.order`/`labels`/`collapsed` are honored and that an unknown group reference warns without failing the run.
 - [x] 6.5 Verify a showcase with no `group` and no `nav` config presents the Exhibits mode as a single default group (no regression vs. today's listing), and `/c/...` addresses are unchanged.
 - [x] 6.6 Add e2e coverage (`e2e/`) for the three-way mode switch, nested group expand/collapse, filtering (incl. cross-mode), and the breadcrumb using the new test-ids.
 
 ## 7. Docs & post-change review
 
-- [ ] 7.1 Document the Components/Exhibits browse modes, the IA `group` axis, resolution order, folder derivation, and the `group`-vs-`area` distinction in `docs/configuration.md`, `docs/writing-cases.md`, `docs/hierarchy.md`, and `display-case.prompt.md`.
-- [ ] 7.2 Post-change review per CLAUDE.md: update `contributing/coding-best-practices.md`, `contributing/NOTES.md`, and `README.md` where the modes/IA axis introduce something a future contributor must know.
-- [ ] 7.3 Add a changeset (`bun run changeset`) declaring the release impact (minor — additive API + behavior).
+- [x] 7.1 Document the Components/Exhibits browse modes, the IA `group` axis, resolution order, folder derivation, and the `group`-vs-`area` distinction in `docs/configuration.md`, `docs/writing-cases.md`, `docs/hierarchy.md`, and `display-case.prompt.md`.
+- [x] 7.2 Post-change review per CLAUDE.md: update `contributing/coding-best-practices.md`, `contributing/NOTES.md`, and `README.md` where the modes/IA axis introduce something a future contributor must know.
+- [x] 7.3 Add a changeset (`bun run changeset`) declaring the release impact (minor — additive API + behavior).

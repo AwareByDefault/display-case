@@ -29,7 +29,8 @@ export default defineCases('TweakControl', {
 | `component` | `string` | The display name shown in the sidebar. Its slug (kebab-case) forms the URL, e.g. `TweakControl` → `/c/tweak-control`. |
 | `cases` | `Record<string, Case>` | Keyed by display name; **insertion order is preserved**. Each value is either a simple render thunk or a tweaked case (see below). |
 | `meta.level` | `HierarchyLevel?` | One of `atom`, `molecule`, `organism`, `template`, `page` (`flow` is set automatically by `defineFlow`). Drives sidebar grouping. Omit to leave it "unclassified" (sorted last). See [Hierarchy](hierarchy.md). |
-| `meta.area` | `string?` | Free-form layout tag passed to the [`decorator`](configuration.md#decorator) so it can wrap this case in app chrome (nav/header/footer). Display Case mandates no vocabulary — the decorator interprets the value. Takes precedence over folder-based detection via `sourcePath`; omit to fall back to that (or to render bare). |
+| `meta.group` | `string \| string[]?` | **Pages and flows only** (surfaces): the information-architecture group — where the surface sits in the **Exhibits** mode's nav tree, as a path (`'App/Settings/Billing'` or `['App','Settings','Billing']`). Omit to derive it from the case file's folder, then showcase config, then a default group. Distinct from `area` (which selects decorator chrome). Ignored for building-block levels. See [Hierarchy](hierarchy.md#components-and-exhibits) and [`nav`](configuration.md#nav). |
+| `meta.area` | `string?` | Free-form layout tag passed to the [`decorator`](configuration.md#decorator) so it can wrap this case in app chrome (nav/header/footer). Display Case mandates no vocabulary — the decorator interprets the value. Takes precedence over folder-based detection via `sourcePath`; omit to fall back to that (or to render bare). **Note:** `area` is a *rendering* concern (which chrome wraps the case); `group` is a *navigation* concern (where it sits in the tree). They may coincide but are separate fields. |
 
 ### Two shapes of case
 
@@ -80,10 +81,17 @@ export default defineFlow('Sign-in flow', {
 
 Keep the views pure: a step wires `goto` to the view's callbacks; the view never imports navigation, so the same view is reused in the real route. `goto(step, overrides?)` re-enters the target step with optional preset tweak values. A flow whose steps declare no transitions is a static, walkable sequence. A flow is always at the `flow` level. See [Hierarchy](hierarchy.md#flows) for how flows differ from regular cases.
 
-`defineFlow` also accepts an optional `area` alongside `steps` — the same free-form layout tag as [`meta.area`](#definecasescomponent-cases-meta) — so a flow can be wrapped in app chrome by the decorator:
+`defineFlow` also accepts an optional `group` and `area` alongside `steps` — the
+same fields as [`meta.group`](#definecasescomponent-cases-meta) and
+[`meta.area`](#definecasescomponent-cases-meta) — so a flow can be placed in the
+Exhibits nav tree and wrapped in app chrome:
 
 ```tsx
-export default defineFlow('Checkout', { area: 'app', steps: { /* … */ } })
+export default defineFlow('Checkout', {
+  group: 'Shop/Checkout',
+  area: 'app',
+  steps: { /* … */ },
+})
 ```
 
 **Typed step values.** A bare step object has loosely-typed `values`. To read typed preset values (`values.error` as `boolean`), wrap the step in the `flowStep` helper, which infers the step's own tweak schema:

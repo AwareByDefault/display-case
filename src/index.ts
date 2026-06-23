@@ -405,6 +405,7 @@ export type StructureRuleId =
   | 'flow-multi-step'
   | 'unique-slugs'
   | 'tweak-defaults-valid'
+  | 'nav-groups-resolve'
   // Case-content rules
   | 'interactive-cases-keyed'
   // Composition (import-graph) rules — opt-in, default off
