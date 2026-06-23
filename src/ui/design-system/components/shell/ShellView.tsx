@@ -14,6 +14,8 @@ import {
   LEVEL_LABEL,
   type Mode,
   RESPONSIVE,
+  SIDEBAR_MAX_W,
+  SIDEBAR_MIN_W,
   STAGE_FADE_MS,
   ZOOM_MAX,
   ZOOM_MIN,
@@ -65,13 +67,24 @@ export interface ShellViewProps extends ShellViewModel {
 }
 
 export function ShellView(props: ShellViewProps) {
-  const { manifest, theme, shownMode, mode, setMode, modeFadeStyle } = props
+  const {
+    manifest,
+    theme,
+    shownMode,
+    mode,
+    setMode,
+    modeFadeStyle,
+    sidebarWidth,
+    startSidebarResize,
+    onSidebarResizeKey,
+  } = props
   return (
     <div
       className="dc-app"
       data-testid={DcTestIds.app}
       data-theme={theme}
-      data-nav={props.navCollapsed ? 'collapsed' : 'open'}>
+      data-nav={props.navCollapsed ? 'collapsed' : 'open'}
+      style={{ '--dc-sidebar-w': `${sidebarWidth}px` } as CSSProperties}>
       <ShellHeader {...props} />
 
       <Sidebar data-testid={DcTestIds.sidebar} label={SIDEBAR_LABEL[shownMode]}>
@@ -84,6 +97,20 @@ export function ShellView(props: ShellViewProps) {
           <ModeSwitch modes={manifest.modes} mode={mode} onMode={setMode} />
         )}
         <NavContents {...props} />
+        {/* biome-ignore lint/a11y/useSemanticElements: a draggable splitter, not a thematic break */}
+        <div
+          className="dc-sidebar-resize"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize sidebar"
+          aria-valuenow={sidebarWidth}
+          aria-valuemin={SIDEBAR_MIN_W}
+          aria-valuemax={SIDEBAR_MAX_W}
+          tabIndex={0}
+          data-testid={DcTestIds.sidebarResize}
+          onPointerDown={startSidebarResize}
+          onKeyDown={onSidebarResizeKey}
+        />
       </Sidebar>
 
       {/* Library main and the Primer host both occupy the `main` grid area; the

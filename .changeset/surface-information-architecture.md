@@ -18,8 +18,9 @@ for Components, `/e/<component>/<case>` for Exhibits — while `/render/...` sta
 unified. `landing` accepts `'primer' | 'components' | 'exhibits'` (honored when
 present, else the first present mode), replacing `'primer' | 'cases'`. The
 manifest exposes each component's resolved `group` and the overall `groups` tree.
-In Exhibits, a flow is distinguished from a page by a leading glyph (default) or
-a trailing `flow` tag (`nav.flowMarker: 'glyph' | 'tag'`) plus numbered step
-rows. A `nav-groups-resolve` structure check warns when `nav` config names a
+In Exhibits, a flow is distinguished from a page by a high-vis `flow` tag
+(default) or a leading glyph (`nav.flowMarker: 'tag' | 'glyph'`) plus numbered
+step rows. The sidebar's right edge is draggable to resize it (width remembered
+across sessions). A `nav-groups-resolve` structure check warns when `nav` config names a
 group no surface resolves to. `level` is unchanged and still drives the structure
 checks.

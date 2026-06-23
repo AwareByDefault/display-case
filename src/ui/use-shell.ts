@@ -34,6 +34,9 @@ import {
   RESPONSIVE,
   resolveMode,
   type Selection,
+  SIDEBAR_MAX_W,
+  SIDEBAR_MIN_W,
+  SIDEBAR_STORAGE_KEY,
   STAGE_FADE_MS,
   selSignature,
   type Theme,
@@ -76,6 +79,11 @@ export interface ShellViewModel {
   setTheme: (update: (t: Theme) => Theme) => void
   navCollapsed: boolean
   setNavCollapsed: (update: (c: boolean) => boolean) => void
+  /** Sidebar (nav rail) width in px — drag its right edge to resize; remembered
+   *  across sessions. Applied as the `--dc-sidebar-w` grid column. */
+  sidebarWidth: number
+  startSidebarResize: (e: ReactPointerEvent<HTMLDivElement>) => void
+  onSidebarResizeKey: (e: ReactKeyboardEvent<HTMLDivElement>) => void
 
   // Browse mode: Primer · Components · Exhibits.
   mode: Mode
@@ -367,6 +375,10 @@ export function useShell(seed: ShellSeed): ShellViewModel | { manifest: null } {
   // Starts expanded deterministically (the server has no viewport width); an
   // effect collapses it on a narrow viewport after mount, so hydration matches.
   const [navCollapsed, setNavCollapsed] = useState(false)
+  // Sidebar width. Seeded to the minimum so the server render and the client's
+  // first render agree (the CSS default is the same 15rem); a mount effect then
+  // applies any width remembered from a previous session.
+  const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_MIN_W)
   // Which components are expanded in the nav. Collapsed by default; the
   // initially-selected component is seeded open so its active case is visible.
   const [expanded, setExpanded] = useState<Set<string>>(
@@ -442,6 +454,18 @@ export function useShell(seed: ShellSeed): ShellViewModel | { manifest: null } {
   // client, after hydration, so the first render matches on both sides.
   useEffect(() => {
     if (window.innerWidth <= NAV_COLLAPSE_MAX) setNavCollapsed(true)
+  }, [])
+
+  // Restore the remembered sidebar width on the client, after hydration (the
+  // server can't read localStorage, so the first render uses the default).
+  useEffect(() => {
+    try {
+      const saved = Number(window.localStorage.getItem(SIDEBAR_STORAGE_KEY))
+      if (saved)
+        setSidebarWidth(Math.max(SIDEBAR_MIN_W, Math.min(SIDEBAR_MAX_W, saved)))
+    } catch {
+      // Storage unavailable (private mode, etc.) — keep the default.
+    }
   }, [])
 
   // Crossfade the chrome when the view mode changes. The highlight box lerps to
@@ -1056,6 +1080,62 @@ export function useShell(seed: ShellSeed): ShellViewModel | { manifest: null } {
     [],
   )
 
+  // Persist the sidebar width on an explicit resize (drag end / key), so a blank
+  // mount never clobbers a remembered value.
+  const persistSidebarWidth = useCallback((w: number) => {
+    try {
+      window.localStorage.setItem(SIDEBAR_STORAGE_KEY, String(w))
+    } catch {
+      // Storage unavailable — width simply won't persist this session.
+    }
+  }, [])
+
+  // Drag the sidebar's right edge: moving right widens it, clamped to
+  // [min, max]; the final width is remembered.
+  const startSidebarResize = useCallback(
+    (e: ReactPointerEvent<HTMLDivElement>) => {
+      e.preventDefault()
+      const startX = e.clientX
+      const startW = sidebarWidth
+      let latest = startW
+      const onMove = (ev: PointerEvent) => {
+        latest = Math.max(
+          SIDEBAR_MIN_W,
+          Math.min(SIDEBAR_MAX_W, startW + (ev.clientX - startX)),
+        )
+        setSidebarWidth(latest)
+      }
+      const onUp = () => {
+        window.removeEventListener('pointermove', onMove)
+        window.removeEventListener('pointerup', onUp)
+        document.body.style.cursor = ''
+        document.body.style.userSelect = ''
+        persistSidebarWidth(latest)
+      }
+      document.body.style.cursor = 'col-resize'
+      document.body.style.userSelect = 'none'
+      window.addEventListener('pointermove', onMove)
+      window.addEventListener('pointerup', onUp)
+    },
+    [sidebarWidth, persistSidebarWidth],
+  )
+  // Keyboard resize: arrows nudge by one grid step (right widens, like the drag).
+  const onSidebarResizeKey = useCallback(
+    (e: ReactKeyboardEvent<HTMLDivElement>) => {
+      let step = 0
+      if (e.key === 'ArrowRight') step = GRID
+      else if (e.key === 'ArrowLeft') step = -GRID
+      if (!step) return
+      e.preventDefault()
+      setSidebarWidth((w) => {
+        const next = Math.max(SIDEBAR_MIN_W, Math.min(SIDEBAR_MAX_W, w + step))
+        persistSidebarWidth(next)
+        return next
+      })
+    },
+    [persistSidebarWidth],
+  )
+
   // Drive the token theme from the document root so html/body (not just the
   // app chrome) pick up the themed background — no white bars around the app.
   useEffect(() => {
@@ -1257,6 +1337,9 @@ export function useShell(seed: ShellSeed): ShellViewModel | { manifest: null } {
     setTheme,
     navCollapsed,
     setNavCollapsed,
+    sidebarWidth,
+    startSidebarResize,
+    onSidebarResizeKey,
     mode,
     setMode: changeMode,
     shownMode,

@@ -85,6 +85,14 @@ export const DOC_MIN_W = 256
 export const DOC_MAX_W = 640
 export const DOC_DEFAULT_W = 352 // 22rem
 
+// Sidebar (nav rail) width (px), adjustable by dragging its right edge. The
+// minimum is the default 15rem (it can also collapse entirely via the ☰ toggle);
+// the maximum keeps it from squeezing the stage and docs panel. The chosen width
+// is remembered across sessions (localStorage).
+export const SIDEBAR_MIN_W = 240 // 15rem — matches --dc-sidebar-w
+export const SIDEBAR_MAX_W = 480 // 30rem
+export const SIDEBAR_STORAGE_KEY = 'dc-sidebar-w'
+
 // Stage crossfade duration (ms): the exhibit fades out when the selection
 // changes, swaps while hidden, then fades back in once measured. Mirrors the
 // CSS opacity transition on the stage.

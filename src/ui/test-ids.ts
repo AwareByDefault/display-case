@@ -50,6 +50,8 @@ export const DcTestIds = {
     `dc-modeswitch-${mode}`,
   /** The sidebar filter input. */
   navFilter: 'dc-nav-filter',
+  /** The sidebar resize handle (drag/keyboard to widen the rail). */
+  sidebarResize: 'dc-sidebar-resize',
   /** An Exhibits-mode group row, keyed by its lowercased `/`-joined path. */
   navGroup: (path: string): string => `dc-nav-group-${path}`,
   /** The active surface's group-path breadcrumb in the stage header. */
