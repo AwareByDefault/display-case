@@ -87,7 +87,17 @@ export function ShellView(props: ShellViewProps) {
       style={{ '--dc-sidebar-w': `${sidebarWidth}px` } as CSSProperties}>
       <ShellHeader {...props} />
 
-      <Sidebar data-testid={DcTestIds.sidebar} label={SIDEBAR_LABEL[shownMode]}>
+      <Sidebar
+        data-testid={DcTestIds.sidebar}
+        label={SIDEBAR_LABEL[shownMode]}
+        resize={{
+          onPointerDown: startSidebarResize,
+          onKeyDown: onSidebarResizeKey,
+          valueNow: sidebarWidth,
+          valueMin: SIDEBAR_MIN_W,
+          valueMax: SIDEBAR_MAX_W,
+          testId: DcTestIds.sidebarResize,
+        }}>
         {/* The ModeSwitch is pinned above the scroll region (a non-scrolling row),
             so it stays put while nav items scroll and fade beneath it, and its
             highlight box keeps lerping during the crossfade. The scroll region's
@@ -97,20 +107,6 @@ export function ShellView(props: ShellViewProps) {
           <ModeSwitch modes={manifest.modes} mode={mode} onMode={setMode} />
         )}
         <NavContents {...props} />
-        {/* biome-ignore lint/a11y/useSemanticElements: a draggable splitter, not a thematic break */}
-        <div
-          className="dc-sidebar-resize"
-          role="separator"
-          aria-orientation="vertical"
-          aria-label="Resize sidebar"
-          aria-valuenow={sidebarWidth}
-          aria-valuemin={SIDEBAR_MIN_W}
-          aria-valuemax={SIDEBAR_MAX_W}
-          tabIndex={0}
-          data-testid={DcTestIds.sidebarResize}
-          onPointerDown={startSidebarResize}
-          onKeyDown={onSidebarResizeKey}
-        />
       </Sidebar>
 
       {/* Library main and the Primer host both occupy the `main` grid area; the
