@@ -461,6 +461,16 @@
   flex: 0 0 auto;
   margin-bottom: var(--dc-space-8);
 }
+/* The mode switch can carry three full words (Primer · Components · Exhibits) in
+   the narrow rail, so its segments run tighter than the default toggle: smaller
+   text, no label tracking, and minimal side padding — enough for the longest
+   label ("Components") to read in full across three equal cells. */
+.dc-modeswitch .dcui-segmented-seg {
+  padding-left: var(--dc-space-1);
+  padding-right: var(--dc-space-1);
+  font-size: var(--dc-text-2xs);
+  letter-spacing: var(--dc-tracking-normal);
+}
 
 /* The Primer host shares the `main` grid area with the library stage; the
    inactive one is `hidden`. The reading page owns its own scroll inside the
