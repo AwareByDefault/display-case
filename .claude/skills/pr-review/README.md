@@ -34,14 +34,15 @@ review", "is this PR ready to merge", or "what's missing in this change".
 
 1. `gh pr view` / `gh pr diff` / `gh pr checks` to gather the facts; group the diff
    by area; optionally `gh pr checkout` to run the gates.
-2. Walk the OpenSpec chain (proposal → design → tasks → specs → code → archive),
-   then dogfood, unit tests, e2e, quality/ethos/best-practices, and docs — citing
-   the specific numbered rule each finding violates.
-3. Post findings to the PR: code-tied findings as resolvable inline line comments
-   (always preferred), plus a terse summary comment at top — verdict,
-   per-consideration pass/fail/n/a, one line per finding. Inline comments are
-   ≤2 lines; a best-practice violation leads with the rule (number + name + a link
-   to its line on `main`) before the what's-wrong and fix.
+2. Walk the OpenSpec chain (proposal → design → tasks → specs → code; archival is
+   left to the CI guard), then dogfood, unit tests, e2e, quality/ethos/best-
+   practices, and docs — citing the specific numbered rule each finding violates.
+3. Post findings to the PR, **summary first**: a terse summary comment (verdict,
+   per-consideration pass/fail/n/a, one line per finding) posted ahead of every
+   other comment the skill makes, then code-tied findings as resolvable inline
+   line comments (always preferred). Inline comments are ≤2 lines; a best-practice
+   violation leads with the rule (number + name + a link to its line on `main`)
+   before the what's-wrong and fix.
 
 **Re-runnable.** Hidden markers make a second run on the same PR idempotent: it
 updates the one summary in place, replies "Resolved 👍" and resolves threads whose

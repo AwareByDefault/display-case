@@ -291,14 +291,36 @@ SUMMARY_ID=$(gh api "repos/$O/$R/issues/<pr>/comments" --paginate \
   --jq 'map(select(.body|contains("pr-review:summary")))|.[0].id // empty')
 ```
 
-**b. Reconcile** the current run's code-tied findings (`CURRENT`, by key) against
-those prior threads (`PRIOR`, by key):
+**b. Classify in memory, then post the summary FIRST.** Compare the current run's
+code-tied findings (`CURRENT`, by key) against the prior threads (`PRIOR`, by
+key) and decide each one's action — but **post nothing yet**:
 
 | | in `CURRENT` | not in `CURRENT` (fixed) |
 |---|---|---|
-| **not in `PRIOR`** | **new** → open an inline comment (with marker) | — |
-| **in `PRIOR`, open** | **leave untouched** — no new comment; keep it in the summary | **reply then resolve** |
-| **in `PRIOR`, resolved** | regressed → reply "Reopened: …" (note it; leave resolved unless obvious) | skip |
+| **not in `PRIOR`** | **new** → will open an inline comment | — |
+| **in `PRIOR`, open** | **leave untouched** — no new comment; kept in the summary | **reply then resolve** |
+| **in `PRIOR`, resolved** | regressed → reply "Reopened: …" (leave resolved unless obvious) | skip |
+
+**The summary comes before every other comment this skill makes**, so post it
+*now*, ahead of any inline comment or reply. On a first run, creating it first
+gives it the earliest timestamp; on a re-run, `PATCH` updates it in place and
+keeps its original position ahead of the rest. (You already know the full picture
+from the classification above, so the body is complete before any inline write.)
+```bash
+# body ends with <!-- pr-review:summary -->
+[ -n "$SUMMARY_ID" ] \
+  && gh api -X PATCH "repos/$O/$R/issues/comments/$SUMMARY_ID" --input summary.json \
+  ||  gh api "repos/$O/$R/issues/<pr>/comments" --input summary.json
+```
+The summary reflects the **current** state: one-line verdict
+(`Approve` / `Approve with nits` / `Request changes` / `Blocked`), a compact
+per-consideration `pass`/`fail`/`n/a` table (`n/a` justified), one terse bullet
+per **open** finding (still-open-prior + new, so the whole picture reads in one
+place), and a short "Resolved this run" line. Never `APPROVE`/`REQUEST_CHANGES`
+the PR's review state unprompted; the verdict lives in the text. Map a real
+review event to the verdict only if asked.
+
+**c. Apply the inline changes** (only after the summary exists):
 
 - **Fixed → resolve with a 👍.** For each prior open thread whose key is gone from
   `CURRENT`, reply then resolve:
@@ -324,21 +346,6 @@ those prior threads (`PRIOR`, by key):
 - **Never re-comment a still-open prior finding** — that's the duplicate the
   marker exists to prevent. It stays in the summary, not as a fresh thread.
 
-**c. Write the summary** (create on first run, else `PATCH` in place):
-```bash
-# body ends with <!-- pr-review:summary -->
-[ -n "$SUMMARY_ID" ] \
-  && gh api -X PATCH "repos/$O/$R/issues/comments/$SUMMARY_ID" --input summary.json \
-  ||  gh api "repos/$O/$R/issues/<pr>/comments" --input summary.json
-```
-The summary always reflects the **current** state: one-line verdict
-(`Approve` / `Approve with nits` / `Request changes` / `Blocked`), a compact
-per-consideration `pass`/`fail`/`n/a` table (`n/a` justified), then one terse
-bullet per **open** finding — both still-open-prior and new, so the whole picture
-reads in one place — and a short "Resolved this run" line for what you just
-closed. Never `APPROVE`/`REQUEST_CHANGES` the PR's review state unprompted; the
-verdict lives in the text. Map a real review event to the verdict only if asked.
-
 Then report one line back here: counts (new / still-open / resolved) and the
 summary-comment URL. Don't re-paste the body.
 
@@ -360,10 +367,11 @@ summary-comment URL. Don't re-paste the body.
 - **Scope `n/a` honestly.** A pure-engine PR legitimately skips e2e and dogfood
   cases; a docs-only PR skips changesets-with-bump and specs. State *why* it's
   out of scope so a reader can't mistake an omission for an oversight.
-- **Output is the PR review, terse.** Resolvable inline comments first, a brief
-  summary at top. Inline comments target **≤2 lines** — what's wrong + a simple
-  fix — more only for a genuinely complex problem. Every extra word is a word the
-  author skims past.
+- **Output is the PR review, terse.** Resolvable inline comments are *preferred*
+  for code-tied findings, but the **summary is posted first** so it sits ahead of
+  every comment the skill makes. Inline comments target **≤2 lines** — what's
+  wrong + a simple fix — more only for a genuinely complex problem. Every extra
+  word is a word the author skims past.
 - **Re-runs reconcile, never duplicate.** Hidden markers
   (`pr-review:summary`, `pr-review:finding:<key>`) let a second run update the
   one summary in place, resolve fixed threads with a 👍 reply, open threads only
