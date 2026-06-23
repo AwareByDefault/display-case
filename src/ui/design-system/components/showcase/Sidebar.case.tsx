@@ -38,33 +38,47 @@ function ResizableDemo() {
     setW((v) => Math.max(MIN_W, Math.min(MAX_W, v + step)))
   }
   return (
-    <Sidebar
-      style={{ width: `${w}px`, maxHeight: '24rem' }}
-      resize={{
-        onPointerDown,
-        onKeyDown,
-        valueNow: w,
-        valueMin: MIN_W,
-        valueMax: MAX_W,
+    // The track is fixed at the maximum width so the Stage measures a constant
+    // box (it won't grow/shrink as you drag). Its dotted outline shows how far
+    // the rail can expand; the solid rail grows toward it, from MIN_W to MAX_W.
+    <div
+      style={{
+        position: 'relative',
+        width: `${MAX_W}px`,
+        height: '24rem',
+        border: '1px dotted var(--dc-border-strong)',
+        borderRadius: 'var(--dc-radius-md)',
       }}>
-      <Eyebrow style={{ margin: '0 0 0.5rem 0.5rem' }}>Atoms</Eyebrow>
-      <NavItem
-        kind="component"
-        label="Button"
-        count={4}
-        expanded
-        onToggle={() => {}}
-        onSelect={() => {}}
-      />
-      <NavItem kind="case" label="Playground" onSelect={() => {}} />
-      <NavItem kind="case" label="Variants" current onSelect={() => {}} />
-      <NavItem
-        kind="component"
-        label="Checkbox"
-        onToggle={() => {}}
-        onSelect={() => {}}
-      />
-    </Sidebar>
+      <Sidebar
+        // border-box so `width` is the rail's true outer width — it meets the
+        // dotted edge exactly at MAX_W.
+        style={{ boxSizing: 'border-box', width: `${w}px`, height: '100%' }}
+        resize={{
+          onPointerDown,
+          onKeyDown,
+          valueNow: w,
+          valueMin: MIN_W,
+          valueMax: MAX_W,
+        }}>
+        <Eyebrow style={{ margin: '0 0 0.5rem 0.5rem' }}>Atoms</Eyebrow>
+        <NavItem
+          kind="component"
+          label="Button"
+          count={4}
+          expanded
+          onToggle={() => {}}
+          onSelect={() => {}}
+        />
+        <NavItem kind="case" label="Playground" onSelect={() => {}} />
+        <NavItem kind="case" label="Variants" current onSelect={() => {}} />
+        <NavItem
+          kind="component"
+          label="Checkbox"
+          onToggle={() => {}}
+          onSelect={() => {}}
+        />
+      </Sidebar>
+    </div>
   )
 }
 
