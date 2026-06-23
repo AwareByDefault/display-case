@@ -377,7 +377,7 @@ function NavContents(props: ShellViewProps) {
     if (total > 0) parentAlert = isExpanded ? 'dot' : total
     // Distinguish a flow from a page: a leading glyph (default) or a trailing
     // `flow` tag, plus numbered step rows. Pages render plain.
-    const flowMarker = props.manifest.flowMarker ?? 'glyph'
+    const flowMarker = props.manifest.flowMarker ?? 'tag'
     const flowIcon = c.isFlow && flowMarker === 'glyph' ? FLOW_GLYPH : undefined
     const flowTag = c.isFlow && flowMarker === 'tag' ? 'flow' : undefined
     return (

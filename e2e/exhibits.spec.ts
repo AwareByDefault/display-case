@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { DcTestIds } from '../src/ui/test-ids'
-import { fetchManifest } from './helpers'
+import { fetchManifest, gotoLibrary } from './helpers'
 
 test.describe('Components / Exhibits modes', () => {
   test('the mode switch offers every present mode', async ({
@@ -122,5 +122,35 @@ test.describe('Components / Exhibits modes', () => {
         `[data-testid="${DcTestIds.navCase(flow.id, flow.cases[0].id)}"] .dcui-nav-index`,
       ),
     ).toHaveText('1')
+  })
+
+  test('selecting a cross-mode filter match switches mode', async ({
+    page,
+    request,
+  }) => {
+    const m = await fetchManifest(request)
+    test.skip(
+      !m.modes.includes('components') || !m.modes.includes('exhibits'),
+      'need both catalog modes',
+    )
+    const surface = m.components.find(
+      (c) => c.level === 'page' || c.level === 'flow',
+    )
+    if (!surface) return
+
+    // Start in Components; filter by a surface's name so it shows as a cross-mode
+    // ("In Exhibits") match.
+    await gotoLibrary(page)
+    await expect(
+      page.getByTestId(DcTestIds.modeSwitch('components')),
+    ).toHaveAttribute('aria-selected', 'true')
+    await page.getByTestId(DcTestIds.navFilter).fill(surface.name)
+
+    // Selecting it switches to the Exhibits mode and the /e/ address.
+    await page.getByTestId(DcTestIds.navComponent(surface.id)).click()
+    await expect(
+      page.getByTestId(DcTestIds.modeSwitch('exhibits')),
+    ).toHaveAttribute('aria-selected', 'true')
+    await expect(page).toHaveURL(new RegExp(`/e/${surface.id}/`))
   })
 })

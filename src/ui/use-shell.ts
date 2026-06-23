@@ -568,7 +568,13 @@ export function useShell(seed: ShellSeed): ShellViewModel | { manifest: null } {
 
   const select = useCallback(
     (next: Selection) => {
+      const surface = isSurfaceId(next.componentId)
       setSel(next)
+      // Align the mode to the selected component's kind. Within a mode this is a
+      // no-op; for a cross-mode filter match (a surface chosen from "In Exhibits"
+      // while in Components, or vice versa) it switches the nav + mode switch to
+      // the right mode — `pushState` alone wouldn't (it doesn't fire popstate).
+      setMode(surface ? 'exhibits' : 'components')
       // On a phone the open nav is a full-width drawer over the stage; close it
       // once a case is chosen so the selection is visible.
       if (window.innerWidth <= NAV_DRAWER_MAX) setNavCollapsed(true)
@@ -580,7 +586,7 @@ export function useShell(seed: ShellSeed): ShellViewModel | { manifest: null } {
           next.caseId,
           next.tweaks,
           docOpenRef.current,
-          isSurfaceId(next.componentId),
+          surface,
         ),
       )
     },
