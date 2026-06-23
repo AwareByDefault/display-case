@@ -43,6 +43,7 @@ function mkComponent(
 ): ManifestComponent {
   return {
     isFlow: false,
+    group: [],
     caseFile: `src/ui/design-system/components/${c.id}.case.tsx`,
     placardDoc: null,
     ...c,
@@ -78,6 +79,7 @@ export const mockManifest: Manifest = {
   title: 'Display Case',
   primer: true,
   landing: 'primer',
+  groups: [],
   components: [
     mkComponent({
       id: 'button',

@@ -25,6 +25,13 @@ Display Case SHALL present a browsing surface that lists the discovered componen
 - THEN the Exhibits mode is not offered
 - AND the Components mode lists the building-block components
 
+#### Scenario: A surfaces-only catalog omits the Components mode
+
+- GIVEN a showcase that declares page and flow surfaces but no building-block components
+- WHEN a viewer opens the browsing surface
+- THEN the Components mode is not offered
+- AND the Exhibits mode lists the surfaces
+
 #### Scenario: Empty catalog
 
 - GIVEN no case files exist
@@ -33,6 +40,30 @@ Display Case SHALL present a browsing surface that lists the discovered componen
 - AND the surface does not error
 
 ## ADDED Requirements
+
+### Requirement: Default landing mode
+
+The showcase MAY configure which browse mode the root view opens — the primer, the Components mode, or the Exhibits mode. Display Case SHALL honor the configured landing mode only when that mode is present; when it is absent (or unconfigured), Display Case SHALL open the first present mode in a fixed order: primer, then Components, then Exhibits. A deep link to a specific case SHALL open its case regardless of the configured landing mode.
+
+#### Scenario: Configured landing mode is present
+
+- GIVEN a showcase configured to land on the Exhibits mode
+- AND the showcase has page or flow surfaces
+- WHEN a viewer opens the root view
+- THEN the Exhibits mode is shown
+
+#### Scenario: Configured landing mode is absent
+
+- GIVEN a showcase configured to land on the Exhibits mode
+- AND the showcase has no page or flow surfaces
+- WHEN a viewer opens the root view
+- THEN the first present mode is shown instead
+
+#### Scenario: Deep link overrides the landing mode
+
+- GIVEN a showcase with any configured landing mode
+- WHEN a viewer opens a specific case's stable address
+- THEN that case is shown regardless of the landing mode
 
 ### Requirement: Locating items by filtering
 

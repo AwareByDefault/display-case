@@ -98,6 +98,17 @@ export interface TweakedCase<T extends TweakSchema = TweakSchema> {
 
 export type Case = SimpleCase | TweakedCase
 
+/**
+ * Normalize an information-architecture group input into ordered path segments.
+ * Accepts a `'/'`-joined string or a segment array; trims each segment and drops
+ * empties. Returns `[]` for an absent/empty input (⇒ the default group).
+ */
+export function normalizeGroup(group: string | string[] | undefined): string[] {
+  if (!group) return []
+  const segments = Array.isArray(group) ? group : group.split('/')
+  return segments.map((s) => s.trim()).filter((s) => s.length > 0)
+}
+
 // ── Flows (interactive multi-step flows) ────────────────────────────────────────
 
 /**
@@ -125,6 +136,15 @@ export interface FlowStep<T extends TweakSchema = TweakSchema> {
 
 export interface CaseMeta {
   level?: HierarchyLevel
+  /**
+   * Information-architecture group for a page/flow surface — where it sits in the
+   * Exhibits-mode navigation tree, as a path (`'App/Settings/Billing'` or
+   * `['App','Settings','Billing']`). Distinct from `area` (which selects decorator
+   * chrome): `group` is purely a navigation concern. Ignored for building-block
+   * levels (atom–template), which group by `level`. Omit to derive the group from
+   * the case file's folder, then showcase config, then a default group.
+   */
+  group?: string | string[]
   /**
    * Free-form area/layout tag passed to the decorator, for wrapping a case in
    * app chrome (nav/header/footer). The decorator interprets the value (Display
@@ -159,6 +179,9 @@ export interface CaseModule {
   isFlow: boolean
   /** Source path relative to the package, injected by codegen (for area-aware chrome). */
   sourcePath?: string
+  /** Normalized information-architecture group path (see CaseMeta.group); empty
+   *  when undeclared. Only meaningful for page/flow surfaces. */
+  group?: string[]
   /** Free-form area/layout tag (see CaseMeta.area); overrides `sourcePath`. */
   area?: string
   /** Declared browser-only (see CaseMeta.browserOnly): skip server rendering and
@@ -184,6 +207,7 @@ export function defineCases(
     cases,
     level: meta.level,
     isFlow: false,
+    group: normalizeGroup(meta.group),
     area: meta.area,
     browserOnly: meta.browserOnly,
   }
@@ -213,6 +237,7 @@ export function defineFlow(
   // the invariant `FlowStep<TweakSchema>`.
   config: {
     steps: Record<string, FlowStep<any>>
+    group?: string | string[]
     area?: string
     browserOnly?: boolean
   },
@@ -222,6 +247,7 @@ export function defineFlow(
     cases: config.steps,
     level: 'flow',
     isFlow: true,
+    group: normalizeGroup(config.group),
     area: config.area,
     browserOnly: config.browserOnly,
   }
@@ -461,6 +487,45 @@ export interface StyleCollector {
  */
 export type StyleEngine = () => StyleCollector
 
+// ── Navigation / information architecture ────────────────────────────────────
+
+/** A rule assigning a page/flow surface to an information-architecture group. */
+export interface NavSurfaceRule {
+  /** Match the surface's component id (slug) exactly, or a glob against its
+   *  package-relative case-file path (e.g. `app/admin/**`). */
+  id?: string
+  /** Match the surface's `area` tag. */
+  area?: string
+  /** The group to assign (path string or segments). */
+  group: string | string[]
+}
+
+/** Curation of the Exhibits-mode information-architecture groups. */
+export interface NavGroupsConfig {
+  /**
+   * Order in which groups appear, each a top-level segment or a `'/'`-joined
+   * path (matched case-insensitively). Groups not listed follow in the default
+   * order.
+   */
+  order?: string[]
+  /** Override a group's display label, keyed by its segment or `'/'`-joined path
+   *  (case-insensitive). */
+  labels?: Record<string, string>
+  /** Groups collapsed by default on first load, by segment or `'/'`-joined path. */
+  collapsed?: string[]
+}
+
+/** Navigation / information-architecture configuration for the browse chrome. */
+export interface NavConfig {
+  /** Derive a surface's group from its case-file folder. Default `true`. */
+  deriveFromFolder?: boolean
+  /** Map surfaces to groups when their folders don't mirror the IA. First match
+   *  wins; consulted after an explicit `group` and folder derivation. */
+  surface?: NavSurfaceRule[]
+  /** Group ordering, labels, and default-collapsed state. */
+  groups?: NavGroupsConfig
+}
+
 // ── Config ─────────────────────────────────────────────────────────────────────
 
 export interface DisplayCaseConfig {
@@ -485,6 +550,13 @@ export interface DisplayCaseConfig {
    * only landing view.
    */
   landing?: 'primer' | 'cases'
+  /**
+   * Navigation / information-architecture configuration: how page/flow surfaces
+   * are grouped in the Exhibits browse mode (folder derivation, surface→group
+   * mapping, group order/labels/default-collapsed). Absent ⇒ groups derive from
+   * folders, ordered deterministically, none collapsed.
+   */
+  nav?: NavConfig
   /** CSS entrypoints (relative to the consumer package) injected into previews. */
   globalStyles?: string[]
   /**

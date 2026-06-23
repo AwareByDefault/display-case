@@ -11,6 +11,7 @@ const assets: DocAssets = {
 const manifest: Manifest = {
   title: 'My Showcase',
   components: [],
+  groups: [],
   primer: true,
   landing: 'primer',
 }

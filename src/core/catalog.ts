@@ -26,6 +26,10 @@ export interface CatalogComponent {
   name: string
   level: HierarchyLevel | null
   isFlow: boolean
+  /** Resolved information-architecture group path (Exhibits mode); `[]` by
+   *  default and for building-block components. Computed by the injected
+   *  resolver (see `buildCatalog`), so the pure catalog stays config-free. */
+  group: string[]
   cases: CatalogCase[]
 }
 
@@ -50,13 +54,22 @@ function caseTransitions(c: Case | FlowStep): string[] {
   return c.transitions.map(slugify)
 }
 
-/** Build the ordered catalog from discovered case modules. */
-export function buildCatalog(modules: CaseModule[]): CatalogComponent[] {
+/**
+ * Build the ordered catalog from discovered case modules. `resolveGroup` maps a
+ * module to its information-architecture group path (default: none); the server
+ * passes a config-bound resolver, while browser callers (slug resolution) omit
+ * it so the catalog stays config-free.
+ */
+export function buildCatalog(
+  modules: CaseModule[],
+  resolveGroup: (mod: CaseModule) => string[] = () => [],
+): CatalogComponent[] {
   const components = modules.map((mod) => ({
     id: slugify(mod.component),
     name: mod.component,
     level: mod.level ?? null,
     isFlow: mod.isFlow,
+    group: resolveGroup(mod),
     cases: Object.entries(mod.cases).map(([name, c]) => ({
       id: slugify(name),
       name,

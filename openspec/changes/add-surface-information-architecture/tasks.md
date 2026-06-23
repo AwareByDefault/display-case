@@ -1,24 +1,25 @@
 ## 1. Authoring API
 
-- [ ] 1.1 Add an optional `group` to `CaseMeta` and to `defineFlow`'s config in `src/index.ts`, accepting a path string (`'App/Settings'`) or segment array (`['App','Settings']`); normalize to `string[]`. Leave `area` unchanged.
-- [ ] 1.2 Add an optional `nav` block to `DisplayCaseConfig`: `groups.order`, `groups.labels`, `groups.collapsed`, and the surface→group mapping (by id/glob and/or by `area`). Export the new types; confirm existing `defineCases`/`defineFlow`/`defineConfig` call sites stay source-compatible (additive only).
+- [x] 1.1 Add an optional `group` to `CaseMeta` and to `defineFlow`'s config in `src/index.ts`, accepting a path string (`'App/Settings'`) or segment array (`['App','Settings']`); normalize to `string[]`. Leave `area` unchanged.
+- [x] 1.2 Add an optional `nav` block to `DisplayCaseConfig`: `groups.order`, `groups.labels`, `groups.collapsed`, and the surface→group mapping (by id/glob and/or by `area`). Export the new types; confirm existing `defineCases`/`defineFlow`/`defineConfig` call sites stay source-compatible (additive only).
 
 ## 2. Group resolution & model
 
-- [ ] 2.1 Implement group resolution in `src/core/` with first-match-wins order: explicit `meta.group` → folder-derived from `sourcePath` relative to the matched discovery root → config mapping → default fallback group.
-- [ ] 2.2 Implement folder derivation (on by default; disablable via `nav`): strip the filename, normalize framework route-group/private segments (e.g. `(marketing)`), title-case segments for display while matching case-insensitively for config; coalesce the same normalized path from different sources into one group.
-- [ ] 2.3 Restrict the IA group axis to page- and flow-level components; building-block levels ignore `group` and keep level grouping.
-- [ ] 2.4 Unit-test resolution precedence, folder derivation (incl. route-group syntax and nesting), and fallback.
+- [x] 2.1 Implement group resolution in `src/core/` with first-match-wins order: explicit `meta.group` → folder-derived from `sourcePath` relative to the matched discovery root → config mapping → default fallback group.
+- [x] 2.2 Implement folder derivation (on by default; disablable via `nav`): strip the filename, normalize framework route-group/private segments (e.g. `(marketing)`), title-case segments for display while matching case-insensitively for config; coalesce the same normalized path from different sources into one group.
+- [x] 2.3 Restrict the IA group axis to page- and flow-level components; building-block levels ignore `group` and keep level grouping.
+- [x] 2.4 Unit-test resolution precedence, folder derivation (incl. route-group syntax and nesting), and fallback.
 
 ## 3. Catalog & manifest
 
-- [ ] 3.1 Add `group: string[]` to `CatalogComponent`/`ManifestComponent` (the resolved path; `[]` for kit and fallback).
-- [ ] 3.2 Build the overall group index (ordered, nested tree with display labels and default-collapsed flags) into the `Manifest`, honoring `nav.groups.order`/`labels`/`collapsed` with a deterministic default order for unlisted groups.
-- [ ] 3.3 Confirm `--print-manifest` and `/manifest.json` expose per-component group paths and the group index without rendering the browsing surface; addresses unchanged.
+- [x] 3.1 Add `group: string[]` to `CatalogComponent`/`ManifestComponent` (the resolved path; `[]` for kit and fallback).
+- [x] 3.2 Build the overall group index (ordered, nested tree with display labels and default-collapsed flags) into the `Manifest`, honoring `nav.groups.order`/`labels`/`collapsed` with a deterministic default order for unlisted groups.
+- [x] 3.3 Confirm `--print-manifest` and `/manifest.json` expose per-component group paths and the group index without rendering the browsing surface; addresses unchanged.
 
 ## 4. Browse modes (chrome)
 
-- [ ] 4.1 Extend the mode model in `src/ui/shell-core.ts` from `Mode = 'primer' | 'library'` to `'primer' | 'components' | 'exhibits'`; resolve the offered modes server-side from catalog contents so an empty mode is never shown (no primer → `Components · Exhibits`; primer but no exhibits → `Primer · Components`; kit-only → Components, no switch).
+- [ ] 4.1 Extend the mode model in `src/ui/shell-core.ts` from `Mode = 'primer' | 'library'` to `'primer' | 'components' | 'exhibits'`; resolve the *present* modes server-side from catalog contents (primer configured; ≥1 building-block component; ≥1 page/flow) so an empty mode is never offered — including omitting Components for a surfaces-only catalog and Exhibits for a kit-only one. Show a switch only when ≥2 modes are present.
+- [ ] 4.7 Generalize the landing config in `src/index.ts` from `'primer' | 'cases'` to `'primer' | 'components' | 'exhibits'`; carry the present-modes set and the resolved landing mode on the `Manifest` (replacing `landing: 'primer' | 'library'` and the boolean `primer` gate), honoring the configured landing only when present and otherwise falling back in order primer → components → exhibits. Update `buildManifest` and all `Manifest` consumers.
 - [ ] 4.2 Extend the mode switch (`SegmentedToggle`) to render the available modes (Primer · Components · Exhibits) with labels; update routing so the old landing/`library` route maps to the right mode and `/c/...` + `/render/...` addresses stay stable (alias/redirect as needed).
 - [ ] 4.3 Components mode: keep the level grouping (`groupByLevel`) exactly as today.
 - [ ] 4.4 Exhibits mode: render the nested, collapsible IA groups for surfaces (reuse the disclosure/`expanded` machinery); keep leaf labels short (rely on existing ellipsis truncation); show the active surface's group path as a breadcrumb in the stage header.

@@ -10,6 +10,7 @@ const manifest: Manifest = {
       name: 'Button',
       level: 'atom',
       isFlow: false,
+      group: [],
       caseFile: 'src/Button.case.tsx',
       placardDoc: null,
       cases: [
@@ -24,6 +25,7 @@ const manifest: Manifest = {
       ],
     },
   ],
+  groups: [],
   primer: false,
   landing: 'library',
 }

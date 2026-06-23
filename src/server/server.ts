@@ -23,6 +23,7 @@ import {
   graphRecorder,
   graphWatchDirs,
 } from '../core/graph-recorder'
+import { buildGroupTree, makeGroupResolver } from '../core/groups'
 import type { Manifest } from '../core/manifest'
 import { mdxPlugin } from '../core/mdx-plugin'
 import { pinReact } from '../core/pin-react'
@@ -138,7 +139,11 @@ function buildManifest(
     modules.map((m) => [m.module.component, m.file]),
   )
   const placardById = new Map<string, string>()
-  const catalog = buildCatalog(modules.map((m) => m.module))
+  const resolveGroup = makeGroupResolver(config)
+  const catalog = buildCatalog(
+    modules.map((m) => m.module),
+    resolveGroup,
+  )
 
   const components = catalog.map((c) => {
     const file = fileByComponent.get(c.name) as string
@@ -150,6 +155,7 @@ function buildManifest(
       name: c.name,
       level: c.level,
       isFlow: c.isFlow,
+      group: c.group,
       caseFile: relPath(file),
       placardDoc: hasDoc ? relPath(placardAbs) : null,
       cases: c.cases.map((cs) => ({
@@ -168,8 +174,16 @@ function buildManifest(
   // Primer there's only the library to land on.
   const landing = hasPrimer && config.landing !== 'cases' ? 'primer' : 'library'
 
+  const groups = buildGroupTree(catalog, config)
+
   return {
-    manifest: { title: config.title, components, primer: hasPrimer, landing },
+    manifest: {
+      title: config.title,
+      components,
+      groups,
+      primer: hasPrimer,
+      landing,
+    },
     placardById,
   }
 }

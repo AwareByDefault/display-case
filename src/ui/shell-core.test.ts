@@ -32,6 +32,7 @@ function manifest(over: Partial<Manifest>): Manifest {
   return {
     title: 'T',
     components: [],
+    groups: [],
     primer: true,
     landing: 'primer',
     ...over,
@@ -71,6 +72,7 @@ function comp(over: Partial<ManifestComponent>): ManifestComponent {
     name: 'Button',
     level: 'atom',
     isFlow: false,
+    group: [],
     caseFile: 'src/Button.case.tsx',
     placardDoc: null,
     cases: [],

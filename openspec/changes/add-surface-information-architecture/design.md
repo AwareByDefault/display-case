@@ -146,12 +146,22 @@ segment changes nothing about its location; it does **not** move into the main
 area. (The chrome-free `/render` wireframes stack it above the rail only because
 that endpoint omits the header/aside/main grid.)
 
-*Dynamic presence.* The switch offers only the modes that have content: no primer
-→ the two-way `Components · Exhibits`; a primer but no exhibits → the two-way
-`Primer · Components`; a kit-only package (no primer, no exhibits) → no switch at
-all (Components only). `shell-core.ts` `Mode` extends from `'primer' | 'library'` to
-`'primer' | 'components' | 'exhibits'`; the `library` mode id and its routes are
-renamed/split, with `/c/...` addresses preserved.
+*Dynamic presence.* Each of the three modes is present **iff it has content**: a
+primer is configured; at least one building-block component (atom–template)
+exists; at least one page/flow exists. The switch offers exactly the present
+modes — two or more → a switch; a single present mode → no switch. So a
+surfaces-only package (pages/flows, no building-block component `*.case.tsx`)
+omits the **Components** mode entirely; a kit-only package omits **Exhibits**;
+no primer omits **Primer**. `shell-core.ts` `Mode` extends from
+`'primer' | 'library'` to `'primer' | 'components' | 'exhibits'`; the `library`
+mode id and its routes are renamed/split, with `/c/...` addresses preserved.
+
+*Landing.* The `landing` config selects which mode `/` opens, generalized from
+`'primer' | 'cases'` to **`'primer' | 'components' | 'exhibits'`**. It is honored
+only when that mode is present; otherwise it falls back to the first present mode
+in a fixed order (Primer → Components → Exhibits). The manifest carries the set
+of present modes and the resolved landing mode so the chrome renders the switch
+and initial view server-side.
 
 *Naming.* **Components** (precise — it is what they are, and matches the docs)
 and **Exhibits** (the assembled, visitor-facing screens — fits the museum/Vitrine

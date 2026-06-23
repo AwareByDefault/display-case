@@ -20,6 +20,9 @@ export interface ManifestComponent {
   name: string
   level: HierarchyLevel | null
   isFlow: boolean
+  /** Resolved information-architecture group path (Exhibits mode); `[]` for
+   *  building-block components and surfaces in the default group. */
+  group: string[]
   /** Repo-relative path to the case file. */
   caseFile: string
   /** Repo-relative path to the authored usage doc, or null. */
@@ -28,9 +31,24 @@ export interface ManifestComponent {
   cases: ManifestCase[]
 }
 
+/** One node of the Exhibits-mode information-architecture group tree. */
+export interface ManifestGroup {
+  /** Display label for this group segment (config override or the segment). */
+  label: string
+  /** Full resolved path to this group (display segments). */
+  path: string[]
+  /** Collapsed by default on first load. */
+  collapsed: boolean
+  /** Nested child groups. */
+  children: ManifestGroup[]
+}
+
 export interface Manifest {
   title: string
   components: ManifestComponent[]
+  /** The Exhibits-mode information-architecture group tree, ordered. Surfaces in
+   *  the default group contribute no node; `[]` when there are no grouped surfaces. */
+  groups: ManifestGroup[]
   /** True when a Primer (`.mdx` reading page) is configured and present. The
    *  chrome shows the Primer / Cases mode switch only then. */
   primer: boolean
