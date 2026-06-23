@@ -27,6 +27,7 @@ import {
   MODE_FADE_MS,
   type Mode,
   NAV_COLLAPSE_MAX,
+  NAV_DRAWER_MAX,
   type ParsedRoute,
   type PrimerGroup,
   type PrimerSection,
@@ -568,6 +569,9 @@ export function useShell(seed: ShellSeed): ShellViewModel | { manifest: null } {
   const select = useCallback(
     (next: Selection) => {
       setSel(next)
+      // On a phone the open nav is a full-width drawer over the stage; close it
+      // once a case is chosen so the selection is visible.
+      if (window.innerWidth <= NAV_DRAWER_MAX) setNavCollapsed(true)
       window.history.pushState(
         null,
         '',

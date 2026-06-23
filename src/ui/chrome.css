@@ -317,6 +317,25 @@
   margin-bottom: var(--dc-space-4);
 }
 
+/* Mobile: the rail never takes a column. When open it overlays the stage as a
+   full-width drawer (placed in the `main` grid cell, so it sits below the header
+   — whose ☰ still toggles it — without needing the header's height); otherwise
+   it stays hidden so the stage gets the whole screen. */
+@media (max-width: 640px) {
+  .dc-app {
+    grid-template-columns: 1fr;
+  }
+  .dc-app[data-nav="open"] .dcui-sidebar {
+    grid-area: main;
+    z-index: 50;
+    border-right: 0;
+  }
+  /* A full-width drawer has no edge to drag. */
+  .dcui-sidebar-resize {
+    display: none;
+  }
+}
+
 @media (max-width: 900px) {
   .dc-stage {
     flex-wrap: wrap;

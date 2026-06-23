@@ -167,6 +167,7 @@ function ShellHeader(props: ShellViewProps) {
         <IconButton
           glyph="☰"
           label="Toggle navigation"
+          data-testid={DcTestIds.navToggle}
           aria-expanded={!navCollapsed}
           onClick={() => setNavCollapsed((c) => !c)}
         />

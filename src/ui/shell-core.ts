@@ -75,6 +75,10 @@ export const KIT_GROUP_ORDER: (HierarchyLevel | 'unclassified')[] = [
 
 // At or below this chrome width the nav starts collapsed (tablet and down).
 export const NAV_COLLAPSE_MAX = 1024
+// At or below this width (phones) the open nav is a full-width overlay drawer
+// rather than a column, and selecting an item closes it. Mirrors the `640px`
+// breakpoint in chrome.css.
+export const NAV_DRAWER_MAX = 640
 
 export const ZOOM_MIN = 0.5
 export const ZOOM_MAX = 2

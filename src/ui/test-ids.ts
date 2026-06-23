@@ -48,6 +48,8 @@ export const DcTestIds = {
   /** A mode-switch tab (Primer · Components · Exhibits), keyed by mode. */
   modeSwitch: (mode: 'primer' | 'components' | 'exhibits'): string =>
     `dc-modeswitch-${mode}`,
+  /** The header's ☰ nav toggle (collapses the rail / opens the mobile drawer). */
+  navToggle: 'dc-nav-toggle',
   /** The sidebar filter input. */
   navFilter: 'dc-nav-filter',
   /** The sidebar resize handle (drag/keyboard to widen the rail). */
