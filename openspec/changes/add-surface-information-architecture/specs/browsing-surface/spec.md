@@ -104,3 +104,49 @@ The browsing surface SHALL provide a text filter that narrows the active browse 
 - GIVEN a browse mode with an active filter
 - WHEN a viewer opens a case's stable address directly
 - THEN that case renders regardless of the filter state
+
+### Requirement: Adjustable, remembered navigation width
+
+The browsing surface SHALL let a viewer adjust the width of the navigation rail — by dragging its edge or via the keyboard — within a minimum and a maximum, so it cannot shrink below a usable size or grow large enough to crowd the preview and documentation. The chosen width SHALL be remembered across sessions. Width adjustment SHALL be a progressive enhancement that does not change the initial server-rendered listing or case addressing.
+
+#### Scenario: Widening the rail
+
+- GIVEN the browsing surface with the navigation rail shown
+- WHEN a viewer drags the rail's edge outward
+- THEN the rail widens, up to the maximum
+
+#### Scenario: Width is clamped
+
+- GIVEN a viewer adjusting the rail width
+- WHEN they attempt to go below the minimum or beyond the maximum
+- THEN the width stops at that bound
+
+#### Scenario: Width persists across sessions
+
+- GIVEN a viewer has adjusted the rail width
+- WHEN they reopen the showcase later
+- THEN the rail is restored to the remembered width
+
+### Requirement: Compact-viewport navigation drawer
+
+On a compact (narrow) viewport, Display Case SHALL keep the navigation rail hidden by default so the preview gets the full width, and SHALL present the rail as a full-width overlay drawer over the content when the viewer opens it. Selecting an item from the drawer SHALL close it.
+
+#### Scenario: Hidden by default on a compact viewport
+
+- GIVEN a compact viewport
+- WHEN the browsing surface opens
+- THEN the navigation rail is hidden
+- AND the preview spans the full width
+
+#### Scenario: Opening the drawer
+
+- GIVEN a compact viewport with the rail hidden
+- WHEN the viewer opens the navigation
+- THEN the rail overlays the content as a full-width drawer
+
+#### Scenario: Selecting closes the drawer
+
+- GIVEN the navigation drawer open on a compact viewport
+- WHEN the viewer selects a component or case
+- THEN the drawer closes
+- AND the selected case is shown

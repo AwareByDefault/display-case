@@ -103,3 +103,26 @@ Display Case SHALL present the full information-architecture group path of the a
 - GIVEN an active surface in the default group
 - WHEN it is rendered in the Exhibits mode
 - THEN presenting no group path is acceptable
+
+### Requirement: Distinguishing flows from pages
+
+Within the Exhibits mode, Display Case SHALL visually distinguish a flow from a page so the two are tellable apart at a glance. A flow SHALL carry a distinguishing marker and its steps SHALL be presented as a numbered sequence; a page SHALL render without the marker. The marker's presentation SHALL be configurable for the showcase.
+
+#### Scenario: A flow is marked, a page is not
+
+- GIVEN the Exhibits mode listing a flow alongside pages
+- WHEN a viewer reviews the listing
+- THEN the flow carries its distinguishing marker
+- AND the page renders without it
+
+#### Scenario: Flow steps are numbered
+
+- GIVEN a flow whose steps are shown in the Exhibits mode
+- WHEN its steps are listed
+- THEN the steps appear as a numbered sequence
+
+#### Scenario: Configurable marker presentation
+
+- GIVEN a showcase that configures the flow marker presentation
+- WHEN the Exhibits mode is shown
+- THEN flows use the configured presentation

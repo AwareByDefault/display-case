@@ -205,6 +205,39 @@ orientation aid that keeps the path visible when the nav is collapsed or filtere
 It occupies only the controls row the stage header already has; it does not push
 navigation into the main area.
 
+### 9. Flow-vs-page marker (refined during implementation)
+
+In the Exhibits listing a flow must be tellable from a page. A flow gets a
+**high-visibility `flow` tag** by default — `nav.flowMarker: 'tag' | 'glyph'`
+switches to a subtler leading glyph — and its step rows are **numbered**,
+surfacing the ordered sequence that separates flow steps from a page's
+independent case variants; pages render plain. The marker is a presentational
+slot on the nav row (icon / index / tag), so the accessible name stays the plain
+component name. The resolved marker style rides the manifest (`flowMarker`) so
+the chrome renders it server-side. `tag` is the default because the glyph alone
+read too faint against the calm rail.
+
+### 10. Resizable, remembered rail (refined during implementation)
+
+The rail is width-adjustable to fit deeper indentation and longer surface names:
+drag its right edge or arrow-key the handle, clamped to **[15rem, 30rem]** — it
+can't shrink below the usable default or grow enough to crowd the stage/docs (it
+can still fully collapse via the existing toggle). The width is **remembered
+across sessions** (browser storage), seeded server-side to the default so the
+first client render matches (no hydration shift) and restored after mount. The
+handle is a **Sidebar component capability** (markup/affordance/CSS), so the
+chrome and the Sidebar's own exhibit both drive it; the width + persistence stay
+in the chrome. Mirrors the existing docs-panel resizer.
+
+### 11. Compact-viewport drawer (refined during implementation)
+
+On a phone-width viewport the rail no longer takes a column that squeezes the
+stage. It stays hidden by default; opened, it overlays the stage as a
+**full-width drawer placed in the main grid cell** — which sits below the header
+automatically, so no header-height measurement is needed and the header's toggle
+still closes it. Selecting an item closes the drawer; the resize handle is hidden
+(nothing to drag against).
+
 ## Alternatives Considered
 
 ### Two-region single rail (kept as a fallback)

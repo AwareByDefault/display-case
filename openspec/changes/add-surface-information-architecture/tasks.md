@@ -45,3 +45,9 @@
 - [x] 7.1 Document the Components/Exhibits browse modes, the IA `group` axis, resolution order, folder derivation, and the `group`-vs-`area` distinction in `docs/configuration.md`, `docs/writing-cases.md`, `docs/hierarchy.md`, and `display-case.prompt.md`.
 - [x] 7.2 Post-change review per CLAUDE.md: update `contributing/coding-best-practices.md`, `contributing/NOTES.md`, and `README.md` where the modes/IA axis introduce something a future contributor must know.
 - [x] 7.3 Add a changeset (`bun run changeset`) declaring the release impact (minor — additive API + behavior).
+
+## 8. Sidebar UX refinements (added during implementation)
+
+- [x] 8.1 Distinguish flows from pages in Exhibits: a `flow` tag (default) or leading glyph via `nav.flowMarker`, plus numbered flow-step rows; pages plain. Carry `flowMarker` on the manifest; render via decorative `icon`/`index`/`tag` slots on `NavItem` (accessible name stays the component name). e2e-covered.
+- [x] 8.2 Make the rail width-adjustable as a `Sidebar` capability (a `resize` handle prop; pointer + keyboard), clamped to [15rem, 30rem], with the width persisted to browser storage and restored after hydration. The chrome owns the width/persistence; a `Sidebar` `Resizable` case dogfoods it. e2e-covered.
+- [x] 8.3 On compact (≤640px) viewports, hide the rail by default and overlay it as a full-width drawer (in the `main` grid cell) when open; close it on select; hide the resize handle. e2e-covered.

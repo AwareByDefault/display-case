@@ -45,6 +45,15 @@ composition axis and the app's IA axis into one list is the root problem.
 - Keep the new `group` (a navigation/IA concern) **distinct from the existing
   `area` tag** (a decorator/chrome concern); they may coincide but are not the
   same field.
+- **Distinguish flows from pages** in the Exhibits listing: a flow carries a
+  high-visibility `flow` tag (default) or a leading glyph (`nav.flowMarker`) and
+  its steps are numbered; pages render plain.
+- **Make the nav rail width adjustable and remembered** — drag its right edge (or
+  use the keyboard) between a minimum and a maximum, with the chosen width kept
+  across sessions, to fit deeper indentation and longer surface names.
+- **Collapse the rail to a drawer on compact viewports** — on a narrow (phone)
+  screen the open rail overlays the stage as a full-width drawer and is otherwise
+  hidden, so it doesn't crowd the preview; choosing an item closes it.
 
 A considered alternative — stacking both axes as two regions in a single rail
 rather than two modes — is documented in `design.md` and kept as a fallback. No
@@ -63,7 +72,8 @@ presents pages and flows as a single default group, matching today's listing.
 - `browsing-surface`: the catalog is presented as two browse modes — a Components
   mode (kit grouped by level) and an Exhibits mode (pages/flows grouped by IA) —
   and gains a text filter that narrows either mode and reaches matches across
-  modes.
+  modes; the rail is width-adjustable (remembered across sessions) and collapses
+  to a full-width drawer on compact viewports.
 - `primer`: the primer switch becomes one of a three-way mode switch alongside
   the Components and Exhibits browse modes, offering only the modes that have
   content.
@@ -71,6 +81,9 @@ presents pages and flows as a single default group, matching today's listing.
   composition but that pages and flows are organized for browsing by their IA
   group (the Exhibits mode), while the building-block levels stay grouped by
   level (the Components mode).
+- `information-architecture` (also): flows are visually distinguished from pages
+  in the Exhibits listing (marker + numbered steps), with a configurable marker
+  style.
 - `discovery-and-manifest`: the catalog additionally exposes each component's
   resolved IA group path and the overall group structure.
 
@@ -78,8 +91,8 @@ presents pages and flows as a single default group, matching today's listing.
 
 - **Authoring API** (`src/index.ts`): `CaseMeta` and `defineFlow` gain an optional
   `group` (string path or segments); `DisplayCaseConfig` gains an optional nav/IA
-  block (group order, label overrides, default-collapsed, and the page/flow→group
-  derivation rules). `area` is unchanged.
+  block (group order, label overrides, default-collapsed, the page/flow→group
+  derivation rules, and `flowMarker`). `area` is unchanged.
 - **Model & discovery** (`src/core/`): catalog/manifest resolve and carry each
   component's group path and build the overall group index; group resolution
   reads `sourcePath` relative to the matched discovery root.
