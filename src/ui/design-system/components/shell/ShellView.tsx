@@ -351,11 +351,18 @@ function NavContents(props: ShellViewProps) {
       : 0
     let parentAlert: number | 'dot' | undefined
     if (total > 0) parentAlert = isExpanded ? 'dot' : total
+    // Distinguish a flow from a page: a leading glyph (default) or a trailing
+    // `flow` tag, plus numbered step rows. Pages render plain.
+    const flowMarker = props.manifest.flowMarker ?? 'glyph'
+    const flowIcon = c.isFlow && flowMarker === 'glyph' ? FLOW_GLYPH : undefined
+    const flowTag = c.isFlow && flowMarker === 'tag' ? 'flow' : undefined
     return (
       <div key={c.id} className="dc-nav-component">
         <NavItem
           kind="component"
           label={c.name}
+          icon={flowIcon}
+          tag={flowTag}
           count={single ? undefined : c.cases.length}
           alert={parentAlert}
           current={sel?.componentId === c.id}
@@ -367,11 +374,12 @@ function NavContents(props: ShellViewProps) {
           onSelect={() => selectComponent(c)}
         />
         {isExpanded &&
-          c.cases.map((cs) => (
+          c.cases.map((cs, i) => (
             <NavItem
               key={cs.id}
               kind="case"
               label={cs.name}
+              index={c.isFlow ? i + 1 : undefined}
               alert={variants?.[cs.id]}
               current={sel?.componentId === c.id && sel?.caseId === cs.id}
               testId={DcTestIds.navCase(c.id, cs.id)}
@@ -739,6 +747,9 @@ const MODE_LABEL: Record<Mode, string> = {
   components: 'Components',
   exhibits: 'Exhibits',
 }
+
+// Leading glyph marking a flow in the Exhibits sidebar (the default flow marker).
+const FLOW_GLYPH = '⤳'
 
 // Accessible name for the nav landmark, per mode.
 const SIDEBAR_LABEL: Record<Mode, string> = {

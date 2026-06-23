@@ -90,4 +90,33 @@ test.describe('Components / Exhibits modes', () => {
     await expect(crumb).toBeVisible()
     await expect(crumb).toContainText(surface.group[surface.group.length - 1])
   })
+
+  test('flows carry a marker that pages do not', async ({ page, request }) => {
+    const m = await fetchManifest(request)
+    const flow = m.components.find((c) => c.isFlow)
+    const pageSurface = m.components.find(
+      (c) => c.level === 'page' && !c.isFlow,
+    )
+    test.skip(!flow || !pageSurface, 'need both a flow and a page surface')
+    if (!flow || !pageSurface) return
+
+    await page.goto(`/e/${flow.id}/${flow.cases[0].id}`)
+    // The default marker is a leading glyph on the flow row; a page row has none.
+    await expect(
+      page.locator(
+        `[data-testid="${DcTestIds.navComponent(flow.id)}"] .dcui-nav-icon`,
+      ),
+    ).toHaveCount(1)
+    await expect(
+      page.locator(
+        `[data-testid="${DcTestIds.navComponent(pageSurface.id)}"] .dcui-nav-icon`,
+      ),
+    ).toHaveCount(0)
+    // The active flow's step rows are numbered.
+    await expect(
+      page.locator(
+        `[data-testid="${DcTestIds.navCase(flow.id, flow.cases[0].id)}"] .dcui-nav-index`,
+      ),
+    ).toHaveText('1')
+  })
 })

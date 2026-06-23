@@ -147,6 +147,11 @@ nav: {
     labels: { app: 'Signed-in app' },               // rename a derived segment
     collapsed: ['Admin'],                           // collapsed by default
   },
+  // How a flow is distinguished from a page in the Exhibits sidebar:
+  // 'glyph' (default) prefixes the flow row with a small flow glyph;
+  // 'tag' appends a `flow` pill after the name. Either way a flow's step
+  // rows are numbered and pages render plain.
+  flowMarker: 'glyph',
 }
 ```
 

@@ -74,6 +74,28 @@
 .dcui-nav-name:hover {
   background: var(--dc-hover);
 }
+/* Decorative leading flow glyph (component rows) / step index (flow case rows):
+   mono, dimmed, non-shrinking so the label keeps the room to truncate. */
+.dcui-nav-icon,
+.dcui-nav-index {
+  flex: 0 0 auto;
+  font-family: var(--dc-font-mono);
+  font-size: var(--dc-text-xs);
+  line-height: 1;
+  color: var(--dc-fg-subtle);
+}
+/* A small trailing kind tag (e.g. "flow"), rendered as a hairline pill. */
+.dcui-nav-tag {
+  flex: 0 0 auto;
+  font-family: var(--dc-font-mono);
+  font-size: var(--dc-text-2xs);
+  letter-spacing: var(--dc-tracking-label);
+  text-transform: uppercase;
+  color: var(--dc-fg-subtle);
+  border: var(--dc-border-line);
+  border-radius: var(--dc-radius-sm);
+  padding: 0 var(--dc-space-1);
+}
 .dcui-nav-count {
   font-family: var(--dc-font-mono);
   font-size: var(--dc-text-xs);

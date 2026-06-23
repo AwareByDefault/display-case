@@ -199,7 +199,14 @@ function buildManifest(
   const groups = buildGroupTree(catalog, config)
 
   return {
-    manifest: { title: config.title, components, groups, modes, landing },
+    manifest: {
+      title: config.title,
+      components,
+      groups,
+      modes,
+      landing,
+      flowMarker: config.nav?.flowMarker ?? 'glyph',
+    },
     placardById,
   }
 }
