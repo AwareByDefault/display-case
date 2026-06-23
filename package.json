@@ -97,8 +97,6 @@
   "devDependencies": {
     "@biomejs/biome": "^2.5.0",
     "@changesets/cli": "^2.27.11",
-    "@commitlint/cli": "^19.6.0",
-    "@commitlint/config-conventional": "^19.6.0",
     "@emotion/cache": "^11.14.0",
     "@emotion/react": "^11.14.0",
     "@emotion/server": "^11.11.0",

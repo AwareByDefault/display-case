@@ -30,8 +30,7 @@ jobs:
     name: Release
     runs-on: ubuntu-latest
     # The release commit is pushed with explicit git config below; disable the
-    # husky hooks (commitlint would reject the generated message, pre-commit
-    # would re-run the whole suite).
+    # husky hooks (the pre-commit hook would otherwise re-run the whole suite).
     env:
       HUSKY: "0"
     steps:
