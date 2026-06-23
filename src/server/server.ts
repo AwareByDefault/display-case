@@ -18,6 +18,11 @@ import {
   loadModules,
   resolveConfig,
 } from '../core/discovery'
+import {
+  findWatchRoot,
+  graphRecorder,
+  graphWatchDirs,
+} from '../core/graph-recorder'
 import type { Manifest } from '../core/manifest'
 import { mdxPlugin } from '../core/mdx-plugin'
 import { pinReact } from '../core/pin-react'
@@ -100,6 +105,10 @@ interface BuiltState {
   renderCase: CaseRenderer
   /** Pre-render the primer to markup, or null when no primer is configured. */
   renderPrimer: (() => PrimerHtmlResult) | null
+  /** Absolute paths of every on-disk file the bundles read this build — the
+   *  actual module graph, transitive workspace-sibling source included. The dev
+   *  watcher follows this so editing a source-resolved dependency rebuilds. */
+  inputs: Set<string>
 }
 
 // Monotonic suffix for the SSR bundle's filename. Bun caches `import()` by
@@ -209,6 +218,11 @@ async function rebuild(
   configPath: string,
 ): Promise<BuiltState> {
   const files = await discoverCaseFiles(pkgDir, config)
+  // Collect the real module graph across every bundle pass (render, SSR, and the
+  // primer) so the dev watcher can follow source-resolved workspace deps. The
+  // recorder is registered first in each plugin list so MDX-handled paths land
+  // here too. See graphRecorder.
+  const inputs = new Set<string>()
 
   const renderEntry = await codegenRenderEntry(pkgDir, files, configPath)
   const outdir = join(cacheDir(pkgDir), 'dist')
@@ -229,7 +243,7 @@ async function rebuild(
     // to JS on load; it's a no-op for builds without a primer entry. pinReact
     // collapses Display Case's render runtime and the consumer's components onto
     // a single React copy — see pinReact for the dual-React bug it prevents.
-    plugins: [mdxPlugin(), pinReact(pkgDir)],
+    plugins: [graphRecorder(inputs), mdxPlugin(), pinReact(pkgDir)],
     // Inline the consumer's public env (BUN_PUBLIC_*) so a `process.env.*` read
     // in bundled code (e.g. the API base URL) doesn't survive as a literal that
     // throws `process is not defined` in the browser. See publicEnvDefines.
@@ -262,7 +276,7 @@ async function rebuild(
     entrypoints: [ssrEntry],
     outdir: ssrOutDir,
     target: 'bun',
-    plugins: [mdxPlugin(), pinReact(pkgDir)],
+    plugins: [graphRecorder(inputs), mdxPlugin(), pinReact(pkgDir)],
     define: await publicEnvDefines(pkgDir),
     naming: {
       entry: `${ssrName}.[ext]`,
@@ -295,7 +309,7 @@ async function rebuild(
       entrypoints: [ssrPrimerEntry],
       outdir: ssrOutDir,
       target: 'bun',
-      plugins: [mdxPlugin(), pinReact(pkgDir)],
+      plugins: [graphRecorder(inputs), mdxPlugin(), pinReact(pkgDir)],
       define: await publicEnvDefines(pkgDir),
       naming: {
         entry: `${ssrPrimerName}.[ext]`,
@@ -324,7 +338,7 @@ async function rebuild(
   console.log(
     `  ${manifest.components.length} component(s), ${manifest.components.reduce((n, c) => n + c.cases.length, 0)} case(s)`,
   )
-  return { manifest, placardById, globalCss, renderCase, renderPrimer }
+  return { manifest, placardById, globalCss, renderCase, renderPrimer, inputs }
 }
 
 /**
@@ -949,6 +963,9 @@ export async function startDisplayCase(
         state = await rebuild(pkgDir, config, configPath)
         browserOnly.clear()
         scanner?.invalidateAll()
+        // The module graph may have shifted (a new sibling import, or one
+        // dropped) — reconcile the dependency watchers against it.
+        await syncGraphWatchers()
         if (reload) {
           // Full-reload the tab when the chrome bundle changed; otherwise just
           // refresh the rendered content (iframe + manifest), keeping nav state.
@@ -977,9 +994,10 @@ export async function startDisplayCase(
   const watchHere = dev && resolve(srcDir) !== resolve(HERE)
   // Load the native watcher only on the paths that actually watch — `check` and
   // the per-rebuild `--print-manifest` subprocess import this module too, and
-  // shouldn't pay to dlopen the binding.
+  // shouldn't pay to dlopen the binding. Interactive servers always watch (the
+  // target src plus the bundle's dependency graph; see syncGraphWatchers).
   const { subscribe } =
-    watchSrc || watchHere
+    watchSrc || watchHere || interactive
       ? await import('@parcel/watcher')
       : { subscribe: undefined }
   const watched = /\.(tsx?|css|mdx)$|\.placard\.md$/
@@ -1009,6 +1027,48 @@ export async function startDisplayCase(
       { ignore },
     )
   }
+
+  // Active dependency-graph subscriptions, keyed by watched dir, reconciled
+  // against the current build's graph after each rebuild. The watch set is
+  // derived from the bundle's real module graph (see graphWatchDirs) — this is
+  // what picks up a workspace sibling resolved to source, so editing it rebuilds
+  // instead of silently serving stale code.
+  const graphWatchers = new Map<string, { unsubscribe(): Promise<void> }>()
+  // The target's own workspace root — bounds the dependency watch. `REPO_ROOT`
+  // tracks where Display Case itself lives (used for manifest-relative paths),
+  // which is a different repo entirely when the tool is installed as a dep.
+  const watchRoot = findWatchRoot(pkgDir)
+  const syncGraphWatchers = async (): Promise<void> => {
+    if (!subscribe || !interactive) return
+    const want = graphWatchDirs(state.inputs, {
+      srcDir,
+      hereDir: HERE,
+      repoRoot: watchRoot,
+    })
+    for (const dir of want) {
+      if (graphWatchers.has(dir)) continue
+      const sub = await subscribe(
+        dir,
+        (err, events) => {
+          if (err) return
+          if (events.some((e) => watched.test(e.path)))
+            scheduleRebuild('dependency change detected')
+        },
+        { ignore },
+      )
+      graphWatchers.set(dir, sub)
+    }
+    for (const [dir, sub] of graphWatchers) {
+      if (!want.has(dir)) {
+        await sub.unsubscribe()
+        graphWatchers.delete(dir)
+      }
+    }
+  }
+
+  // Initialize the dependency watchers from the first build's graph, then keep
+  // them reconciled after every rebuild (the call in scheduleRebuild).
+  await syncGraphWatchers()
 
   return server
 }
