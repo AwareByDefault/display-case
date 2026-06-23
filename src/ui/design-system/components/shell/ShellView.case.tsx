@@ -20,7 +20,7 @@ export default defineFlow('Primer to Cases', {
             mode: 'primer',
             shownMode: 'primer',
             setMode: (m) => {
-              if (m === 'library') goto('Cases view')
+              if (m !== 'primer') goto('Cases view')
             },
           })}
           renderFrame={null}
@@ -33,8 +33,8 @@ export default defineFlow('Primer to Cases', {
       render: ({ goto }) => (
         <ShellView
           {...makeModel({
-            mode: 'library',
-            shownMode: 'library',
+            mode: 'components',
+            shownMode: 'components',
             boxW: 240,
             boxH: 120,
             setMode: (m) => {

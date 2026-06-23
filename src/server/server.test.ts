@@ -49,9 +49,9 @@ describe('getManifest', () => {
     const m = await getManifest(dir)
 
     expect(m.title).toBe('Fixtures')
-    expect(m.primer).toBe(false)
-    // No primer → the library is the only landing view.
-    expect(m.landing).toBe('library')
+    // Button (atom) → Components; Sign In (flow) → Exhibits; no primer.
+    expect(m.modes).toEqual(['components', 'exhibits'])
+    expect(m.landing).toBe('components')
     // atom sorts before flow
     expect(m.components.map((c) => c.name)).toEqual(['Button', 'Sign In'])
 
@@ -75,38 +75,40 @@ describe('getManifest', () => {
     expect(flow.isFlow).toBe(true)
     expect(flow.placardDoc).toBeNull()
     expect(flow.cases[0].transitions).toEqual(['check-email'])
+    // A flow is a surface → its cases route under the /e/ (Exhibits) prefix.
+    expect(flow.cases[0].browseUrl.startsWith('/e/sign-in/')).toBe(true)
   })
 
-  test('flags primer true when a configured .mdx exists', async () => {
+  test('offers the primer mode when a configured .mdx exists', async () => {
     const dir = await setup({
       'display-case.config.ts': `export default { title: 'P', roots: ['**/*.case.tsx'], primer: 'doc.mdx' }\n`,
       'doc.mdx': '# Hello\n',
       'Button.case.tsx': `export default { component: 'Button', isFlow: false, cases: { Default: () => null } }\n`,
     })
     const m = await getManifest(dir)
-    expect(m.primer).toBe(true)
-    // Primer present and not overridden → land on it.
+    expect(m.modes).toContain('primer')
+    // Primer present and no landing override → land on it.
     expect(m.landing).toBe('primer')
   })
 
-  test('lands on the library when landing is cases, even with a primer', async () => {
+  test('lands on the configured mode when present, even with a primer', async () => {
     const dir = await setup({
-      'display-case.config.ts': `export default { title: 'P', roots: ['**/*.case.tsx'], primer: 'doc.mdx', landing: 'cases' }\n`,
+      'display-case.config.ts': `export default { title: 'P', roots: ['**/*.case.tsx'], primer: 'doc.mdx', landing: 'components' }\n`,
       'doc.mdx': '# Hello\n',
       'Button.case.tsx': `export default { component: 'Button', isFlow: false, cases: { Default: () => null } }\n`,
     })
     const m = await getManifest(dir)
-    expect(m.primer).toBe(true)
-    expect(m.landing).toBe('library')
+    expect(m.modes).toContain('primer')
+    expect(m.landing).toBe('components')
   })
 
-  test('leaves primer false when the configured .mdx is missing', async () => {
+  test('omits the primer mode when the configured .mdx is missing', async () => {
     const dir = await setup({
       'display-case.config.ts': `export default { title: 'P', roots: ['**/*.case.tsx'], primer: 'missing.mdx' }\n`,
       'Button.case.tsx': `export default { component: 'Button', isFlow: false, cases: { Default: () => null } }\n`,
     })
     const m = await getManifest(dir)
-    expect(m.primer).toBe(false)
+    expect(m.modes).not.toContain('primer')
   })
 })
 

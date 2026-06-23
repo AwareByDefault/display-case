@@ -1,7 +1,10 @@
 import { Glob } from 'bun'
-import type { CaseModule, DisplayCaseConfig, HierarchyLevel } from '../index'
-import { normalizeGroup } from '../index'
+import type { CaseModule, DisplayCaseConfig } from '../index'
+import { isSurfaceLevel, normalizeGroup } from '../index'
 import type { ManifestGroup } from './manifest'
+
+// Re-export so callers (and tests) can import the surface predicate from here.
+export { isSurfaceLevel }
 
 /**
  * Information-architecture group resolution for the Exhibits browse mode.
@@ -13,15 +16,6 @@ import type { ManifestGroup } from './manifest'
  * group. This module is server-side (it reads config + paths and uses `Glob`);
  * the pure browser catalog stays config-free and receives the resolver.
  */
-
-const SURFACE_LEVELS = new Set<HierarchyLevel>(['page', 'flow'])
-
-/** Whether a level is a product surface (page/flow), i.e. group-organized. */
-export function isSurfaceLevel(
-  level: HierarchyLevel | null | undefined,
-): boolean {
-  return level != null && SURFACE_LEVELS.has(level)
-}
 
 /** The static (wildcard-free) directory prefix of a roots glob, with its trailing slash. */
 function globStaticPrefix(glob: string): string {

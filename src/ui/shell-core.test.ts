@@ -2,8 +2,10 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import type { Manifest, ManifestComponent } from '../core/manifest'
 import {
   buildAddressUrl,
+  buildExhibitView,
   buildRenderSrc,
   buildUrl,
+  componentMatchesFilter,
   gridPad,
   groupByLevel,
   groupPrimerSections,
@@ -33,34 +35,36 @@ function manifest(over: Partial<Manifest>): Manifest {
     title: 'T',
     components: [],
     groups: [],
-    primer: true,
+    modes: ['primer', 'components', 'exhibits'],
     landing: 'primer',
     ...over,
   }
 }
 
 describe('primerForLocation', () => {
-  test('the /primer route is the Primer whenever one is configured', () => {
+  test('the /primer route is the Primer whenever one is present', () => {
     atPath('/primer')
-    // Even when the landing default was overridden to the library, an explicit
-    // /primer link still resolves to the Primer.
-    expect(primerForLocation(manifest({ landing: 'library' }))).toBe(true)
+    // Even when the landing is a catalog mode, an explicit /primer link still
+    // resolves to the Primer.
+    expect(primerForLocation(manifest({ landing: 'components' }))).toBe(true)
   })
 
-  test('the /primer route is the library when no Primer is configured', () => {
+  test('the /primer route falls back when no Primer is present', () => {
     atPath('/primer')
     expect(
-      primerForLocation(manifest({ primer: false, landing: 'library' })),
+      primerForLocation(
+        manifest({ modes: ['components'], landing: 'components' }),
+      ),
     ).toBe(false)
   })
 
   test('the bare / landing honors the resolved landing', () => {
     atPath('/')
     expect(primerForLocation(manifest({ landing: 'primer' }))).toBe(true)
-    expect(primerForLocation(manifest({ landing: 'library' }))).toBe(false)
+    expect(primerForLocation(manifest({ landing: 'components' }))).toBe(false)
   })
 
-  test('a /c/... deep link is always a library address', () => {
+  test('a /c/... deep link is never the Primer', () => {
     atPath('/c/button/default')
     expect(primerForLocation(manifest({ landing: 'primer' }))).toBe(false)
   })
@@ -108,28 +112,41 @@ describe('parseRoute', () => {
 describe('resolveMode', () => {
   const route = (path: string) => parseRoute(path, '')
 
-  test('/primer resolves to the primer only when one is configured', () => {
-    expect(resolveMode(route('/primer'), manifest({ primer: true }))).toBe(
-      'primer',
+  test('/primer resolves to the primer only when one is present', () => {
+    expect(resolveMode(route('/primer'), manifest({}))).toBe('primer')
+    expect(
+      resolveMode(
+        route('/primer'),
+        manifest({ modes: ['components'], landing: 'components' }),
+      ),
+    ).toBe('components')
+  })
+
+  test('the path prefix selects the catalog mode', () => {
+    expect(resolveMode(route('/c/button/default'), manifest({}))).toBe(
+      'components',
     )
-    expect(resolveMode(route('/primer'), manifest({ primer: false }))).toBe(
-      'library',
+    expect(resolveMode(route('/e/pricing/default'), manifest({}))).toBe(
+      'exhibits',
     )
+  })
+
+  test('a prefix for an absent mode falls back to the landing', () => {
+    expect(
+      resolveMode(
+        route('/e/pricing/default'),
+        manifest({ modes: ['components'], landing: 'components' }),
+      ),
+    ).toBe('components')
   })
 
   test('the bare / landing honors the resolved landing', () => {
     expect(resolveMode(route('/'), manifest({ landing: 'primer' }))).toBe(
       'primer',
     )
-    expect(resolveMode(route('/'), manifest({ landing: 'library' }))).toBe(
-      'library',
+    expect(resolveMode(route('/'), manifest({ landing: 'exhibits' }))).toBe(
+      'exhibits',
     )
-  })
-
-  test('any deep link is a library address', () => {
-    expect(
-      resolveMode(route('/c/button/default'), manifest({ landing: 'primer' })),
-    ).toBe('library')
   })
 })
 
@@ -290,13 +307,19 @@ describe('gridPad', () => {
 })
 
 describe('groupByLevel', () => {
-  test('orders groups atoms-first and drops empty levels', () => {
+  test('orders the kit atoms-first, drops empty levels, and excludes surfaces', () => {
     const groups = groupByLevel([
+      // A surface (page) belongs to the Exhibits mode — not the kit grouping.
       comp({ id: 'page', level: 'page' }),
+      comp({ id: 'organism', level: 'organism' }),
       comp({ id: 'atom', level: 'atom' }),
       comp({ id: 'mystery', level: null }),
     ])
-    expect(groups.map((g) => g.key)).toEqual(['atom', 'page', 'unclassified'])
+    expect(groups.map((g) => g.key)).toEqual([
+      'atom',
+      'organism',
+      'unclassified',
+    ])
   })
 
   test('files a null level under the unclassified group', () => {
@@ -304,6 +327,67 @@ describe('groupByLevel', () => {
     expect(groups).toHaveLength(1)
     expect(groups[0].key).toBe('unclassified')
     expect(groups[0].components).toHaveLength(1)
+  })
+})
+
+describe('buildUrl mode prefix', () => {
+  test('a kit case routes under /c/ and a surface under /e/', () => {
+    expect(buildUrl('button', 'default', {}, false, false)).toBe(
+      '/c/button/default',
+    )
+    expect(buildUrl('pricing', 'default', {}, false, true)).toBe(
+      '/e/pricing/default',
+    )
+  })
+})
+
+describe('componentMatchesFilter', () => {
+  test('matches by name, case name, or group segment; empty filter matches all', () => {
+    const c = comp({
+      name: 'Pricing',
+      group: ['Marketing'],
+      cases: [
+        {
+          id: 'error',
+          name: 'Error',
+          browseUrl: '',
+          renderUrl: '',
+          tweaks: null,
+          transitions: [],
+        },
+      ],
+    })
+    expect(componentMatchesFilter(c, 'pric')).toBe(true)
+    expect(componentMatchesFilter(c, 'market')).toBe(true)
+    expect(componentMatchesFilter(c, 'error')).toBe(true)
+    expect(componentMatchesFilter(c, '')).toBe(true)
+    expect(componentMatchesFilter(c, 'zzz')).toBe(false)
+  })
+})
+
+describe('buildExhibitView', () => {
+  test('places surfaces under their group, lists ungrouped first, and excludes the kit', () => {
+    const m = manifest({
+      groups: [
+        {
+          label: 'Marketing',
+          path: ['Marketing'],
+          collapsed: false,
+          children: [],
+        },
+      ],
+      components: [
+        comp({ id: 'pricing', level: 'page', group: ['Marketing'] }),
+        comp({ id: 'welcome', level: 'page', group: [] }),
+        comp({ id: 'button', level: 'atom', group: [] }),
+      ],
+    })
+    const view = buildExhibitView(m)
+    // Only surfaces appear; the kit (button) is excluded.
+    expect(view.ungrouped.map((c) => c.id)).toEqual(['welcome'])
+    expect(view.tree).toHaveLength(1)
+    expect(view.tree[0].label).toBe('Marketing')
+    expect(view.tree[0].components.map((c) => c.id)).toEqual(['pricing'])
   })
 })
 

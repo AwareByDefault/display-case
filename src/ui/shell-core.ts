@@ -1,9 +1,15 @@
-import type { Manifest, ManifestComponent } from '../core/manifest'
+import type {
+  BrowseMode,
+  Manifest,
+  ManifestComponent,
+  ManifestGroup,
+} from '../core/manifest'
 import type { HierarchyLevel } from '../index'
-import { HIERARCHY_LEVELS } from '../index'
+import { HIERARCHY_LEVELS, isSurfaceLevel } from '../index'
 
 export type Theme = 'light' | 'dark'
-export type Mode = 'primer' | 'library'
+/** A top-level browse mode: the Primer, the Components kit, or the Exhibits surfaces. */
+export type Mode = BrowseMode
 
 // Two ways to size the preview, à la Chrome DevTools' device toolbar:
 //  - Responsive: a width (or "full"); height fills the panel; manual zoom applies.
@@ -53,6 +59,17 @@ export const LEVEL_LABEL: Record<HierarchyLevel | 'unclassified', string> = {
 
 export const GROUP_ORDER: (HierarchyLevel | 'unclassified')[] = [
   ...HIERARCHY_LEVELS,
+  'unclassified',
+]
+
+// The Components mode groups only the building-block kit (atom–template) and the
+// unclassified bucket; pages and flows are surfaces, organized by the Exhibits
+// mode's information-architecture tree instead.
+export const KIT_GROUP_ORDER: (HierarchyLevel | 'unclassified')[] = [
+  'atom',
+  'molecule',
+  'organism',
+  'template',
   'unclassified',
 ]
 
@@ -138,16 +155,20 @@ export function parseLocation(): ParsedRoute {
 }
 
 /**
- * Whether a route resolves to the Primer rather than the library. The canonical
- * `/primer` route does (when a Primer exists); the bare `/` landing does unless
- * the consumer opted out with `landing: 'cases'` (resolved server-side into
- * `manifest.landing`). Every `/c/...` deep link — and any other path — is a
- * library address. Pure (takes the route), so it runs on the server too.
+ * Resolve a route to its browse mode. The mode is the path prefix: `/primer` is
+ * the Primer, `/e/...` an Exhibits (surface) case, `/c/...` a Components (kit)
+ * case; the bare `/` honors `manifest.landing`. A mode that is not present falls
+ * back to the resolved landing mode. Pure (takes the route), so it runs on the
+ * server and the client identically.
  */
 export function resolveMode(route: ParsedRoute, m: Manifest): Mode {
-  if (route.path === '/primer') return m.primer ? 'primer' : 'library'
-  if (route.path === '/') return m.landing === 'primer' ? 'primer' : 'library'
-  return 'library'
+  const has = (mode: Mode) => m.modes.includes(mode)
+  const p = route.path
+  if (p === '/primer' && has('primer')) return 'primer'
+  if ((p === '/e' || p.startsWith('/e/')) && has('exhibits')) return 'exhibits'
+  if ((p === '/c' || p.startsWith('/c/')) && has('components'))
+    return 'components'
+  return m.landing
 }
 
 /** Client convenience over {@link resolveMode}. Reads `window`; client-only. */
@@ -155,7 +176,10 @@ export function primerForLocation(m: Manifest): boolean {
   return resolveMode(parseLocation(), m) === 'primer'
 }
 
-/** Pure initial selection from a parsed route + manifest (server + client). */
+/** Pure initial selection from a parsed route + manifest (server + client). With
+ *  no case in the route, pick the first component of the landing mode's kind —
+ *  the first surface for Exhibits, otherwise the first kit component — so the
+ *  stage seeds the right side of the catalog. */
 export function initialSelectionFor(
   m: Manifest,
   route: ParsedRoute,
@@ -166,7 +190,11 @@ export function initialSelectionFor(
       caseId: route.caseId,
       tweaks: route.tweaks,
     }
-  const first = m.components[0]
+  const mode = resolveMode(route, m)
+  const wantSurface = mode === 'exhibits'
+  const first =
+    m.components.find((c) => isSurfaceLevel(c.level) === wantSurface) ??
+    m.components[0]
   if (first) {
     return {
       componentId: first.id,
@@ -199,12 +227,16 @@ export function buildUrl(
   caseId: string,
   tweaks: Record<string, string>,
   docsOpen: boolean,
+  isSurface = false,
 ): string {
   const params = new URLSearchParams()
   for (const [k, v] of Object.entries(tweaks)) params.set(`t.${k}`, v)
   if (docsOpen) params.set('docs', '1')
   const qs = params.toString()
-  return `/c/${componentId}/${caseId}${qs ? `?${qs}` : ''}`
+  // The mode is the path prefix: `/e/` for an Exhibits surface, `/c/` for a
+  // Components (kit) case — so a deep link carries its mode.
+  const prefix = isSurface ? 'e' : 'c'
+  return `/${prefix}/${componentId}/${caseId}${qs ? `?${qs}` : ''}`
 }
 
 export function buildRenderSrc(
@@ -250,11 +282,74 @@ export function buildAddressUrl(
   return `${origin}${renderUrl}?${params.toString()}`
 }
 
+// Components mode: group the building-block kit by level (atom → template, then
+// unclassified). Surfaces (page/flow) are excluded — they live in the Exhibits
+// mode — and never match a kit key anyway.
 export function groupByLevel(components: ManifestComponent[]) {
-  return GROUP_ORDER.map((key) => ({
+  return KIT_GROUP_ORDER.map((key) => ({
     key,
-    components: components.filter((c) => (c.level ?? 'unclassified') === key),
+    components: components.filter(
+      (c) => !isSurfaceLevel(c.level) && (c.level ?? 'unclassified') === key,
+    ),
   })).filter((g) => g.components.length > 0)
+}
+
+// A node of the Exhibits-mode navigation tree: a group with its surfaces and
+// nested child groups. Mirrors the manifest group tree, with the surfaces that
+// resolve to each group attached.
+export interface ExhibitNode {
+  label: string
+  path: string[]
+  collapsed: boolean
+  children: ExhibitNode[]
+  components: ManifestComponent[]
+}
+
+// Build the Exhibits view: surfaces in the default group (no path) listed first,
+// then the manifest's ordered group tree with each group's surfaces attached.
+export function buildExhibitView(m: Manifest): {
+  ungrouped: ManifestComponent[]
+  tree: ExhibitNode[]
+} {
+  const surfaces = m.components.filter((c) => isSurfaceLevel(c.level))
+  const byKey = new Map<string, ManifestComponent[]>()
+  const ungrouped: ManifestComponent[] = []
+  for (const c of surfaces) {
+    if (!c.group || c.group.length === 0) {
+      ungrouped.push(c)
+      continue
+    }
+    const key = c.group.join('/').toLowerCase()
+    const arr = byKey.get(key)
+    if (arr) arr.push(c)
+    else byKey.set(key, [c])
+  }
+  const toNode = (g: ManifestGroup): ExhibitNode => ({
+    label: g.label,
+    path: g.path,
+    collapsed: g.collapsed,
+    children: g.children.map(toNode),
+    components: byKey.get(g.path.join('/').toLowerCase()) ?? [],
+  })
+  return { ungrouped, tree: m.groups.map(toNode) }
+}
+
+/** Case-insensitive substring match for the sidebar filter. */
+export function matchesFilter(text: string, filter: string): boolean {
+  const f = filter.trim().toLowerCase()
+  return f === '' || text.toLowerCase().includes(f)
+}
+
+/** Whether any of a component's identifiers (its name, any case name, or a group
+ *  segment) match the filter — so a filtered tree keeps a component reachable by
+ *  its own name, a case name, or its group. */
+export function componentMatchesFilter(
+  c: ManifestComponent,
+  filter: string,
+): boolean {
+  if (matchesFilter(c.name, filter)) return true
+  if (c.cases.some((cs) => matchesFilter(cs.name, filter))) return true
+  return c.group.some((seg) => matchesFilter(seg, filter))
 }
 
 // A `##`-heading group in the primer table of contents: the heading plus the

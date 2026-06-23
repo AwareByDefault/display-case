@@ -12,7 +12,7 @@ const manifest: Manifest = {
   title: 'My Showcase',
   components: [],
   groups: [],
-  primer: true,
+  modes: ['primer', 'components'],
   landing: 'primer',
 }
 

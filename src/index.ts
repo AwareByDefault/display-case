@@ -23,6 +23,18 @@ export const HIERARCHY_LEVELS = [
 
 export type HierarchyLevel = (typeof HIERARCHY_LEVELS)[number]
 
+/**
+ * Whether a level is a product *surface* (page or flow) — organized for browsing
+ * by its information-architecture group (the Exhibits mode) rather than by level
+ * (the Components mode). The building-block levels (atom–template) and an
+ * undeclared level are not surfaces.
+ */
+export function isSurfaceLevel(
+  level: HierarchyLevel | null | undefined,
+): boolean {
+  return level === 'page' || level === 'flow'
+}
+
 // ── Tweaks (typed controls) ───────────────────────────────────────────────────
 
 export interface TextTweak {
@@ -543,13 +555,14 @@ export interface DisplayCaseConfig {
    */
   primer?: string
   /**
-   * Which view the browse chrome lands on at the root path (`/`) when a Primer
-   * is configured: the Primer reading page (`'primer'`, the default) or the
-   * Cases library (`'cases'`). A deep link to a specific case always opens the
-   * library regardless. Ignored when no Primer is set — the library is then the
-   * only landing view.
+   * Which browse mode the chrome lands on at the root path (`/`): the Primer
+   * reading page, the Components kit, or the Exhibits surfaces. Honored only when
+   * that mode is present (has content); otherwise the first present mode is used,
+   * in order primer → components → exhibits. A deep link to a specific case always
+   * opens that case. Defaults to the primer when one is configured, else the first
+   * present mode.
    */
-  landing?: 'primer' | 'cases'
+  landing?: 'primer' | 'components' | 'exhibits'
   /**
    * Navigation / information-architecture configuration: how page/flow surfaces
    * are grouped in the Exhibits browse mode (folder derivation, surface→group

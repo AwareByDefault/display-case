@@ -1,13 +1,16 @@
 // display-case: no-placard — Display Case's own browse chrome, cased for
 // dogfooding (ShellView.case.tsx); internal plumbing, not a consumer primitive.
-import type { CSSProperties, ReactNode } from 'react'
+import { type CSSProperties, type ReactNode, useState } from 'react'
+import type { ManifestComponent } from '../../../../core/manifest'
 import type { TweakDescriptor } from '../../../../index'
 import { DocMarkdown } from '../../../markdown'
 import {
   buildUrl,
+  componentMatchesFilter,
   DEVICES,
   DOC_MAX_W,
   DOC_MIN_W,
+  type ExhibitNode,
   LEVEL_LABEL,
   type Mode,
   RESPONSIVE,
@@ -22,6 +25,7 @@ import type { SegmentedOption } from '..'
 import {
   A11yPanel,
   Button,
+  Chip,
   Eyebrow,
   FlowNav,
   IconButton,
@@ -70,15 +74,15 @@ export function ShellView(props: ShellViewProps) {
       data-nav={props.navCollapsed ? 'collapsed' : 'open'}>
       <ShellHeader {...props} />
 
-      <Sidebar
-        data-testid={DcTestIds.sidebar}
-        label={shownMode === 'primer' ? 'Primer contents' : 'Components'}>
+      <Sidebar data-testid={DcTestIds.sidebar} label={SIDEBAR_LABEL[shownMode]}>
         {/* The ModeSwitch is pinned above the scroll region (a non-scrolling row),
             so it stays put while nav items scroll and fade beneath it, and its
             highlight box keeps lerping during the crossfade. The scroll region's
             fading body tracks `shownMode` so it swaps mid-fade, in step with the
-            screen content. */}
-        {manifest.primer && <ModeSwitch mode={mode} onMode={setMode} />}
+            screen content. Shown only when two or more modes are present. */}
+        {manifest.modes.length > 1 && (
+          <ModeSwitch modes={manifest.modes} mode={mode} onMode={setMode} />
+        )}
         <NavContents {...props} />
       </Sidebar>
 
@@ -94,7 +98,7 @@ export function ShellView(props: ShellViewProps) {
         <LibraryStage {...props} />
       </main>
 
-      {manifest.primer && (
+      {manifest.modes.includes('primer') && (
         <section
           className="dc-primer-host"
           aria-label="Primer"
@@ -132,6 +136,7 @@ function ShellHeader(props: ShellViewProps) {
     component,
     docOpen,
     changeDocsOpen,
+    breadcrumb,
   } = props
   return (
     <header className="dc-header">
@@ -143,6 +148,20 @@ function ShellHeader(props: ShellViewProps) {
           onClick={() => setNavCollapsed((c) => !c)}
         />
         <Wordmark data-testid={DcTestIds.wordmark}>{manifest.title}</Wordmark>
+        {/* The active surface's information-architecture path (Exhibits mode). */}
+        {shownMode === 'exhibits' && breadcrumb.length > 0 && (
+          <nav
+            className="dc-breadcrumb"
+            aria-label="Group path"
+            data-testid={DcTestIds.breadcrumb}
+            style={modeFadeStyle}>
+            {breadcrumb.map((seg, i) => (
+              <Chip key={seg} current={i === breadcrumb.length - 1}>
+                {seg}
+              </Chip>
+            ))}
+          </nav>
+        )}
       </div>
       <div className="dc-controls">
         {/* The device toolbar, zoom, grid and docs controls act on the stage,
@@ -150,7 +169,7 @@ function ShellHeader(props: ShellViewProps) {
             toggle. Gated on `shownMode` (not `mode`) and wrapped in a fading
             group so they fade out before the swap to Primer and fade in after
             the swap to Cases — in step with the nav and screen crossfade. */}
-        {shownMode === 'library' && (
+        {shownMode !== 'primer' && (
           <div className="dc-controls-extra" style={modeFadeStyle}>
             {/* The custom listbox (not a native <select>) so a pick commits
                 instantly and the trigger styling matches the tweak controls.
@@ -271,6 +290,19 @@ function ShellHeader(props: ShellViewProps) {
   )
 }
 
+// Default-collapsed exhibit group keys, gathered from the tree's `collapsed` flags.
+function defaultClosedGroups(tree: ExhibitNode[]): Set<string> {
+  const out = new Set<string>()
+  const walk = (nodes: ExhibitNode[]) => {
+    for (const n of nodes) {
+      if (n.collapsed) out.add(n.path.join('/').toLowerCase())
+      walk(n.children)
+    }
+  }
+  walk(tree)
+  return out
+}
+
 function NavContents(props: ShellViewProps) {
   const {
     shownMode,
@@ -283,134 +315,232 @@ function NavContents(props: ShellViewProps) {
     togglePrimerGroup,
     scrollToSection,
     groups,
+    exhibitView,
+    filter,
+    setFilter,
     expanded,
     sel,
     toggleExpanded,
     selectComponent,
     select,
   } = props
+
+  // Collapse state for Exhibits groups, seeded from the manifest defaults.
+  const [closedGroups, setClosedGroups] = useState<Set<string>>(() =>
+    defaultClosedGroups(exhibitView.tree),
+  )
+  const toggleGroup = (key: string) =>
+    setClosedGroups((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  const filtering = filter.trim() !== ''
+
+  // One component row (disclosure + cases), reused by every catalog section.
+  const componentRow = (c: ManifestComponent) => {
+    // A single-case component reads as a leaf: no chevron, no count, no case row.
+    const single = c.cases.length === 1
+    const isExpanded = !single && expanded.has(c.id)
+    // Per-variant violation counts fold onto the parent (collapsed) or the case
+    // rows (expanded), exactly as before.
+    const variants = props.a11y?.byVariant[c.id]
+    const total = variants
+      ? Object.values(variants).reduce((a, b) => a + b, 0)
+      : 0
+    let parentAlert: number | 'dot' | undefined
+    if (total > 0) parentAlert = isExpanded ? 'dot' : total
+    return (
+      <div key={c.id} className="dc-nav-component">
+        <NavItem
+          kind="component"
+          label={c.name}
+          count={single ? undefined : c.cases.length}
+          alert={parentAlert}
+          current={sel?.componentId === c.id}
+          expanded={isExpanded}
+          testId={DcTestIds.navComponent(c.id)}
+          toggleTestId={single ? undefined : DcTestIds.navComponentToggle(c.id)}
+          alertTestId={DcTestIds.navAlert(c.id)}
+          onToggle={single ? undefined : () => toggleExpanded(c.id)}
+          onSelect={() => selectComponent(c)}
+        />
+        {isExpanded &&
+          c.cases.map((cs) => (
+            <NavItem
+              key={cs.id}
+              kind="case"
+              label={cs.name}
+              alert={variants?.[cs.id]}
+              current={sel?.componentId === c.id && sel?.caseId === cs.id}
+              testId={DcTestIds.navCase(c.id, cs.id)}
+              alertTestId={`${DcTestIds.navAlert(c.id)}-${cs.id}`}
+              onSelect={() =>
+                select({ componentId: c.id, caseId: cs.id, tweaks: {} })
+              }
+            />
+          ))}
+      </div>
+    )
+  }
+
+  // Components mode: the kit grouped by level, filtered. `null` when nothing matches.
+  const renderComponents = (): ReactNode => {
+    const fg = groups
+      .map((g) => ({
+        key: g.key,
+        components: g.components.filter((c) =>
+          componentMatchesFilter(c, filter),
+        ),
+      }))
+      .filter((g) => g.components.length > 0)
+    if (fg.length === 0) return null
+    return fg.map(({ key, components }) => (
+      <div key={key} className="dc-group">
+        <Eyebrow className="dc-group-label">{LEVEL_LABEL[key]}</Eyebrow>
+        {components.map(componentRow)}
+      </div>
+    ))
+  }
+
+  // Exhibits mode: nested IA groups, filtered. A group with no matching surfaces
+  // and no matching descendants is dropped; while filtering, groups force open.
+  const renderExhibitNodes = (nodes: ExhibitNode[]): ReactNode => {
+    const out: ReactNode[] = []
+    for (const n of nodes) {
+      const key = n.path.join('/').toLowerCase()
+      const comps = n.components.filter((c) =>
+        componentMatchesFilter(c, filter),
+      )
+      const childContent = renderExhibitNodes(n.children)
+      if (comps.length === 0 && childContent === null) continue
+      const closed = !filtering && closedGroups.has(key)
+      out.push(
+        <div key={key} className="dc-group">
+          <NavItem
+            kind="component"
+            label={n.label}
+            expanded={!closed}
+            testId={DcTestIds.navGroup(key)}
+            toggleTestId={`${DcTestIds.navGroup(key)}-toggle`}
+            onToggle={() => toggleGroup(key)}
+            onSelect={() => toggleGroup(key)}
+          />
+          {!closed && (
+            <div style={{ marginLeft: 'var(--dc-space-3)' }}>
+              {comps.map(componentRow)}
+              {childContent}
+            </div>
+          )}
+        </div>,
+      )
+    }
+    return out.length ? out : null
+  }
+
+  const renderExhibits = (): ReactNode => {
+    const ungrouped = exhibitView.ungrouped.filter((c) =>
+      componentMatchesFilter(c, filter),
+    )
+    const tree = renderExhibitNodes(exhibitView.tree)
+    if (ungrouped.length === 0 && tree === null) return null
+    return (
+      <>
+        {ungrouped.map(componentRow)}
+        {tree}
+      </>
+    )
+  }
+
+  // Primer view: the reading-page table of contents (unchanged).
+  if (shownMode === 'primer') {
+    return (
+      <div ref={navScrollRef} className="dc-nav-scroll">
+        <div ref={navBodyRef} className="dc-nav-body" style={modeFadeStyle}>
+          {primerGroups.map((g) => {
+            const items = g.items.map((s) => (
+              <NavItem
+                key={s.id}
+                kind="case"
+                label={s.title}
+                current={primerActive === s.id}
+                onSelect={() => scrollToSection(s.id)}
+              />
+            ))
+            const heading = g.heading
+            if (!heading) {
+              return (
+                <div key="primer-lead" className="dc-primer-group">
+                  <Eyebrow className="dc-group-label">Contents</Eyebrow>
+                  {items}
+                </div>
+              )
+            }
+            const hasItems = g.items.length > 0
+            const collapsed = !primerExpanded.has(heading.id)
+            const headingActive =
+              primerActive === heading.id ||
+              (hasItems &&
+                collapsed &&
+                g.items.some((it) => it.id === primerActive))
+            return (
+              <div key={heading.id} className="dc-primer-group">
+                <NavItem
+                  kind="component"
+                  label={heading.title}
+                  count={hasItems ? g.items.length : undefined}
+                  current={headingActive}
+                  expanded={hasItems ? !collapsed : undefined}
+                  onToggle={
+                    hasItems ? () => togglePrimerGroup(heading.id) : undefined
+                  }
+                  onSelect={() => scrollToSection(heading.id)}
+                />
+                {hasItems && !collapsed && items}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    )
+  }
+
+  // Catalog view (Components or Exhibits): a filter input, the active mode's
+  // tree, and — while filtering — any matches in the other catalog mode below,
+  // with an explicit empty state when the active mode has none.
+  const inExhibits = shownMode === 'exhibits'
+  const active = inExhibits ? renderExhibits() : renderComponents()
+  const otherMode: Mode = inExhibits ? 'components' : 'exhibits'
+  const renderOther = () => (inExhibits ? renderComponents() : renderExhibits())
+  const other = filtering ? renderOther() : null
   return (
     <div ref={navScrollRef} className="dc-nav-scroll">
       <div ref={navBodyRef} className="dc-nav-body" style={modeFadeStyle}>
-        {shownMode === 'primer'
-          ? primerGroups.map((g) => {
-              const items = g.items.map((s) => (
-                <NavItem
-                  key={s.id}
-                  kind="case"
-                  label={s.title}
-                  current={primerActive === s.id}
-                  onSelect={() => scrollToSection(s.id)}
-                />
-              ))
-              // Displays before the first `##` heading get a plain "Contents"
-              // label (there is at most one such leading group).
-              const heading = g.heading
-              if (!heading) {
-                return (
-                  <div key="primer-lead" className="dc-primer-group">
-                    <Eyebrow className="dc-group-label">Contents</Eyebrow>
-                    {items}
-                  </div>
-                )
-              }
-              // A heading with no Displays under it is a leaf: it scrolls but
-              // has no accordion (no chevron, no count, no expand state) — same
-              // treatment as a single-case component in the library tree.
-              const hasItems = g.items.length > 0
-              const collapsed = !primerExpanded.has(heading.id)
-              // When a group is collapsed, a Display in view has no visible row,
-              // so stand its heading in as the active marker — the highlight
-              // stays put while reading instead of vanishing into the fold.
-              const headingActive =
-                primerActive === heading.id ||
-                (hasItems &&
-                  collapsed &&
-                  g.items.some((it) => it.id === primerActive))
-              return (
-                <div key={heading.id} className="dc-primer-group">
-                  <NavItem
-                    kind="component"
-                    label={heading.title}
-                    count={hasItems ? g.items.length : undefined}
-                    current={headingActive}
-                    expanded={hasItems ? !collapsed : undefined}
-                    onToggle={
-                      hasItems ? () => togglePrimerGroup(heading.id) : undefined
-                    }
-                    onSelect={() => scrollToSection(heading.id)}
-                  />
-                  {hasItems && !collapsed && items}
-                </div>
-              )
-            })
-          : groups.map(({ key, components }) => (
-              <div key={key} className="dc-group">
-                <Eyebrow className="dc-group-label">{LEVEL_LABEL[key]}</Eyebrow>
-                {components.map((c) => {
-                  // A single-case component reads as a leaf: no chevron, no
-                  // count, no case row — the lone case lives in the stage caption
-                  // and URL. Selecting the row routes straight to that case.
-                  const single = c.cases.length === 1
-                  const isExpanded = !single && expanded.has(c.id)
-                  // Per-variant violation counts. A collapsed multi-case parent
-                  // (and a single-case leaf, which never expands) shows the sum
-                  // across variants directly; an expanded parent shows a plain
-                  // dot instead and the per-variant counts move onto its case
-                  // rows. A leaf has no children, so it always shows its number.
-                  const variants = props.a11y?.byVariant[c.id]
-                  const total = variants
-                    ? Object.values(variants).reduce((a, b) => a + b, 0)
-                    : 0
-                  let parentAlert: number | 'dot' | undefined
-                  if (total > 0) parentAlert = isExpanded ? 'dot' : total
-                  return (
-                    <div key={c.id} className="dc-nav-component">
-                      <NavItem
-                        kind="component"
-                        label={c.name}
-                        count={single ? undefined : c.cases.length}
-                        alert={parentAlert}
-                        current={sel?.componentId === c.id}
-                        expanded={isExpanded}
-                        testId={DcTestIds.navComponent(c.id)}
-                        toggleTestId={
-                          single
-                            ? undefined
-                            : DcTestIds.navComponentToggle(c.id)
-                        }
-                        alertTestId={DcTestIds.navAlert(c.id)}
-                        onToggle={
-                          single ? undefined : () => toggleExpanded(c.id)
-                        }
-                        onSelect={() => selectComponent(c)}
-                      />
-                      {isExpanded &&
-                        c.cases.map((cs) => (
-                          <NavItem
-                            key={cs.id}
-                            kind="case"
-                            label={cs.name}
-                            alert={variants?.[cs.id]}
-                            current={
-                              sel?.componentId === c.id && sel?.caseId === cs.id
-                            }
-                            testId={DcTestIds.navCase(c.id, cs.id)}
-                            alertTestId={`${DcTestIds.navAlert(c.id)}-${cs.id}`}
-                            onSelect={() =>
-                              select({
-                                componentId: c.id,
-                                caseId: cs.id,
-                                tweaks: {},
-                              })
-                            }
-                          />
-                        ))}
-                    </div>
-                  )
-                })}
-              </div>
-            ))}
+        <div style={{ padding: 'var(--dc-space-1) var(--dc-space-2)' }}>
+          <Input
+            size="sm"
+            prefix="⌕"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            placeholder="Filter…"
+            aria-label="Filter the sidebar"
+            data-testid={DcTestIds.navFilter}
+            wrapperStyle={{ width: '100%' }}
+          />
+        </div>
+        {active}
+        {filtering && active === null && (
+          <Eyebrow className="dc-group-label">No matches in this mode</Eyebrow>
+        )}
+        {other && (
+          <div className="dc-group">
+            <Eyebrow className="dc-group-label">
+              In {MODE_LABEL[otherMode]}
+            </Eyebrow>
+            {other}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -601,27 +731,41 @@ function LibraryStage(props: ShellViewProps) {
   )
 }
 
-// Segmented control at the top of the sidebar: switch between the Primer
-// (reading page) and the Cases library. Shown only when a Primer is configured.
-// Just the two-option binding of the generic SegmentedToggle; `dc-modeswitch`
-// supplies the sidebar-pinning layout (see chrome.css).
-const MODE_SEGMENTS: SegmentedOption<Mode>[] = [
-  { id: 'primer', label: 'Primer' },
-  { id: 'library', label: 'Cases' },
-]
+// Segmented control at the top of the sidebar: switch between the present browse
+// modes — Primer (reading page), Components (the kit), and Exhibits (surfaces).
+// Rendered only when two or more modes are present; `dc-modeswitch` supplies the
+// sidebar-pinning layout (see chrome.css).
+const MODE_LABEL: Record<Mode, string> = {
+  primer: 'Primer',
+  components: 'Components',
+  exhibits: 'Exhibits',
+}
+
+// Accessible name for the nav landmark, per mode.
+const SIDEBAR_LABEL: Record<Mode, string> = {
+  primer: 'Primer contents',
+  components: 'Components',
+  exhibits: 'Exhibits',
+}
 
 function ModeSwitch({
+  modes,
   mode,
   onMode,
 }: {
+  modes: Mode[]
   mode: Mode
   onMode: (m: Mode) => void
 }) {
+  const options: SegmentedOption<Mode>[] = modes.map((m) => ({
+    id: m,
+    label: MODE_LABEL[m],
+  }))
   return (
     <SegmentedToggle
       className="dc-modeswitch"
       label="View mode"
-      options={MODE_SEGMENTS}
+      options={options}
       value={mode}
       onChange={onMode}
       testId={DcTestIds.modeSwitch}

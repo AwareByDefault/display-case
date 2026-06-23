@@ -43,17 +43,23 @@ export interface ManifestGroup {
   children: ManifestGroup[]
 }
 
+/** A top-level browse mode. `components` lists the building-block kit by level;
+ *  `exhibits` lists page/flow surfaces by their information-architecture group;
+ *  `primer` is the optional long-form reading page. */
+export type BrowseMode = 'primer' | 'components' | 'exhibits'
+
 export interface Manifest {
   title: string
   components: ManifestComponent[]
   /** The Exhibits-mode information-architecture group tree, ordered. Surfaces in
    *  the default group contribute no node; `[]` when there are no grouped surfaces. */
   groups: ManifestGroup[]
-  /** True when a Primer (`.mdx` reading page) is configured and present. The
-   *  chrome shows the Primer / Cases mode switch only then. */
-  primer: boolean
-  /** The view the chrome lands on at `/`: `'primer'` only when a Primer is
-   *  configured and the config didn't override the landing to `'cases'`; else
-   *  `'library'`. A deep-linked case always opens the library. */
-  landing: 'primer' | 'library'
+  /** Browse modes that have content, in canonical order (primer, components,
+   *  exhibits). A mode absent here is never offered; the switch shows only when
+   *  two or more are present. */
+  modes: BrowseMode[]
+  /** The mode the chrome lands on at `/` — the configured landing when present,
+   *  else the first present mode. Always one of `modes`. A deep-linked case opens
+   *  that case regardless. */
+  landing: BrowseMode
 }

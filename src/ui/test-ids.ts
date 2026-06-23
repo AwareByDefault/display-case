@@ -45,8 +45,15 @@ export const DcTestIds = {
    *  component, so it's scoped by the owning component id. */
   navCase: (componentId: string, caseId: string): string =>
     `dc-nav-case-${componentId}-${caseId}`,
-  /** A Primer ↔ Cases mode-switch tab, keyed by mode. */
-  modeSwitch: (mode: 'primer' | 'library'): string => `dc-modeswitch-${mode}`,
+  /** A mode-switch tab (Primer · Components · Exhibits), keyed by mode. */
+  modeSwitch: (mode: 'primer' | 'components' | 'exhibits'): string =>
+    `dc-modeswitch-${mode}`,
+  /** The sidebar filter input. */
+  navFilter: 'dc-nav-filter',
+  /** An Exhibits-mode group row, keyed by its lowercased `/`-joined path. */
+  navGroup: (path: string): string => `dc-nav-group-${path}`,
+  /** The active surface's group-path breadcrumb in the stage header. */
+  breadcrumb: 'dc-breadcrumb',
   /** A violation row in the accessibility panel, keyed by its axe rule id
    *  (e.g. 'color-contrast'); present only for a failing variant. */
   a11yViolation: (ruleId: string): string => `dc-a11y-violation-${ruleId}`,

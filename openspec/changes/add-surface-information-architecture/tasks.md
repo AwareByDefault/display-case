@@ -18,27 +18,27 @@
 
 ## 4. Browse modes (chrome)
 
-- [ ] 4.1 Extend the mode model in `src/ui/shell-core.ts` from `Mode = 'primer' | 'library'` to `'primer' | 'components' | 'exhibits'`; resolve the *present* modes server-side from catalog contents (primer configured; ≥1 building-block component; ≥1 page/flow) so an empty mode is never offered — including omitting Components for a surfaces-only catalog and Exhibits for a kit-only one. Show a switch only when ≥2 modes are present.
-- [ ] 4.7 Generalize the landing config in `src/index.ts` from `'primer' | 'cases'` to `'primer' | 'components' | 'exhibits'`; carry the present-modes set and the resolved landing mode on the `Manifest` (replacing `landing: 'primer' | 'library'` and the boolean `primer` gate), honoring the configured landing only when present and otherwise falling back in order primer → components → exhibits. Update `buildManifest` and all `Manifest` consumers.
-- [ ] 4.2 Extend the mode switch (`SegmentedToggle`) to render the present modes (Primer · Components · Exhibits) with labels; route the modes by case-path prefix — `/c/<comp>/<case>` for Components, `/e/<comp>/<case>` for Exhibits, `/primer` unchanged, `/` → landing mode; keep `/render/<comp>/<case>` unified (mode-agnostic). `resolveMode` reads the prefix; `buildUrl` and each `ManifestCase.browseUrl` pick `/c/` vs `/e/` by `isSurfaceLevel(level)`.
-- [ ] 4.3 Components mode: keep the level grouping (`groupByLevel`) exactly as today.
-- [ ] 4.4 Exhibits mode: render the nested, collapsible IA groups for surfaces (reuse the disclosure/`expanded` machinery); keep leaf labels short (rely on existing ellipsis truncation); show the active surface's group path as a breadcrumb in the stage header.
-- [ ] 4.5 Add a text filter to both modes that narrows by name/group and restores on clear; append cross-mode matches below the current mode's results (labelled, selecting one switches mode), and show an explicit "no matches in this mode" state when the current mode is empty but the other has hits; keep it a progressive enhancement that does not change the initial SSR listing or addressing.
-- [ ] 4.6 Update `src/ui/test-ids.ts`: extend `modeSwitch` to the new modes and add ids for the filter input, group rows, and breadcrumb.
+- [x] 4.1 Extend the mode model in `src/ui/shell-core.ts` from `Mode = 'primer' | 'library'` to `'primer' | 'components' | 'exhibits'`; resolve the *present* modes server-side from catalog contents (primer configured; ≥1 building-block component; ≥1 page/flow) so an empty mode is never offered — including omitting Components for a surfaces-only catalog and Exhibits for a kit-only one. Show a switch only when ≥2 modes are present.
+- [x] 4.7 Generalize the landing config in `src/index.ts` from `'primer' | 'cases'` to `'primer' | 'components' | 'exhibits'`; carry the present-modes set and the resolved landing mode on the `Manifest` (replacing `landing: 'primer' | 'library'` and the boolean `primer` gate), honoring the configured landing only when present and otherwise falling back in order primer → components → exhibits. Update `buildManifest` and all `Manifest` consumers.
+- [x] 4.2 Extend the mode switch (`SegmentedToggle`) to render the present modes (Primer · Components · Exhibits) with labels; route the modes by case-path prefix — `/c/<comp>/<case>` for Components, `/e/<comp>/<case>` for Exhibits, `/primer` unchanged, `/` → landing mode; keep `/render/<comp>/<case>` unified (mode-agnostic). `resolveMode` reads the prefix; `buildUrl` and each `ManifestCase.browseUrl` pick `/c/` vs `/e/` by `isSurfaceLevel(level)`.
+- [x] 4.3 Components mode: keep the level grouping (`groupByLevel`) exactly as today.
+- [x] 4.4 Exhibits mode: render the nested, collapsible IA groups for surfaces (reuse the disclosure/`expanded` machinery); keep leaf labels short (rely on existing ellipsis truncation); show the active surface's group path as a breadcrumb in the stage header.
+- [x] 4.5 Add a text filter to both modes that narrows by name/group and restores on clear; append cross-mode matches below the current mode's results (labelled, selecting one switches mode), and show an explicit "no matches in this mode" state when the current mode is empty but the other has hits; keep it a progressive enhancement that does not change the initial SSR listing or addressing.
+- [x] 4.6 Update `src/ui/test-ids.ts`: extend `modeSwitch` to the new modes and add ids for the filter input, group rows, and breadcrumb.
 
 ## 5. Checks
 
 - [ ] 5.1 Add a static check (structure phase) that reports `nav` config naming a group no surface resolves to, at warning severity; make it independently disablable.
-- [ ] 5.2 Confirm the existing structure checks (composition, level) are unaffected — they continue to read `level`, which pages/flows retain.
+- [x] 5.2 Confirm the existing structure checks (composition, level) are unaffected — they continue to read `level`, which pages/flows retain.
 
 ## 6. Verification against spec
 
-- [ ] 6.1 Verify the mode switch offers Primer · Components · Exhibits, omits any empty mode, and that switching lists the kit by level (Components) and surfaces by IA (Exhibits).
-- [ ] 6.2 Verify resolution precedence end-to-end (explicit overrides folder; folder overrides config-less; config assigns when neither; fallback otherwise) and that an ungrouped surface lands in the default group and still appears.
-- [ ] 6.3 Verify the filter narrows and restores each mode, reaches cross-mode matches, and does not affect deep-linking; verify the breadcrumb shows the active surface's group path.
+- [x] 6.1 Verify the mode switch offers Primer · Components · Exhibits, omits any empty mode, and that switching lists the kit by level (Components) and surfaces by IA (Exhibits).
+- [x] 6.2 Verify resolution precedence end-to-end (explicit overrides folder; folder overrides config-less; config assigns when neither; fallback otherwise) and that an ungrouped surface lands in the default group and still appears.
+- [x] 6.3 Verify the filter narrows and restores each mode, reaches cross-mode matches, and does not affect deep-linking; verify the breadcrumb shows the active surface's group path.
 - [ ] 6.4 Verify `nav.groups.order`/`labels`/`collapsed` are honored and that an unknown group reference warns without failing the run.
-- [ ] 6.5 Verify a showcase with no `group` and no `nav` config presents the Exhibits mode as a single default group (no regression vs. today's listing), and `/c/...` addresses are unchanged.
-- [ ] 6.6 Add e2e coverage (`e2e/`) for the three-way mode switch, nested group expand/collapse, filtering (incl. cross-mode), and the breadcrumb using the new test-ids.
+- [x] 6.5 Verify a showcase with no `group` and no `nav` config presents the Exhibits mode as a single default group (no regression vs. today's listing), and `/c/...` addresses are unchanged.
+- [x] 6.6 Add e2e coverage (`e2e/`) for the three-way mode switch, nested group expand/collapse, filtering (incl. cross-mode), and the breadcrumb using the new test-ids.
 
 ## 7. Docs & post-change review
 

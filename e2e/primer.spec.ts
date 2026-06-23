@@ -8,7 +8,10 @@ test.describe('Primer / Cases mode switch', () => {
     request,
   }) => {
     const m = await fetchManifest(request)
-    test.skip(!m.primer, 'this showcase has no Primer configured')
+    test.skip(
+      !m.modes.includes('primer'),
+      'this showcase has no Primer configured',
+    )
     const c = firstComponent(m)
     const firstCase = c.cases[0]
     if (!firstCase) throw new Error('first component has no cases')
@@ -17,7 +20,7 @@ test.describe('Primer / Cases mode switch', () => {
     await expect(page.getByTestId(DcTestIds.app)).toBeVisible()
 
     const primerTab = page.getByTestId(DcTestIds.modeSwitch('primer'))
-    const casesTab = page.getByTestId(DcTestIds.modeSwitch('library'))
+    const casesTab = page.getByTestId(DcTestIds.modeSwitch('components'))
     const componentNav = page.getByTestId(DcTestIds.navComponent(c.id))
 
     // The Primer is the default landing view at "/": its tab is selected, the
@@ -46,7 +49,10 @@ test.describe('Primer / Cases mode switch', () => {
     request,
   }) => {
     const m = await fetchManifest(request)
-    test.skip(!m.primer, 'this showcase has no Primer configured')
+    test.skip(
+      !m.modes.includes('primer'),
+      'this showcase has no Primer configured',
+    )
     const c = componentWithCases(m)
     test.skip(!c, 'no component with multiple cases to navigate to')
     if (!c) return
@@ -54,7 +60,7 @@ test.describe('Primer / Cases mode switch', () => {
     if (!target) throw new Error('component has no second case')
 
     const primerTab = page.getByTestId(DcTestIds.modeSwitch('primer'))
-    const casesTab = page.getByTestId(DcTestIds.modeSwitch('library'))
+    const casesTab = page.getByTestId(DcTestIds.modeSwitch('components'))
 
     // Land on the Primer, switch to Cases, then navigate to a specific case.
     await page.goto('/')
@@ -74,7 +80,10 @@ test.describe('Primer / Cases mode switch', () => {
     request,
   }) => {
     const m = await fetchManifest(request)
-    test.skip(!m.primer, 'this showcase has no Primer configured')
+    test.skip(
+      !m.modes.includes('primer'),
+      'this showcase has no Primer configured',
+    )
 
     // The chrome-free Primer document lives under the reserved /render/primer.
     const doc = await request.get('/render/primer')
@@ -96,7 +105,10 @@ test.describe('Primer / Cases mode switch', () => {
     request,
   }) => {
     const m = await fetchManifest(request)
-    test.skip(!m.primer, 'this showcase has no Primer configured')
+    test.skip(
+      !m.modes.includes('primer'),
+      'this showcase has no Primer configured',
+    )
 
     await page.goto('/primer')
     await expect(page.getByTestId(DcTestIds.app)).toBeVisible()
@@ -111,13 +123,16 @@ test.describe('Primer / Cases mode switch', () => {
     request,
   }) => {
     const m = await fetchManifest(request)
-    test.skip(!m.primer, 'this showcase has no Primer configured')
+    test.skip(
+      !m.modes.includes('primer'),
+      'this showcase has no Primer configured',
+    )
     const c = firstComponent(m)
     const firstCase = c.cases[0]
     if (!firstCase) throw new Error('first component has no cases')
 
     await page.goto('/')
-    await page.getByTestId(DcTestIds.modeSwitch('library')).click()
+    await page.getByTestId(DcTestIds.modeSwitch('components')).click()
     await expect(page).toHaveURL(new RegExp(`/c/${c.id}/${firstCase.id}$`))
 
     // Back → the Primer ("/"). Forward → the library deep link again.
@@ -130,7 +145,7 @@ test.describe('Primer / Cases mode switch', () => {
     await page.goForward()
     await expect(page).toHaveURL(new RegExp(`/c/${c.id}/${firstCase.id}$`))
     await expect(
-      page.getByTestId(DcTestIds.modeSwitch('library')),
+      page.getByTestId(DcTestIds.modeSwitch('components')),
     ).toHaveAttribute('aria-selected', 'true')
   })
 })

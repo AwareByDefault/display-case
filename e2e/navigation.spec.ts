@@ -84,12 +84,16 @@ test.describe('library navigation', () => {
     request,
   }) => {
     const m = await fetchManifest(request)
-    // The last component sits at the bottom of a rail far taller than the
-    // viewport, so it starts below the fold. Deep-linking to it must scroll the
-    // rail so its (current) row is on screen — not stranded out of view.
-    const last = m.components.at(-1)
+    // The last building-block (Components-mode) component sits at the bottom of a
+    // rail far taller than the viewport, so it starts below the fold. Deep-linking
+    // to it must scroll the rail so its (current) row is on screen. Surfaces live
+    // in the Exhibits mode, so scope to the kit the `/c/` route shows.
+    const kit = m.components.filter(
+      (c) => c.level !== 'page' && c.level !== 'flow',
+    )
+    const last = kit.at(-1)
     test.skip(
-      !last || m.components.length < 8 || (last?.cases.length ?? 0) === 0,
+      !last || kit.length < 8 || (last?.cases.length ?? 0) === 0,
       'showcase too short to push a row below the fold',
     )
     if (!last) return

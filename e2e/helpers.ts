@@ -23,6 +23,7 @@ export interface ManifestComponent {
   name: string
   level: string | null
   isFlow: boolean
+  group: string[]
   caseFile: string
   placardDoc: string | null
   cases: ManifestCase[]
@@ -30,7 +31,9 @@ export interface ManifestComponent {
 export interface Manifest {
   title: string
   components: ManifestComponent[]
-  primer: boolean
+  /** Present browse modes, e.g. ['primer','components','exhibits']. */
+  modes: ('primer' | 'components' | 'exhibits')[]
+  landing: 'primer' | 'components' | 'exhibits'
 }
 
 export async function fetchManifest(
@@ -62,13 +65,13 @@ export function componentWithCases(
 }
 
 /**
- * Open the chrome and ensure the Cases (library) view is showing. When a Primer
- * is configured the app lands on it at `/`, so switch to Cases if the toggle is
- * present.
+ * Open the chrome and ensure the Components (kit) view is showing. When another
+ * mode is the landing (e.g. the Primer) the app opens there at `/`, so switch to
+ * Components if its mode-switch tab is present.
  */
 export async function gotoLibrary(page: Page): Promise<void> {
   await page.goto('/')
   await expect(page.getByTestId(DcTestIds.app)).toBeVisible()
-  const cases = page.getByTestId(DcTestIds.modeSwitch('library'))
-  if ((await cases.count()) > 0) await cases.click()
+  const components = page.getByTestId(DcTestIds.modeSwitch('components'))
+  if ((await components.count()) > 0) await components.click()
 }
