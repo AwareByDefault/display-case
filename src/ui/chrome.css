@@ -149,7 +149,21 @@
   flex: 1 1 0;
   min-height: 0;
   overflow-y: auto;
+  /* The rail never scrolls sideways — long names ellipsize in place. */
+  overflow-x: hidden;
   scrollbar-width: none; /* Firefox */
+}
+
+/* Sidebar filter input (both catalog modes). The field fills the rail width;
+   `border-box` keeps its border + padding inside that 100% so it never overflows
+   the rail (there's no global box-sizing reset). */
+.dc-nav-filter {
+  padding: var(--dc-space-1) var(--dc-space-1) var(--dc-space-3);
+}
+.dc-nav-filter .dcui-field {
+  display: flex;
+  box-sizing: border-box;
+  width: 100%;
 }
 .dc-nav-scroll::-webkit-scrollbar {
   display: none; /* WebKit/Blink */

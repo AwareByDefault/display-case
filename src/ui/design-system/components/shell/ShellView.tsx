@@ -517,7 +517,7 @@ function NavContents(props: ShellViewProps) {
   return (
     <div ref={navScrollRef} className="dc-nav-scroll">
       <div ref={navBodyRef} className="dc-nav-body" style={modeFadeStyle}>
-        <div style={{ padding: 'var(--dc-space-1) var(--dc-space-2)' }}>
+        <div className="dc-nav-filter">
           <Input
             size="sm"
             prefix="⌕"
@@ -526,7 +526,6 @@ function NavContents(props: ShellViewProps) {
             placeholder="Filter…"
             aria-label="Filter the sidebar"
             data-testid={DcTestIds.navFilter}
-            wrapperStyle={{ width: '100%' }}
           />
         </div>
         {active}
