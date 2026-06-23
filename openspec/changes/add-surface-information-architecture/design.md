@@ -163,6 +163,16 @@ in a fixed order (Primer → Components → Exhibits). The manifest carries the 
 of present modes and the resolved landing mode so the chrome renders the switch
 and initial view server-side.
 
+*Routing — the mode is the route prefix.* The two catalog modes are deep-linked
+by a per-mode case prefix rather than separate mode-landing routes: `/c/<comp>/
+<case>` is a **Components** (kit) case and `/e/<comp>/<case>` is an **Exhibits**
+(surface) case, so every case link carries its mode. `/primer` is unchanged; `/`
+resolves to the landing mode; the chrome-free `/render/<comp>/<case>` stays
+unified (mode-agnostic — it renders a case by id). `resolveMode` reads the path
+prefix; `buildUrl` and each `ManifestCase.browseUrl` choose `/c/` vs `/e/` by the
+component's level (`isSurfaceLevel`). Switching modes in the UI navigates to that
+mode's first selection under the matching prefix.
+
 *Naming.* **Components** (precise — it is what they are, and matches the docs)
 and **Exhibits** (the assembled, visitor-facing screens — fits the museum/Vitrine
 metaphor while staying immediately legible). Rejected: *Specimens · Exhibits*
