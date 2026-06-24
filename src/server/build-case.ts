@@ -86,7 +86,7 @@ export interface BuildCaseArgs {
   configPath: string
   componentId: string
   /** Sequence suffix so the SSR bundle gets a fresh on-disk name each build (Bun
-   *  caches `import()` by resolved path). The parent imports the matching file. */
+   *  caches `import()` by resolved path). `buildCase` imports the matching file. */
   seq: number
 }
 
@@ -104,7 +104,8 @@ export interface BuildCaseResult {
  * `<cache>/dist/render-case-<id>.js`) and in-process SSR bundle (→
  * `<cache>/ssr/ssr-case-<id>-<seq>.js`). Returns the recorded module-graph
  * inputs. A *build failure* is returned as `{ ok: false }`; a native bundler
- * crash terminates the process (the parent detects the abnormal exit).
+ * crash is uncatchable and would take the (single, in-process) server down — per
+ * component graphs are kept small enough that it does not arise.
  */
 export async function buildCaseBundles(
   args: BuildCaseArgs,
@@ -173,9 +174,8 @@ export async function buildCaseBundles(
   } catch (err) {
     // Bun.build *rejects* (rather than returning `success: false`) for some
     // failures — an unresolvable import, a syntax error in the graph. Report it
-    // as a structured failure. A native bundler *crash* is uncatchable and takes
-    // the process down instead — which the spawning parent attributes (see
-    // build-case's module comment).
+    // as a structured failure. (A native bundler *crash* is uncatchable and would
+    // take the in-process server down instead — see the module comment.)
     return {
       ok: false,
       inputs: [...inputs],
