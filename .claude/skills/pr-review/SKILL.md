@@ -25,7 +25,7 @@ engineering material: [`contributing/coding-best-practices.md`](../../../contrib
 [`contributing/releasing.md`](../../../contributing/releasing.md), the OpenSpec
 workspace under [`openspec/`](../../../openspec/), and the root
 [`CLAUDE.md`](../../../CLAUDE.md). Cite the specific rule a finding violates
-(e.g. "coding §3.1", "testing §6.1").
+(e.g. "coding 3.1", "testing 6.1").
 
 ## Steps
 
@@ -134,15 +134,15 @@ exercises it on the repo's own showcase is half-done.
 
 ### 7. Unit-test coverage — appropriate, not just present? *(consideration 6)*
 
-`bun test`, colocated `*.test.ts` under `src/` (testing §1–§4). Adversarial bar:
+`bun test`, colocated `*.test.ts` under `src/` (testing 1–4). Adversarial bar:
 
 - Every new pure function / engine module / check rule has a colocated test that
-  asserts **observable behavior**, named as an assertion (testing §3.2).
+  asserts **observable behavior**, named as an assertion (testing 3.2).
 - **Error paths are covered**, not only the happy path (loaders return
-  `{ modules, errors }` — assert both; testing §3.4). New structure rule → a test
-  next to it in `structure-check.test.ts` (linting §4.2).
+  `{ modules, errors }` — assert both; testing 3.4). New structure rule → a test
+  next to it in `structure-check.test.ts` (linting 4.2).
 - Tests are **deterministic** — no `Date.now()`/`Math.random()`/wall-clock/ambient
-  env (testing §4). Filesystem code uses real temp dirs, not mocks (§3.3).
+  env (testing 4). Filesystem code uses real temp dirs, not mocks (3.3).
 - Public type-surface changes carry `*.test-d.ts` assertions where it matters.
 - A diff that adds logic but no test, or tests only the sunny path, is a finding.
 
@@ -155,9 +155,9 @@ new surface, nav, panel, control):
 - A new reachable surface needs a `data-testid` from `src/ui/test-ids.ts`
   (`DcTestIds`) and an e2e spec that drives it **only** via
   `getByTestId(DcTestIds.*)` — never `getByText`/`getByRole`/CSS/text (testing
-  §6, enforced for `getByText`/`getByRole` by a Biome plugin).
+  6, enforced for `getByText`/`getByRole` by a Biome plugin).
 - **No sleeps** — wait on conditions/web-first assertions, not `waitForTimeout`
-  (testing §7). `retries: 0`, so a flake is a failure.
+  (testing 7). `retries: 0`, so a flake is a failure.
 - Pure engine/CLI/check changes don't need e2e — say so rather than inventing a
   gap. A chrome change with no e2e (or only a unit test where a browser
   interaction is the point) is a finding.
@@ -168,9 +168,9 @@ Is this **worth shipping to the world**, and is it true to Display Case?
 
 **Sweep every numbered rule — don't spot-check.** Open all three references and
 test the diff against **each** rule in them, not just the famous ones:
-- [`contributing/coding-best-practices.md`](../../../contributing/coding-best-practices.md) (§§1–9)
-- [`contributing/testing-best-practices.md`](../../../contributing/testing-best-practices.md) (§§1–11)
-- [`contributing/linting-best-practices.md`](../../../contributing/linting-best-practices.md) (§3 + the `biome.json` rule list)
+- [`contributing/coding-best-practices.md`](../../../contributing/coding-best-practices.md) (rules 1–9)
+- [`contributing/testing-best-practices.md`](../../../contributing/testing-best-practices.md) (rules 1–11)
+- [`contributing/linting-best-practices.md`](../../../contributing/linting-best-practices.md) (3 + the `biome.json` rule list)
 
 For every numbered rule ask "does this diff break it?" On a large diff, fan out
 subagents — one per file or section — each returning `{rule, file:line,
@@ -180,7 +180,7 @@ violation, fix}` for any breach. Miss none; the rule numbers are stable handles.
 rule, the comment **leads** with the rule (number + name + a link to its line on
 `main`), *then* the one-line what's-wrong and the fix:
 
-> [coding §3.1 Keep render pure](https://github.com/OWNER/REPO/blob/main/contributing/coding-best-practices.md#L68): `Date.now()` in render → adopt mismatch. Pass a fixed tweak.
+> [coding 3.1 Keep render pure](https://github.com/OWNER/REPO/blob/main/contributing/coding-best-practices.md#L68): `Date.now()` in render → adopt mismatch. Pass a fixed tweak.
 
 Resolve the line against the **main branch**, so the link survives the PR's own
 edits. Rule anchors are bold and start the line in either form — `**3.1**` or
@@ -195,15 +195,15 @@ describes the issue — don't manufacture a citation.
 
 **Where to hunt hardest** (rules most often broken here):
 
-- **Render purity / SSR determinism (coding §3)** — the central rule. No
+- **Render purity / SSR determinism (coding 3)** — the central rule. No
   clock/random/locale/browser API *during render*; browser work lives in
   effects/handlers; non-deterministic values come in as fixed tweaks;
   `browserOnly` is the last-resort opt-out. This is the one to hunt hardest.
-- **Public surface (coding §2.3, §1.1)** — `src/index.ts` stays pure data + thin
+- **Public surface (coding 2.3, 1.1)** — `src/index.ts` stays pure data + thin
   helpers, environment-neutral, no `any`. Imports point inward
   (commands/server/checks → render/core → index); no consuming-app imports
-  (coding §6.1).
-- **Dependency-light (coding §6.2–§6.3)** — a new runtime `dependency` is a
+  (coding 6.1).
+- **Dependency-light (coding 6.2–6.3)** — a new runtime `dependency` is a
   deliberate, justified decision, not a convenience; the visual toolchain stays
   `optional` and lazily `import()`-ed. A new dep with a Bun/`node:` built-in
   alternative is a finding.
@@ -211,16 +211,16 @@ describes the issue — don't manufacture a citation.
   every surface machine-readable; the chrome quiet so the showcased component
   owns the visual weight; **no** dev machinery carried into a published build;
   **no** consuming-app code pulled into the tool.
-- **Conventions** — `import type` (§1.2), no non-null `!` (§1.3), safe index
-  access (§1.4), discriminated-union narrowing (§1.6), pure logic split from
-  React (§2.4), `--dc-*` token vocabulary in the chrome (§5), loud-and-early
-  error handling (§7). Naming/format/lint per `biome.json` (linting §3).
+- **Conventions** — `import type` (1.2), no non-null `!` (1.3), safe index
+  access (1.4), discriminated-union narrowing (1.6), pure logic split from
+  React (2.4), `--dc-*` token vocabulary in the chrome (5), loud-and-early
+  error handling (7). Naming/format/lint per `biome.json` (linting 3).
 - Confirm the gates pass: `gh pr checks <pr>`, or run `bun run lint`,
   `bun run typecheck`, `bun run check`, `bun test` (and `bun run e2e` for chrome)
   from the checked-out branch. A green-looking PR that fails a gate locally is the
   headline finding. **A change is complete only when unit tests, the static
   checks, and lint all pass, and chrome changes are covered by e2e** (testing
-  §10).
+  10).
 - **Changeset (releasing)** — every PR needs a `.changeset/*.md` declaring the
   bump (or an empty one for no-release), or `Changeset present` fails. Sanity-
   check the level against the actual surface impact (major = breaking public
@@ -252,8 +252,8 @@ rather than duplicating it.
 plus a *recommended fix when it's simple*. **≤2 lines is the target**; spend more
 only on a genuinely complex problem. No preamble, no restating the diff. Shape:
 
-- Breaks a numbered rule → **lead with the linked rule** (§9 format), then the
-  one-liner: `[coding §3.1 Keep render pure](<main-link>): <what's wrong>. <fix>.`
+- Breaks a numbered rule → **lead with the linked rule** (step 9 format), then the
+  one-liner: `[coding 3.1 Keep render pure](<main-link>): <what's wrong>. <fix>.`
 - No rule behind it → `severity: <what's wrong>. <fix>.`
 
 **Resolvable inline comments are ALWAYS preferred.** Every finding that maps to a
@@ -312,13 +312,14 @@ from the classification above, so the body is complete before any inline write.)
   && gh api -X PATCH "repos/$O/$R/issues/comments/$SUMMARY_ID" --input summary.json \
   ||  gh api "repos/$O/$R/issues/<pr>/comments" --input summary.json
 ```
-The summary reflects the **current** state: one-line verdict
-(`Approve` / `Approve with nits` / `Request changes` / `Blocked`), a compact
-per-consideration `pass`/`fail`/`n/a` table (`n/a` justified), one terse bullet
-per **open** finding (still-open-prior + new, so the whole picture reads in one
-place), and a short "Resolved this run" line. Never `APPROVE`/`REQUEST_CHANGES`
-the PR's review state unprompted; the verdict lives in the text. Map a real
-review event to the verdict only if asked.
+The summary is **only what still needs fixing**: a one-line verdict
+(`Approve` / `Approve with nits` / `Request changes` / `Blocked`) and one terse
+bullet per **open** finding (still-open-prior + new). On an update, **drop
+everything now fixed** — completed items leave the summary entirely; only
+remaining issues stay. **No checklist / per-consideration table** — the author
+cares what to fix, not what was scanned, and resolution shows on the thread
+itself, not here. Never `APPROVE`/`REQUEST_CHANGES` the PR's review state
+unprompted; the verdict lives in the text. Map a real review event only if asked.
 
 **c. Apply the inline changes** (only after the summary exists):
 
@@ -336,7 +337,7 @@ review event to the verdict only if asked.
   ```json
   { "event": "COMMENT", "comments": [
     { "path": "src/foo.tsx", "line": 42, "side": "RIGHT",
-      "body": "[coding §3.1 Keep render pure](https://github.com/OWNER/REPO/blob/main/contributing/coding-best-practices.md#L68): `Date.now()` in render → adopt mismatch. Pass a fixed tweak. <!-- pr-review:finding:coding-3.1@src/foo.tsx#render-date-now -->" }
+      "body": "[coding 3.1 Keep render pure](https://github.com/OWNER/REPO/blob/main/contributing/coding-best-practices.md#L68): `Date.now()` in render → adopt mismatch. Pass a fixed tweak. <!-- pr-review:finding:coding-3.1@src/foo.tsx#render-date-now -->" }
   ]}
   ```
   `gh api "repos/$O/$R/pulls/<pr>/reviews" --input new.json`. Line rules: `path` +
@@ -356,7 +357,7 @@ summary-comment URL. Don't re-paste the body.
   spec'd (if behavioral), and documented. Enumerate gaps; don't assume good faith
   closes them.
 - **Cite rules, not vibes.** Sweep *every* numbered rule in the three
-  best-practices files (§9), not a favourite few. A rule violation leads with the
+  best-practices files (step 9), not a favourite few. A rule violation leads with the
   rule — number, name, and a link to its line on `main` — before the what's-wrong
   and fix, so the author can act and argue precisely.
 - **OpenSpec is the load-bearing axis** of considerations 1–3: behavioral change

@@ -37,12 +37,13 @@ review", "is this PR ready to merge", or "what's missing in this change".
 2. Walk the OpenSpec chain (proposal → design → tasks → specs → code; archival is
    left to the CI guard), then dogfood, unit tests, e2e, quality/ethos/best-
    practices, and docs — citing the specific numbered rule each finding violates.
-3. Post findings to the PR, **summary first**: a terse summary comment (verdict,
-   per-consideration pass/fail/n/a, one line per finding) posted ahead of every
-   other comment the skill makes, then code-tied findings as resolvable inline
-   line comments (always preferred). Inline comments are ≤2 lines; a best-practice
-   violation leads with the rule (number + name + a link to its line on `main`)
-   before the what's-wrong and fix.
+3. Post findings to the PR, **summary first**: a terse summary comment — verdict +
+   one line per **open** finding, only what still needs fixing (no scan checklist;
+   on a re-run, fixed items drop off) — posted ahead of every other comment the
+   skill makes, then code-tied findings as resolvable inline line comments (always
+   preferred). Inline comments are ≤2 lines; a best-practice violation leads with
+   the rule (number + name + a link to its line on `main`) before the what's-wrong
+   and fix.
 
 **Re-runnable.** Hidden markers make a second run on the same PR idempotent: it
 updates the one summary in place, replies "Resolved 👍" and resolves threads whose
