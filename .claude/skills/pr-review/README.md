@@ -41,9 +41,10 @@ review", "is this PR ready to merge", or "what's missing in this change".
    one line per **open** finding, only what still needs fixing (no scan checklist;
    on a re-run, fixed items drop off) — posted ahead of every other comment the
    skill makes, then code-tied findings as resolvable inline line comments (always
-   preferred). Inline comments are ≤2 lines; a best-practice violation leads with
-   the rule (number + name + a link to its line on `main`) before the what's-wrong
-   and fix.
+   preferred). Inline comments are ≤2 lines. Every best-practice rule reference —
+   in the summary and inline alike — **must** be a Markdown link to that rule's
+   line on `main` (e.g. `[coding 3.1 Keep render pure](…/contributing/coding-best-practices.md#L68)`),
+   leading the comment before the what's-wrong and fix.
 
 **Re-runnable.** Hidden markers make a second run on the same PR idempotent: it
 updates the one summary in place, replies "Resolved 👍" and resolves threads whose

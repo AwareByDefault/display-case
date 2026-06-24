@@ -176,19 +176,24 @@ For every numbered rule ask "does this diff break it?" On a large diff, fan out
 subagents — one per file or section — each returning `{rule, file:line,
 violation, fix}` for any breach. Miss none; the rule numbers are stable handles.
 
-**Citing a rule violation — required format.** When a finding breaks a numbered
-rule, the comment **leads** with the rule (number + name + a link to its line on
-`main`), *then* the one-line what's-wrong and the fix:
+**Citing a rule — MUST link to the docs.** *Every* reference to a numbered
+best-practice rule — in an inline comment **and** in a summary bullet — MUST be a
+Markdown link to that rule's line on `main`. A bare "coding 3.1" with no link is
+not acceptable. Lead with the linked rule (number + name), *then* the one-line
+what's-wrong and the fix:
 
 > [coding 3.1 Keep render pure](https://github.com/OWNER/REPO/blob/main/contributing/coding-best-practices.md#L68): `Date.now()` in render → adopt mismatch. Pass a fixed tweak.
 
-Resolve the line against the **main branch**, so the link survives the PR's own
-edits. Rule anchors are bold and start the line in either form — `**3.1**` or
-`**3.1 Colocation.**` — so match the number followed by a space or `*`:
+`OWNER/REPO` is the base repo (the `$O`/`$R` resolved below); the path is the
+best-practices file, `#L<n>` its rule line. Resolve `<n>` against the **main
+branch** so the link survives the PR's own edits. Rule anchors are bold and start
+the line in either form — `**3.1**` or `**3.1 Colocation.**` — so match the number
+followed by a space or `*`:
 ```bash
 n=$(git show origin/main:contributing/coding-best-practices.md \
     | grep -nE '^\*\*3\.1[ *]' | head -1 | cut -d: -f1)
 echo "https://github.com/$O/$R/blob/main/contributing/coding-best-practices.md#L$n"
+# → https://github.com/$O/$R/blob/main/contributing/coding-best-practices.md#L68
 ```
 A finding with **no** numbered rule behind it (a plain bug, a missing test) just
 describes the issue — don't manufacture a citation.
@@ -314,11 +319,19 @@ from the classification above, so the body is complete before any inline write.)
 ```
 The summary is **only what still needs fixing**: a one-line verdict
 (`Approve` / `Approve with nits` / `Request changes` / `Blocked`) and one terse
-bullet per **open** finding (still-open-prior + new). On an update, **drop
-everything now fixed** — completed items leave the summary entirely; only
-remaining issues stay. **No checklist / per-consideration table** — the author
-cares what to fix, not what was scanned, and resolution shows on the thread
-itself, not here. Never `APPROVE`/`REQUEST_CHANGES` the PR's review state
+bullet per **open** finding (still-open-prior + new). A bullet that cites a rule
+MUST link it the same way an inline comment does (number + name + line on `main`):
+
+```md
+**Request changes** — 2 open
+- [coding 3.1 Keep render pure](https://github.com/OWNER/REPO/blob/main/contributing/coding-best-practices.md#L68): `Date.now()` in render — src/foo.tsx:42
+- missing changeset — `Changeset present` will fail
+```
+
+On an update, **drop everything now fixed** — completed items leave the summary
+entirely; only remaining issues stay. **No checklist / per-consideration table** —
+the author cares what to fix, not what was scanned, and resolution shows on the
+thread itself, not here. Never `APPROVE`/`REQUEST_CHANGES` the PR's review state
 unprompted; the verdict lives in the text. Map a real review event only if asked.
 
 **c. Apply the inline changes** (only after the summary exists):
@@ -357,9 +370,10 @@ summary-comment URL. Don't re-paste the body.
   spec'd (if behavioral), and documented. Enumerate gaps; don't assume good faith
   closes them.
 - **Cite rules, not vibes.** Sweep *every* numbered rule in the three
-  best-practices files (step 9), not a favourite few. A rule violation leads with the
-  rule — number, name, and a link to its line on `main` — before the what's-wrong
-  and fix, so the author can act and argue precisely.
+  best-practices files (step 9), not a favourite few. Citing a rule **MUST**
+  include a Markdown link to its line on `main` — everywhere, inline comments and
+  summary bullets alike; a bare "coding 3.1" is not acceptable. Lead with the
+  linked rule (number + name) before the what's-wrong and fix.
 - **OpenSpec is the load-bearing axis** of considerations 1–3: behavioral change
   → proposal; proposal internally complete (design ⊇ proposal, tasks ⊇ design,
   specs ⊇ behavior); code matches design. Walk that chain in order. Archival
