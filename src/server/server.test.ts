@@ -1,7 +1,18 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm } from 'node:fs/promises'
+import { join, resolve } from 'node:path'
 import { makeTempDir, writeFiles } from '../testing/test-helpers'
-import { getManifest, slugify } from './server'
+import { getManifest, slugify, startDisplayCase } from './server'
+
+// A temp showcase INSIDE the repo so pinReact (and the per-component build
+// subprocess) resolve the consumer React by walking up to the repo's
+// node_modules — a /tmp dir has none. Gitignored via `.tmp/`.
+const REPO_ROOT = resolve(import.meta.dir, '..', '..')
+async function makeRepoTempDir(): Promise<string> {
+  const base = join(REPO_ROOT, '.tmp')
+  await mkdir(base, { recursive: true })
+  return mkdtemp(join(base, 'server-'))
+}
 
 const dirs: string[] = []
 const setup = async (files: Record<string, string>) => {
@@ -116,4 +127,100 @@ describe('slugify (re-exported from the server entry)', () => {
   test('matches the catalog slugifier', () => {
     expect(slugify('Sign In')).toBe('sign-in')
   })
+})
+
+// Integration: the dev server prepares each component on demand rather than
+// bundling the whole catalog at once. Booted against Display Case's own
+// dogfooded showcase (dozens of components) — a single-graph build of that
+// catalog is what crashes Bun's bundler at scale; this confirms the server
+// starts and serves without ever building it as one graph.
+describe('per-component on-demand bundling (integration)', () => {
+  // The worktree/repo root: has display-case.config.ts and node_modules (pinReact
+  // resolves the consumer React from here).
+  const Repo = resolve(import.meta.dir, '..', '..')
+
+  test('serves a large showcase, building each component only when first requested', async () => {
+    const server = await startDisplayCase(Repo, { port: 0 })
+    try {
+      const base = String(server.url).replace(/\/$/, '')
+
+      // The browsing surface and catalog are served even though the catalog is
+      // large and no case bundle has been built yet (size-independent startup).
+      expect((await fetch(`${base}/`)).ok).toBe(true)
+      const manifest = (await (
+        await fetch(`${base}/manifest.json`)
+      ).json()) as {
+        components: { id: string; cases: { id: string; renderUrl: string }[] }[]
+      }
+      expect(manifest.components.length).toBeGreaterThan(10)
+
+      // A case builds on first request to its address and references that one
+      // component's bundle — which is then served.
+      const comp = manifest.components[0]
+      const cs = comp.cases[0]
+      const doc = await (await fetch(`${base}${cs.renderUrl}`)).text()
+      expect(doc).toContain(`/dist/render-case-${comp.id}.js`)
+      expect(doc).toContain('data-ssr="1"')
+      expect(
+        (await fetch(`${base}/dist/render-case-${comp.id}.js`)).status,
+      ).toBe(200)
+
+      // An unknown component does not crash the server — it serves a document and
+      // every other case keeps working (failure is isolated, never fatal).
+      expect((await fetch(`${base}/render/__no-such-component__/x`)).ok).toBe(
+        true,
+      )
+      const other = manifest.components[1]
+      const otherDoc = await (
+        await fetch(`${base}${other.cases[0].renderUrl}`)
+      ).text()
+      expect(otherDoc).toContain(`/dist/render-case-${other.id}.js`)
+    } finally {
+      server.stop(true)
+    }
+  }, 60_000)
+})
+
+// Live reload: editing a component's source invalidates that component's cached
+// bundle so the change is reflected on its next render — the correctness property
+// the granular (per-graph) invalidation must preserve (it must not serve stale).
+describe('live reload (per-component invalidation)', () => {
+  const dirs: string[] = []
+  afterEach(async () => {
+    while (dirs.length)
+      await rm(dirs.pop() as string, { recursive: true, force: true })
+  })
+
+  test('editing a component reflects on its next render', async () => {
+    const dir = await makeRepoTempDir()
+    dirs.push(dir)
+    // Watcher covers `<pkg>/src`, so the case lives there. The case renders a
+    // plain string so the SSR markup carries it verbatim — no JSX needed.
+    await writeFiles(dir, {
+      'display-case.config.ts': `export default { title: 'T', roots: ['src/**/*.case.tsx'] }\n`,
+      'src/Widget.case.tsx': `export default { component: 'Widget', isFlow: false, cases: { Default: () => 'VERSION_ONE' } }\n`,
+    })
+    const server = await startDisplayCase(dir, { port: 3456 })
+    try {
+      const base = String(server.url).replace(/\/$/, '')
+      const first = await (await fetch(`${base}/render/widget/default`)).text()
+      expect(first).toContain('VERSION_ONE')
+
+      // Edit the case; the watcher (+150ms debounce) rebuilds and invalidates it.
+      await Bun.write(
+        join(dir, 'src/Widget.case.tsx'),
+        `export default { component: 'Widget', isFlow: false, cases: { Default: () => 'VERSION_TWO' } }\n`,
+      )
+      let reflected = ''
+      for (let i = 0; i < 80; i++) {
+        reflected = await (await fetch(`${base}/render/widget/default`)).text()
+        if (reflected.includes('VERSION_TWO')) break
+        await Bun.sleep(100)
+      }
+      expect(reflected).toContain('VERSION_TWO')
+      expect(reflected).not.toContain('VERSION_ONE')
+    } finally {
+      server.stop(true)
+    }
+  }, 60_000)
 })

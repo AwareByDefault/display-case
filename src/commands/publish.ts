@@ -1,12 +1,14 @@
 import { mkdir, rm } from 'node:fs/promises'
-import { basename, join, resolve } from 'node:path'
+import { basename, join, relative, resolve } from 'node:path'
+import { slugify } from '../core/catalog'
 import {
   cacheDir,
+  codegenCaseRenderEntry,
+  codegenCaseSsrEntry,
   codegenPrimerEntry,
-  codegenRenderEntry,
-  codegenSsrEntry,
   codegenSsrPrimerEntry,
   discoverCaseFiles,
+  loadModules,
   resolveConfig,
 } from '../core/discovery'
 import { mdxPlugin } from '../core/mdx-plugin'
@@ -115,11 +117,12 @@ async function readGlobalCss(
   return parts.join('\n')
 }
 
-/** Map a built entry-point's output path back to its logical name. */
-function entryName(path: string): 'browser' | 'render' | 'primer' | null {
+/** Map the chrome bundle's entry-point output path back to its logical name.
+ *  (The per-component render bundles are matched separately, by their single
+ *  entry-point output.) */
+function entryName(path: string): 'browser' | 'primer' | null {
   const b = basename(path)
   if (b.startsWith('browser-entry')) return 'browser'
-  if (b.startsWith('render-entry')) return 'render'
   if (b.startsWith('primer-entry')) return 'primer'
   return null
 }
@@ -129,8 +132,9 @@ export interface BuildDescriptor {
   base: string
   a11y: false
   hasPrimer: boolean
-  /** Content-hashed, base-prefixed entry URLs. */
-  assets: { browser: string; render: string; primer: string }
+  /** Content-hashed, base-prefixed entry URLs. `render` is per component
+   *  (componentId → bundle URL) — the catalog is split, never one render entry. */
+  assets: { browser: string; render: Record<string, string>; primer: string }
   tokensCss: string
   globalCss: string
   vitrineCss: string
@@ -155,25 +159,37 @@ export async function publish(
     : null
   const hasPrimer = !!primerSrc && (await Bun.file(primerSrc).exists())
 
-  // Codegen the same entries the dev server uses.
-  const renderEntry = await codegenRenderEntry(pkgDir, files, configPath)
+  // Each component is one case file; build each into its own bundle so the
+  // catalog is never bundled as a single module graph — the precondition for the
+  // Bun-bundler crash on large showcases (see the per-case-on-demand-bundling
+  // change). The catalog id is `slugify(component)`, matching the manifest.
+  const { modules } = await loadModules(files)
+  const components = modules.map((m) => ({
+    file: m.file,
+    id: slugify(m.module.component),
+  }))
+
   const primerEntry = hasPrimer
     ? await codegenPrimerEntry(pkgDir, config.primer as string)
     : null
-  const ssrEntry = await codegenSsrEntry(pkgDir, files, configPath)
   const ssrPrimerEntry = hasPrimer
     ? await codegenSsrPrimerEntry(pkgDir, config.primer as string, configPath)
     : null
 
   const defines = await buildDefines(pkgDir)
+  const assets = {
+    browser: '',
+    render: {} as Record<string, string>,
+    primer: '',
+  }
 
-  // Browser bundle: minified, content-hashed, production React. pinReact keeps
-  // Display Case's render runtime and the consumer's components on one React copy
-  // (see pinReact for the dual-React bug it prevents).
-  const browserEntries = [BROWSER_ENTRY, renderEntry]
-  if (primerEntry) browserEntries.push(primerEntry)
-  const browser = await Bun.build({
-    entrypoints: browserEntries,
+  // 1) Chrome bundle (the browse shell + optional primer) — carries no case
+  // modules, so a small graph. Minified, content-hashed, production React.
+  // pinReact keeps the render runtime and consumer components on one React copy.
+  const chromeEntries = [BROWSER_ENTRY]
+  if (primerEntry) chromeEntries.push(primerEntry)
+  const chrome = await Bun.build({
+    entrypoints: chromeEntries,
     outdir: join(out, 'assets'),
     target: 'browser',
     minify: true,
@@ -186,19 +202,45 @@ export async function publish(
       asset: '[name]-[hash].[ext]',
     },
   })
-  if (!browser.success) {
-    for (const log of browser.logs) console.error(log)
-    throw new Error('Display Case publish: browser bundle failed')
+  if (!chrome.success) {
+    for (const log of chrome.logs) console.error(log)
+    throw new Error('Display Case publish: chrome bundle failed')
   }
-
-  const assets = { browser: '', render: '', primer: '' }
-  for (const o of browser.outputs) {
+  for (const o of chrome.outputs) {
     if (o.kind !== 'entry-point') continue
     const name = entryName(o.path)
     if (name) assets[name] = `${base}/assets/${basename(o.path)}`
   }
 
-  // SSR renderers for the production server: built once (no watching), imported
+  // 2) Per-component browser render bundles — one `Bun.build` each (a bounded,
+  // single-component graph), content-hashed as `render-case-<id>-<hash>.js`.
+  for (const c of components) {
+    const entry = await codegenCaseRenderEntry(pkgDir, c.file, configPath, c.id)
+    const r = await Bun.build({
+      entrypoints: [entry],
+      outdir: join(out, 'assets'),
+      target: 'browser',
+      minify: true,
+      sourcemap: 'none',
+      plugins: [mdxPlugin(), pinReact(pkgDir)],
+      define: defines,
+      naming: {
+        entry: '[name]-[hash].[ext]',
+        chunk: '[name]-[hash].[ext]',
+        asset: '[name]-[hash].[ext]',
+      },
+    })
+    if (!r.success) {
+      for (const log of r.logs) console.error(log)
+      throw new Error(
+        `Display Case publish: render bundle failed for component "${c.id}" (${relative(pkgDir, c.file)})`,
+      )
+    }
+    const ep = r.outputs.find((o) => o.kind === 'entry-point')
+    if (ep) assets.render[c.id] = `${base}/assets/${basename(ep.path)}`
+  }
+
+  // 3) SSR renderers for the production server: built once (no watching), imported
   // by `prod-server`. React stays external here (unlike the browser bundle and
   // the dev server's in-process SSR, which pin React to the consumer copy): a
   // published build deploys with its own `bun install`, so the prod process has a
@@ -208,26 +250,48 @@ export async function publish(
   // instead put a second copy in the prod process for no benefit. The dual-React
   // hazard pinReact addresses comes from a temp/global *tool* install resolving a
   // different React than the consumer's components; a clean deploy has neither.
-  const ssrEntries = [ssrEntry]
-  if (ssrPrimerEntry) ssrEntries.push(ssrPrimerEntry)
-  const ssr = await Bun.build({
-    entrypoints: ssrEntries,
-    outdir: join(out, 'server'),
-    target: 'bun',
-    plugins: [mdxPlugin()],
-    define: defines,
-    external: [
-      'react',
-      'react-dom',
-      'react-dom/server',
-      'react/jsx-runtime',
-      'react/jsx-dev-runtime',
-    ],
-    naming: { entry: '[name].[ext]', chunk: '[name]-[hash].[ext]' },
-  })
-  if (!ssr.success) {
-    for (const log of ssr.logs) console.error(log)
-    throw new Error('Display Case publish: SSR bundle failed')
+  // Each component is its own SSR bundle (`ssr-case-<id>.js`), built separately so
+  // — like the browser side — no single pass holds the whole catalog.
+  const ssrExternal = [
+    'react',
+    'react-dom',
+    'react-dom/server',
+    'react/jsx-runtime',
+    'react/jsx-dev-runtime',
+  ]
+  if (ssrPrimerEntry) {
+    const r = await Bun.build({
+      entrypoints: [ssrPrimerEntry],
+      outdir: join(out, 'server'),
+      target: 'bun',
+      plugins: [mdxPlugin()],
+      define: defines,
+      external: ssrExternal,
+      naming: { entry: '[name].[ext]', chunk: '[name]-[hash].[ext]' },
+    })
+    if (!r.success) {
+      for (const log of r.logs) console.error(log)
+      throw new Error('Display Case publish: SSR primer bundle failed')
+    }
+  }
+  for (const c of components) {
+    const entry = await codegenCaseSsrEntry(pkgDir, c.file, configPath, c.id, 0)
+    const r = await Bun.build({
+      entrypoints: [entry],
+      outdir: join(out, 'server'),
+      target: 'bun',
+      plugins: [mdxPlugin()],
+      define: defines,
+      external: ssrExternal,
+      // Fixed name (no hash) so `prod-server` resolves it by component id.
+      naming: { entry: `ssr-case-${c.id}.[ext]`, chunk: '[name]-[hash].[ext]' },
+    })
+    if (!r.success) {
+      for (const log of r.logs) console.error(log)
+      throw new Error(
+        `Display Case publish: SSR bundle failed for component "${c.id}" (${relative(pkgDir, c.file)})`,
+      )
+    }
   }
 
   const manifest = await getManifest(pkgDir)

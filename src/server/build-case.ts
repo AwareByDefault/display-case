@@ -1,0 +1,209 @@
+import { join } from 'node:path'
+import {
+  cacheDir,
+  codegenCaseRenderEntry,
+  codegenCaseSsrEntry,
+} from '../core/discovery'
+import { graphRecorder } from '../core/graph-recorder'
+import { mdxPlugin } from '../core/mdx-plugin'
+import { pinReact } from '../core/pin-react'
+
+/**
+ * Build one component's bundles in a **subprocess**. The dev server spawns this
+ * per component on first request (see `buildCase` in server.ts), rather than
+ * calling `Bun.build` in-process, for two reasons:
+ *
+ *  1. **Crash isolation.** Bun's bundler can segfault on a large module graph —
+ *     "a bug in Bun, not your code". In-process that takes the whole dev server
+ *     down with a bare native crash and no indication of the culprit. As a child
+ *     process, an abnormal termination is just a non-zero/signal exit the parent
+ *     attributes to *this* component, while every other component keeps serving.
+ *  2. **A responsive event loop.** `Bun.build` is CPU-bound; running it in the
+ *     server's request path would block the loop and starve concurrent requests
+ *     (even the cheap shell route). In a child, the parent only awaits the exit.
+ *
+ * This module owns the per-component build so the same code path serves the
+ * subprocess `main` below and is unit-testable directly. A *build error* (an
+ * unresolved import, a syntax error) is returned as `{ ok: false, error }` — only
+ * an abnormal bundler crash takes the process down (which is the point).
+ */
+
+/**
+ * Build a `Bun.build` `define` map that inlines the consumer's public env
+ * (`BUN_PUBLIC_*`) into the browser bundle — the same values the app's own
+ * production build inlines (`bun build … --env='BUN_PUBLIC_*'`).
+ *
+ * Why `define` and not `Bun.build({ env: 'BUN_PUBLIC_*' })`: the `env` option
+ * only inlines vars present in the environment Bun snapshotted at *process*
+ * startup (plus the CWD-relative `.env` Bun auto-loads). Display Case runs from
+ * the repo root, not the consumer package, so a public var defined only in
+ * `<pkg>/.env` (e.g. the API base URL) is absent at build time — and mutating
+ * `process.env` at runtime does not influence it. Left unreplaced, a
+ * `process.env.BUN_PUBLIC_*` read survives as a literal that throws
+ * `process is not defined` in the browser. `define` replaces the literal
+ * unconditionally, independent of env timing.
+ *
+ * Scoped strictly to the public prefix so non-public env (secrets, NODE_ENV,
+ * ports) never enters the bundle. A real exported `process.env` value wins over
+ * the file so local overrides still apply.
+ */
+export async function publicEnvDefines(
+  pkgDir: string,
+): Promise<Record<string, string>> {
+  const values = new Map<string, string>()
+  for (const name of ['.env', '.env.local']) {
+    const file = Bun.file(join(pkgDir, name))
+    if (!(await file.exists())) continue
+    for (const raw of (await file.text()).split('\n')) {
+      const line = raw.trim()
+      if (!line || line.startsWith('#')) continue
+      const eq = line.indexOf('=')
+      if (eq === -1) continue
+      const key = line
+        .slice(0, eq)
+        .replace(/^export\s+/, '')
+        .trim()
+      if (!key.startsWith('BUN_PUBLIC_')) continue
+      let value = line.slice(eq + 1).trim()
+      if (
+        (value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))
+      ) {
+        value = value.slice(1, -1)
+      }
+      values.set(key, value)
+    }
+  }
+  // A real exported env value overrides the file (local override wins).
+  for (const [key, value] of Object.entries(process.env)) {
+    if (key.startsWith('BUN_PUBLIC_') && value !== undefined) {
+      values.set(key, value)
+    }
+  }
+  const defines: Record<string, string> = {}
+  for (const [key, value] of values) {
+    defines[`process.env.${key}`] = JSON.stringify(value)
+  }
+  return defines
+}
+
+export interface BuildCaseArgs {
+  pkgDir: string
+  file: string
+  configPath: string
+  componentId: string
+  /** Sequence suffix so the SSR bundle gets a fresh on-disk name each build (Bun
+   *  caches `import()` by resolved path). The parent imports the matching file. */
+  seq: number
+}
+
+export interface BuildCaseResult {
+  ok: boolean
+  /** Absolute paths the build read — the component's real module graph, so the
+   *  dev watcher can follow source-resolved deps. */
+  inputs: string[]
+  /** Present when `ok` is false: the bundler logs explaining the build failure. */
+  error?: string
+}
+
+/**
+ * Codegen and build one component's browser render bundle (→
+ * `<cache>/dist/render-case-<id>.js`) and in-process SSR bundle (→
+ * `<cache>/ssr/ssr-case-<id>-<seq>.js`). Returns the recorded module-graph
+ * inputs. A *build failure* is returned as `{ ok: false }`; a native bundler
+ * crash terminates the process (the parent detects the abnormal exit).
+ */
+export async function buildCaseBundles(
+  args: BuildCaseArgs,
+): Promise<BuildCaseResult> {
+  const { pkgDir, file, configPath, componentId, seq } = args
+  const inputs = new Set<string>()
+  const outdir = join(cacheDir(pkgDir), 'dist')
+  const ssrOutDir = join(cacheDir(pkgDir), 'ssr')
+  try {
+    const define = await publicEnvDefines(pkgDir)
+
+    const renderEntry = await codegenCaseRenderEntry(
+      pkgDir,
+      file,
+      configPath,
+      componentId,
+    )
+    const browser = await Bun.build({
+      entrypoints: [renderEntry],
+      outdir,
+      target: 'browser',
+      plugins: [graphRecorder(inputs), mdxPlugin(), pinReact(pkgDir)],
+      define,
+      naming: {
+        entry: '[name].[ext]',
+        chunk: '[name]-[hash].[ext]',
+        asset: '[name]-[hash].[ext]',
+      },
+    })
+    if (!browser.success) {
+      return {
+        ok: false,
+        inputs: [...inputs],
+        error: browser.logs.map(String).join('\n') || 'browser bundle failed',
+      }
+    }
+
+    const ssrEntry = await codegenCaseSsrEntry(
+      pkgDir,
+      file,
+      configPath,
+      componentId,
+      seq,
+    )
+    const ssr = await Bun.build({
+      entrypoints: [ssrEntry],
+      outdir: ssrOutDir,
+      target: 'bun',
+      plugins: [graphRecorder(inputs), mdxPlugin(), pinReact(pkgDir)],
+      define,
+      naming: {
+        entry: `ssr-case-${componentId}-${seq}.[ext]`,
+        chunk: '[name]-[hash].[ext]',
+        asset: '[name]-[hash].[ext]',
+      },
+    })
+    if (!ssr.success) {
+      return {
+        ok: false,
+        inputs: [...inputs],
+        error: ssr.logs.map(String).join('\n') || 'SSR bundle failed',
+      }
+    }
+
+    return { ok: true, inputs: [...inputs] }
+  } catch (err) {
+    // Bun.build *rejects* (rather than returning `success: false`) for some
+    // failures — an unresolvable import, a syntax error in the graph. Report it
+    // as a structured failure. A native bundler *crash* is uncatchable and takes
+    // the process down instead — which the spawning parent attributes (see
+    // build-case's module comment).
+    return {
+      ok: false,
+      inputs: [...inputs],
+      error: err instanceof Error ? (err.message ?? String(err)) : String(err),
+    }
+  }
+}
+
+// Subprocess entry: `bun build-case.ts <pkgDir> <file> <configPath> <id> <seq>`.
+// Emits the JSON result on stdout and exits 0 (built) / 1 (build error). A native
+// bundler crash exits abnormally with no stdout — the parent treats either as a
+// per-component failure.
+if (import.meta.main) {
+  const [pkgDir, file, configPath, componentId, seqStr] = process.argv.slice(2)
+  const result = await buildCaseBundles({
+    pkgDir,
+    file,
+    configPath,
+    componentId,
+    seq: Number(seqStr),
+  })
+  process.stdout.write(JSON.stringify(result))
+  process.exit(result.ok ? 0 : 1)
+}

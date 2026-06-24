@@ -179,12 +179,30 @@ function blockFrameNavigation(): void {
   )
 }
 
+/** Encode a render selection into its `/render/<comp>/<case>` address, mirroring
+ *  the chrome's `buildRenderSrc` so a cross-component navigation lands on a
+ *  document whose first paint already reflects theme/width/tweaks/fit/decor. */
+function renderUrlFor(state: RenderState): string {
+  const params = new URLSearchParams()
+  params.set('theme', state.theme)
+  if (state.width) params.set('width', String(state.width))
+  for (const [k, v] of Object.entries(state.tweaks)) params.set(`t.${k}`, v)
+  if (state.fit) params.set('fit', '1')
+  if (state.transparent) params.set('transparent', '1')
+  return `/render/${state.componentId}/${state.caseId}?${params.toString()}`
+}
+
 export function mountRender(
   modules: CaseModule[],
   config: DisplayCaseConfig,
 ): void {
   blockFrameNavigation()
   const rootEl = document.getElementById('root') as HTMLElement
+  // Each on-demand bundle carries one component's cases. A `dc-render` for a
+  // different component can't be satisfied in place (its module isn't here), so
+  // the frame navigates to that component's address, loading its bundle. The
+  // target equals what the chrome just selected, so the chrome stays in sync.
+  const ownComponentIds = new Set(modules.map((m) => slugify(m.component)))
   // The server pre-rendered the case into #root and flagged it `data-ssr="1"`;
   // adopt that markup instead of mounting from scratch. A browser-only case is
   // delivered empty (`data-ssr="0"`) and mounted fresh on the client.
@@ -273,7 +291,13 @@ export function mountRender(
     if (e.source !== window.parent) return
     const data = e.data as { type?: string; state?: Partial<RenderState> }
     if (data?.type !== 'dc-render' || !data.state) return
-    navigate({ ...state, ...data.state })
+    const next = { ...state, ...data.state }
+    // A different component than this bundle holds: load its document/bundle.
+    if (next.componentId && !ownComponentIds.has(next.componentId)) {
+      window.location.assign(renderUrlFor(next))
+      return
+    }
+    navigate(next)
   })
 
   // Announce readiness so the parent can push the current selection. Harmless
