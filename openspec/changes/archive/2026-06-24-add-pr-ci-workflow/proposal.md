@@ -28,6 +28,12 @@ without passing the gate.
   capability so a typical PR re-audits only the handful of affected components,
   not the whole showcase.
 - In-flight runs for a ref are **cancelled when a new commit is pushed**.
+- Add an **openspec merge-guard** job that blocks a pull request from integrating
+  an open (unarchived) spec proposal — the only proposal material a PR may merge
+  is archived proposals and the canonical spec updates archiving produces.
+  Deletions of an open proposal are allowed (that is what archiving looks like).
+  It is PR-only — it needs the PR's base commit — so it has no husky-hook
+  equivalent in the local gate.
 - This is **repo engineering tooling only**. It changes no Display Case runtime
   behavior, adds no runtime dependency, and ships nothing into a consuming build
   or a published showcase.
@@ -49,7 +55,9 @@ without passing the gate.
 ## Impact
 
 - **New file**: `.github/workflows/ci.yml` — the PR workflow (lint, check, test,
-  e2e jobs).
+  e2e jobs, plus the `openspec` merge-guard job).
+- **New file**: `tools/openspec-merge-guard.ts` — the diff-vs-base guard the
+  `openspec` job runs (also `bun run check:openspec-merge` locally).
 - **Docs**: `contributing/linting-best-practices.md` — replaces the "intentionally
   no PR-CI workflow defined today" note with the workflow as the documented
   backstop to the husky hooks.
