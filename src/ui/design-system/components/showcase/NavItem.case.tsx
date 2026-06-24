@@ -81,6 +81,49 @@ export default defineCases(
         />
       </Sidebar>
     ),
+    // Surface markers used in the Exhibits mode: a page renders plain; a flow is
+    // marked by a leading `icon` glyph (or a trailing `tag`) and its step rows
+    // carry a leading `index`.
+    Surfaces: () => (
+      <Sidebar style={{ width: '15rem' }}>
+        <NavItem
+          kind="component"
+          label="Pricing"
+          onToggle={() => {}}
+          onSelect={() => {}}
+        />
+        <NavItem
+          kind="component"
+          label="Sign-up"
+          icon="⤳"
+          count={3}
+          expanded
+          onToggle={() => {}}
+          onSelect={() => {}}
+        />
+        <NavItem
+          kind="case"
+          label="Request link"
+          index={1}
+          onSelect={() => {}}
+        />
+        <NavItem
+          kind="case"
+          label="Check email"
+          index={2}
+          current
+          onSelect={() => {}}
+        />
+        <NavItem kind="case" label="Done" index={3} onSelect={() => {}} />
+        <NavItem
+          kind="component"
+          label="Checkout"
+          tag="flow"
+          onToggle={() => {}}
+          onSelect={() => {}}
+        />
+      </Sidebar>
+    ),
   },
   { level: 'molecule' },
 )

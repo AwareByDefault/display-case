@@ -1,7 +1,10 @@
 .dcui-segmented {
   position: relative;
   display: grid;
-  grid-template-columns: repeat(var(--seg-count), 1fr);
+  /* `minmax(0, 1fr)` (not bare `1fr`, whose implicit `min-width: auto` lets a
+     long label force unequal columns) keeps every cell exactly equal, so the
+     formula-sized thumb lands on each segment whatever the label lengths. */
+  grid-template-columns: repeat(var(--seg-count), minmax(0, 1fr));
   gap: var(--dc-space-1);
   padding: var(--dc-space-1);
   border: var(--dc-border-line);
@@ -44,6 +47,13 @@
   background: transparent;
   cursor: pointer;
   transition: color var(--dc-transition-base);
+  /* Stay within the equal cell: a label too long for its share is clipped with
+     an ellipsis rather than overflowing the control's border. */
+  min-width: 0;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 /* Only the inactive segments take a hover fill — the active one sits over the
    thumb, which already carries the brand background. */

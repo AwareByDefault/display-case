@@ -10,6 +10,7 @@ const manifest: Manifest = {
       name: 'Button',
       level: 'atom',
       isFlow: false,
+      group: [],
       caseFile: 'src/Button.case.tsx',
       placardDoc: null,
       cases: [
@@ -24,8 +25,9 @@ const manifest: Manifest = {
       ],
     },
   ],
-  primer: false,
-  landing: 'library',
+  groups: [],
+  modes: ['components'],
+  landing: 'components',
 }
 
 describe('renderShellToHtml', () => {
@@ -45,7 +47,11 @@ describe('renderShellToHtml', () => {
 
   test('renders the primer landing without throwing when one is configured', () => {
     const result = renderShellToHtml({
-      manifest: { ...manifest, primer: true, landing: 'primer' },
+      manifest: {
+        ...manifest,
+        modes: ['primer', 'components'],
+        landing: 'primer',
+      },
       pathname: '/',
       search: '',
       theme: 'light',

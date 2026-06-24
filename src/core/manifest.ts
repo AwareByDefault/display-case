@@ -20,6 +20,9 @@ export interface ManifestComponent {
   name: string
   level: HierarchyLevel | null
   isFlow: boolean
+  /** Resolved information-architecture group path (Exhibits mode); `[]` for
+   *  building-block components and surfaces in the default group. */
+  group: string[]
   /** Repo-relative path to the case file. */
   caseFile: string
   /** Repo-relative path to the authored usage doc, or null. */
@@ -28,14 +31,40 @@ export interface ManifestComponent {
   cases: ManifestCase[]
 }
 
+/** One node of the Exhibits-mode information-architecture group tree. */
+export interface ManifestGroup {
+  /** Display label for this group segment (config override or the segment). */
+  label: string
+  /** Full resolved path to this group (display segments). */
+  path: string[]
+  /** Collapsed by default on first load. */
+  collapsed: boolean
+  /** Nested child groups. */
+  children: ManifestGroup[]
+}
+
+/** Top-level browse modes, in canonical (switch + landing-fallback) order:
+ *  `primer` is the optional long-form reading page; `components` lists the
+ *  building-block kit by level; `exhibits` lists page/flow surfaces by their
+ *  information-architecture group. */
+export const BROWSE_MODES = ['primer', 'components', 'exhibits'] as const
+export type BrowseMode = (typeof BROWSE_MODES)[number]
+
 export interface Manifest {
   title: string
   components: ManifestComponent[]
-  /** True when a Primer (`.mdx` reading page) is configured and present. The
-   *  chrome shows the Primer / Cases mode switch only then. */
-  primer: boolean
-  /** The view the chrome lands on at `/`: `'primer'` only when a Primer is
-   *  configured and the config didn't override the landing to `'cases'`; else
-   *  `'library'`. A deep-linked case always opens the library. */
-  landing: 'primer' | 'library'
+  /** The Exhibits-mode information-architecture group tree, ordered. Surfaces in
+   *  the default group contribute no node; `[]` when there are no grouped surfaces. */
+  groups: ManifestGroup[]
+  /** Browse modes that have content, in canonical order (primer, components,
+   *  exhibits). A mode absent here is never offered; the switch shows only when
+   *  two or more are present. */
+  modes: BrowseMode[]
+  /** The mode the chrome lands on at `/` — the configured landing when present,
+   *  else the first present mode. Always one of `modes`. A deep-linked case opens
+   *  that case regardless. */
+  landing: BrowseMode
+  /** How flows are distinguished from pages in the Exhibits sidebar: a trailing
+   *  `flow` tag (default) or a leading glyph. Resolved from `nav.flowMarker`. */
+  flowMarker?: 'glyph' | 'tag'
 }

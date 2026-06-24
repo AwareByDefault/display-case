@@ -24,11 +24,14 @@ test.describe('Display Case server contract', () => {
       expect(c.id, 'component has an id').toBeTruthy()
       expect(c.name, 'component has a name').toBeTruthy()
       expect(c.cases.length, `${c.id} has at least one case`).toBeGreaterThan(0)
+      // The browse-URL prefix encodes the mode: `/e/` for a page/flow surface
+      // (Exhibits), `/c/` for a building-block (Components).
+      const prefix = c.level === 'page' || c.level === 'flow' ? 'e' : 'c'
       for (const cs of c.cases) {
         expect(cs.id, `${c.id} case has an id`).toBeTruthy()
-        // Render URL is the deterministic snapshot address.
+        // Render URL is the deterministic snapshot address (mode-agnostic).
         expect(cs.renderUrl).toBe(`/render/${c.id}/${cs.id}`)
-        expect(cs.browseUrl).toBe(`/c/${c.id}/${cs.id}`)
+        expect(cs.browseUrl).toBe(`/${prefix}/${c.id}/${cs.id}`)
       }
     }
   })

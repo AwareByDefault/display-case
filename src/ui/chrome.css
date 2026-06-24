@@ -149,7 +149,21 @@
   flex: 1 1 0;
   min-height: 0;
   overflow-y: auto;
+  /* The rail never scrolls sideways — long names ellipsize in place. */
+  overflow-x: hidden;
   scrollbar-width: none; /* Firefox */
+}
+
+/* Sidebar filter input (both catalog modes). The field fills the rail width;
+   `border-box` keeps its border + padding inside that 100% so it never overflows
+   the rail (there's no global box-sizing reset). */
+.dc-nav-filter {
+  padding: var(--dc-space-1) var(--dc-space-1) var(--dc-space-3);
+}
+.dc-nav-filter .dcui-field {
+  display: flex;
+  box-sizing: border-box;
+  width: 100%;
 }
 .dc-nav-scroll::-webkit-scrollbar {
   display: none; /* WebKit/Blink */
@@ -301,6 +315,25 @@
   justify-content: space-between;
   gap: var(--dc-space-4);
   margin-bottom: var(--dc-space-4);
+}
+
+/* Mobile: the rail never takes a column. When open it overlays the stage as a
+   full-width drawer (placed in the `main` grid cell, so it sits below the header
+   — whose ☰ still toggles it — without needing the header's height); otherwise
+   it stays hidden so the stage gets the whole screen. */
+@media (max-width: 640px) {
+  .dc-app {
+    grid-template-columns: 1fr;
+  }
+  .dc-app[data-nav="open"] .dcui-sidebar {
+    grid-area: main;
+    z-index: 50;
+    border-right: 0;
+  }
+  /* A full-width drawer has no edge to drag. */
+  .dcui-sidebar-resize {
+    display: none;
+  }
 }
 
 @media (max-width: 900px) {
@@ -460,6 +493,16 @@
 .dc-modeswitch {
   flex: 0 0 auto;
   margin-bottom: var(--dc-space-8);
+}
+/* The mode switch can carry three full words (Primer · Components · Exhibits) in
+   the narrow rail, so its segments run tighter than the default toggle: smaller
+   text, no label tracking, and minimal side padding — enough for the longest
+   label ("Components") to read in full across three equal cells. */
+.dc-modeswitch .dcui-segmented-seg {
+  padding-left: var(--dc-space-1);
+  padding-right: var(--dc-space-1);
+  font-size: var(--dc-text-2xs);
+  letter-spacing: var(--dc-tracking-normal);
 }
 
 /* The Primer host shares the `main` grid area with the library stage; the

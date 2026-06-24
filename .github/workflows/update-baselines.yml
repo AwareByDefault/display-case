@@ -59,6 +59,11 @@ jobs:
       - name: Record baselines
         run: bun src/cli.ts check . --visual --update ${{ github.event.inputs.only && format('--only={0}', github.event.inputs.only) || '' }}
       - name: Commit refreshed baselines
+        # `bun install` set up husky, so a plain commit triggers the repo's
+        # commitlint commit-msg hook in the container — `--no-verify` skips it
+        # (and HUSKY=0 belt-and-suspenders), with a conventional message anyway.
+        env:
+          HUSKY: "0"
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -66,6 +71,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "No baseline changes to commit."
           else
-            git commit -m "Update visual baselines [skip ci]"
+            git commit --no-verify -m "chore(visual): refresh baselines [skip ci]"
             git push origin HEAD:${{ github.event.inputs.ref }}
           fi

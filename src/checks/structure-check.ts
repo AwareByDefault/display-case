@@ -6,6 +6,7 @@ import {
   loadModules,
   resolveConfig,
 } from '../core/discovery'
+import { makeGroupResolver } from '../core/groups'
 import { segmentMdx } from '../core/mdx-lite'
 import type {
   CaseModule,
@@ -68,6 +69,7 @@ const RULE_DEFAULTS: Record<StructureRuleId, RuleDefault> = {
   'flow-multi-step': { enabled: true, severity: 'error' },
   'unique-slugs': { enabled: true, severity: 'error' },
   'tweak-defaults-valid': { enabled: true, severity: 'error' },
+  'nav-groups-resolve': { enabled: true, severity: 'warn' },
   'interactive-cases-keyed': { enabled: true, severity: 'error' },
   'atom-purity': { enabled: false, severity: 'error' },
   'no-downward-dependency': { enabled: false, severity: 'error' },
@@ -323,6 +325,51 @@ function ruleCasesLoad(s: SharedInputs): Omit<StructureFinding, 'severity'>[] {
     file: e.file,
     message: `case file failed to load: ${e.error}`,
   }))
+}
+
+async function ruleNavGroupsResolve(
+  s: SharedInputs,
+): Promise<Omit<StructureFinding, 'severity'>[]> {
+  const groups = s.config.nav?.groups
+  if (!groups) return []
+  const refs = [
+    ...(groups.order ?? []),
+    ...Object.keys(groups.labels ?? {}),
+    ...(groups.collapsed ?? []),
+  ]
+  if (refs.length === 0) return []
+
+  // Collect every identifier a config reference could legitimately name: each
+  // resolved group's full path (joined), every ancestor prefix of it, and every
+  // individual segment — matching how the group tree keys nodes.
+  const resolveGroup = makeGroupResolver(s.config)
+  const valid = new Set<string>()
+  for (const { file, module } of s.modules) {
+    const mod =
+      module.sourcePath != null
+        ? module
+        : { ...module, sourcePath: relative(s.pkgDir, file) }
+    const acc: string[] = []
+    for (const seg of resolveGroup(mod)) {
+      acc.push(seg)
+      valid.add(seg.toLowerCase())
+      valid.add(acc.join('/').toLowerCase())
+    }
+  }
+
+  const out: Omit<StructureFinding, 'severity'>[] = []
+  const seen = new Set<string>()
+  for (const ref of refs) {
+    const key = ref.trim().toLowerCase()
+    if (valid.has(key) || seen.has(key)) continue
+    seen.add(key)
+    out.push({
+      rule: 'nav-groups-resolve',
+      file: s.configPath,
+      message: `nav config references group "${ref}" that no surface resolves to`,
+    })
+  }
+  return out
 }
 
 async function ruleLevelsClassified(
@@ -957,6 +1004,7 @@ export async function checkStructure(
     'flow-multi-step': () => ruleFlowMultiStep(shared),
     'unique-slugs': () => ruleUniqueSlugs(shared),
     'tweak-defaults-valid': () => ruleTweakDefaultsValid(shared),
+    'nav-groups-resolve': () => ruleNavGroupsResolve(shared),
     'interactive-cases-keyed': () => ruleInteractiveCasesKeyed(shared),
     'atom-purity': () => ruleAtomPurity(ctx),
     'no-downward-dependency': () => ruleNoDownwardDependency(ctx),

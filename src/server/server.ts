@@ -23,10 +23,11 @@ import {
   graphRecorder,
   graphWatchDirs,
 } from '../core/graph-recorder'
-import type { Manifest } from '../core/manifest'
+import { buildGroupTree, makeGroupResolver } from '../core/groups'
+import type { BrowseMode, Manifest } from '../core/manifest'
 import { mdxPlugin } from '../core/mdx-plugin'
 import { pinReact } from '../core/pin-react'
-import type { DisplayCaseConfig } from '../index'
+import { type DisplayCaseConfig, isSurfaceLevel } from '../index'
 import type { PrimerHtmlResult } from '../render/ssr-primer'
 import type { CaseRenderer } from '../render/ssr-render'
 import { renderShellToHtml } from '../render/ssr-shell'
@@ -130,6 +131,7 @@ function primerFile(pkgDir: string, config: DisplayCaseConfig): string | null {
 }
 
 function buildManifest(
+  pkgDir: string,
   modules: LoadedModule[],
   config: DisplayCaseConfig,
   hasPrimer: boolean,
@@ -137,8 +139,20 @@ function buildManifest(
   const fileByComponent = new Map(
     modules.map((m) => [m.module.component, m.file]),
   )
+  // The manifest-building load path (loadModules) doesn't tag modules with their
+  // source path the way the codegen'd bundles do, so set it here — group
+  // resolution and the decorator both key off it. Package-relative, matching the
+  // `roots` globs.
+  for (const m of modules) {
+    if (m.module.sourcePath == null)
+      m.module.sourcePath = relative(pkgDir, m.file)
+  }
   const placardById = new Map<string, string>()
-  const catalog = buildCatalog(modules.map((m) => m.module))
+  const resolveGroup = makeGroupResolver(config)
+  const catalog = buildCatalog(
+    modules.map((m) => m.module),
+    resolveGroup,
+  )
 
   const components = catalog.map((c) => {
     const file = fileByComponent.get(c.name) as string
@@ -150,12 +164,15 @@ function buildManifest(
       name: c.name,
       level: c.level,
       isFlow: c.isFlow,
+      group: c.group,
       caseFile: relPath(file),
       placardDoc: hasDoc ? relPath(placardAbs) : null,
       cases: c.cases.map((cs) => ({
         id: cs.id,
         name: cs.name,
-        browseUrl: `/c/${c.id}/${cs.id}`,
+        // The mode is the path prefix: `/e/` for an Exhibits surface, `/c/` for
+        // a Components (kit) case. The render endpoint stays unified.
+        browseUrl: `/${isSurfaceLevel(c.level) ? 'e' : 'c'}/${c.id}/${cs.id}`,
         renderUrl: `/render/${c.id}/${cs.id}`,
         tweaks: cs.tweaks,
         transitions: cs.transitions,
@@ -163,13 +180,33 @@ function buildManifest(
     }
   })
 
-  // Land on the Primer by default when one exists; `landing: 'cases'` opts the
-  // root view back to the library even with a Primer configured. With no
-  // Primer there's only the library to land on.
-  const landing = hasPrimer && config.landing !== 'cases' ? 'primer' : 'library'
+  // The present modes, in canonical order: a mode is offered only when it has
+  // content (a primer; ≥1 building-block component; ≥1 page/flow surface).
+  const hasKit = catalog.some((c) => !isSurfaceLevel(c.level))
+  const hasSurfaces = catalog.some((c) => isSurfaceLevel(c.level))
+  const modes: BrowseMode[] = []
+  if (hasPrimer) modes.push('primer')
+  if (hasKit) modes.push('components')
+  if (hasSurfaces) modes.push('exhibits')
+
+  // Land on the configured mode when it's present; otherwise the first present
+  // mode (primer → components → exhibits). With no config and a primer present,
+  // this lands on the primer, as before.
+  const want = config.landing
+  const landing: BrowseMode =
+    want && modes.includes(want) ? want : (modes[0] ?? 'components')
+
+  const groups = buildGroupTree(catalog, config)
 
   return {
-    manifest: { title: config.title, components, primer: hasPrimer, landing },
+    manifest: {
+      title: config.title,
+      components,
+      groups,
+      modes,
+      landing,
+      flowMarker: config.nav?.flowMarker ?? 'tag',
+    },
     placardById,
   }
 }
@@ -866,7 +903,7 @@ export async function startDisplayCase(
         )
       }
 
-      // Shell handles `/`, `/primer`, and all `/c/...` browse routes. The server
+      // Shell handles `/`, `/primer`, and all `/c/...` + `/e/...` browse routes. The server
       // pre-renders the shell from the in-memory manifest + this request's route
       // so the landing surface and every deep link arrive painted; the client
       // adopts it. The shell does a full reload only in `--dev` (chrome may have
@@ -1084,7 +1121,7 @@ export async function getManifest(pkgDir: string): Promise<Manifest> {
   const { modules, errors } = await loadModules(files)
   for (const e of errors) console.error(`  ✗ ${relPath(e.file)}: ${e.error}`)
   const hasPrimer = primerFile(pkgDir, config) !== null
-  return buildManifest(modules, config, hasPrimer).manifest
+  return buildManifest(pkgDir, modules, config, hasPrimer).manifest
 }
 
 export { slugify }
