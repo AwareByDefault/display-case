@@ -1,18 +1,14 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { mkdir, mkdtemp, rm } from 'node:fs/promises'
-import { join, resolve } from 'node:path'
+import { rm } from 'node:fs/promises'
+import { resolve } from 'node:path'
 import { makeTempDir, writeFiles } from '../testing/test-helpers'
-import { getManifest, slugify, startDisplayCase } from './server'
-
-// A temp showcase INSIDE the repo so pinReact (and the per-component build
-// subprocess) resolve the consumer React by walking up to the repo's
-// node_modules — a /tmp dir has none. Gitignored via `.tmp/`.
-const REPO_ROOT = resolve(import.meta.dir, '..', '..')
-async function makeRepoTempDir(): Promise<string> {
-  const base = join(REPO_ROOT, '.tmp')
-  await mkdir(base, { recursive: true })
-  return mkdtemp(join(base, 'server-'))
-}
+import {
+  getManifest,
+  type Invalidatable,
+  slugify,
+  staleCaseIds,
+  startDisplayCase,
+} from './server'
 
 const dirs: string[] = []
 const setup = async (files: Record<string, string>) => {
@@ -181,46 +177,43 @@ describe('per-component on-demand bundling (integration)', () => {
   }, 60_000)
 })
 
-// Live reload: editing a component's source invalidates that component's cached
-// bundle so the change is reflected on its next render — the correctness property
-// the granular (per-graph) invalidation must preserve (it must not serve stale).
-describe('live reload (per-component invalidation)', () => {
-  const dirs: string[] = []
-  afterEach(async () => {
-    while (dirs.length)
-      await rm(dirs.pop() as string, { recursive: true, force: true })
+// Live reload: a watch rebuild must invalidate exactly the components whose
+// module graph includes a changed file — so an edit is reflected (never stale)
+// without forcing every other component to rebuild. Tested at the pure-function
+// level (the OS file watcher that feeds it the paths is not deterministic enough
+// to assert on under `bun test`).
+describe('staleCaseIds (graph-aware invalidation)', () => {
+  const ok = (...inputs: string[]): Invalidatable => ({
+    ok: true,
+    inputs: new Set(inputs),
+  })
+  // Two components: A imports a shared dep, B is independent.
+  const cache = (): Map<string, Invalidatable> =>
+    new Map<string, Invalidatable>([
+      ['a', ok('/p/src/A.case.tsx', '/p/src/shared.ts')],
+      ['b', ok('/p/src/B.case.tsx')],
+    ])
+
+  test('editing a case file invalidates only that component', () => {
+    expect(staleCaseIds(cache(), ['/p/src/A.case.tsx'])).toEqual(new Set(['a']))
   })
 
-  test('editing a component reflects on its next render', async () => {
-    const dir = await makeRepoTempDir()
-    dirs.push(dir)
-    // Watcher covers `<pkg>/src`, so the case lives there. The case renders a
-    // plain string so the SSR markup carries it verbatim — no JSX needed.
-    await writeFiles(dir, {
-      'display-case.config.ts': `export default { title: 'T', roots: ['src/**/*.case.tsx'] }\n`,
-      'src/Widget.case.tsx': `export default { component: 'Widget', isFlow: false, cases: { Default: () => 'VERSION_ONE' } }\n`,
-    })
-    const server = await startDisplayCase(dir, { port: 3456 })
-    try {
-      const base = String(server.url).replace(/\/$/, '')
-      const first = await (await fetch(`${base}/render/widget/default`)).text()
-      expect(first).toContain('VERSION_ONE')
+  test('editing a shared (non-entry) dependency invalidates its dependents only', () => {
+    // The shared file is in A's graph but not B's — only A is dropped.
+    expect(staleCaseIds(cache(), ['/p/src/shared.ts'])).toEqual(new Set(['a']))
+  })
 
-      // Edit the case; the watcher (+150ms debounce) rebuilds and invalidates it.
-      await Bun.write(
-        join(dir, 'src/Widget.case.tsx'),
-        `export default { component: 'Widget', isFlow: false, cases: { Default: () => 'VERSION_TWO' } }\n`,
-      )
-      let reflected = ''
-      for (let i = 0; i < 80; i++) {
-        reflected = await (await fetch(`${base}/render/widget/default`)).text()
-        if (reflected.includes('VERSION_TWO')) break
-        await Bun.sleep(100)
-      }
-      expect(reflected).toContain('VERSION_TWO')
-      expect(reflected).not.toContain('VERSION_ONE')
-    } finally {
-      server.stop(true)
-    }
-  }, 60_000)
+  test('an unrelated change invalidates nothing', () => {
+    expect(staleCaseIds(cache(), ['/p/src/other.ts'])).toEqual(new Set())
+  })
+
+  test('a failed entry is always invalidated (so a fix is retried)', () => {
+    const c = cache()
+    c.set('bad', { ok: false })
+    expect(staleCaseIds(c, ['/p/src/other.ts'])).toEqual(new Set(['bad']))
+  })
+
+  test('no changed paths is a conservative fallback — invalidate everything', () => {
+    expect(staleCaseIds(cache(), [])).toEqual(new Set(['a', 'b']))
+  })
 })

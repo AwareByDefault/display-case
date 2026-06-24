@@ -648,7 +648,7 @@ export async function startDisplayCase(
         inputs: Set<string>
       }
     | { ok: false; componentId: string; caseFile: string; error: string }
-  let caseCache = new Map<string, CaseEntry>()
+  const caseCache = new Map<string, CaseEntry>()
   // In-flight builds, so concurrent requests for the same component (e.g. the
   // a11y startup sweep) share one build instead of racing.
   const caseBuilding = new Map<string, Promise<CaseEntry | null>>()
@@ -1092,14 +1092,7 @@ export async function startDisplayCase(
         // every failed entry, so a fix is retried) — not the whole cache — so an
         // edit doesn't force every other component to rebuild on its next visit.
         // No specific paths (a conservative fallback) drops everything.
-        if (changed.length === 0) {
-          caseCache = new Map()
-        } else {
-          for (const [id, entry] of caseCache) {
-            const stale = !entry.ok || changed.some((p) => entry.inputs.has(p))
-            if (stale) caseCache.delete(id)
-          }
-        }
+        for (const id of staleCaseIds(caseCache, changed)) caseCache.delete(id)
         scanner?.invalidateAll()
         // The module graph may have shifted (a new sibling import, or one
         // dropped) — reconcile the dependency watchers against it.
@@ -1239,6 +1232,30 @@ export async function getManifest(pkgDir: string): Promise<Manifest> {
   for (const e of errors) console.error(`  ✗ ${relPath(e.file)}: ${e.error}`)
   const hasPrimer = primerFile(pkgDir, config) !== null
   return buildManifest(pkgDir, modules, config, hasPrimer).manifest
+}
+
+/** A per-component cache entry, reduced to what {@link staleCaseIds} reasons
+ *  about: whether it built, and (if so) the files its bundle read. */
+export type Invalidatable = { ok: true; inputs: Set<string> } | { ok: false }
+
+/**
+ * Given the cached components and the absolute paths that changed since the last
+ * rebuild, return the component ids to drop from the cache: every component whose
+ * recorded input graph includes a changed file (its bundle is stale), plus every
+ * failed entry (so a fix is retried on next visit). With no changed paths — a
+ * conservative fallback — everything is invalidated. Pure so the graph-aware
+ * invalidation is tested deterministically, without the OS file watcher.
+ */
+export function staleCaseIds(
+  cache: ReadonlyMap<string, Invalidatable>,
+  changed: readonly string[],
+): Set<string> {
+  if (changed.length === 0) return new Set(cache.keys())
+  const ids = new Set<string>()
+  for (const [id, entry] of cache) {
+    if (!entry.ok || changed.some((p) => entry.inputs.has(p))) ids.add(id)
+  }
+  return ids
 }
 
 export { slugify }
