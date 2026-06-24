@@ -13,8 +13,8 @@
 
 ## 3. Build isolation + graceful degradation (D4)
 
-- [x] 3.1 Each per-component build runs in a subprocess (`src/server/build-case.ts`, spawned by `buildCase`): a non-zero exit or an abnormal termination with no result (a native bundler crash) is attributed to that component and surfaced as a per-case diagnostic, while every other case keeps serving and the server's event loop stays free during the CPU-bound build. Tested via `build-case.test.ts` (the exit-code/attribution boundary).
-- [x] 3.2 On a case build failure, serve a diagnostic error surface for that case (component + source file + bundler logs) while keeping every other case served; failures are cached and never terminate the server. (Covers build errors; native-crash containment depends on 3.1.)
+- [ ] 3.1 Run each per-case build in a subprocess so a *native* bundler crash is an attributed per-case failure rather than a dead server. (Implemented, then **reverted**: a cold `bun` spawn per build is pathologically slow on a contended CI runner — the a11y e2e timed out. Per-component bundling already keeps each graph small enough that a native crash does not arise — the report's individual heavy cases all built fine — so the build runs in-process. Build *errors* are still isolated and diagnosed; 3.2 covers that.)
+- [x] 3.2 On a case build failure (caught in-process by `buildCaseBundles`), serve a chrome-free diagnostic for that case (component + source file + bundler logs) while every other case keeps serving; failures are cached so they aren't retried every request. Tested via `build-case.test.ts`.
 - [x] 3.3 Publish builds each component separately and fails with a case-attributed error (`render/SSR bundle failed for component "<id>" (<file>)`) instead of a bare crash. (A one-shot build aborts on a bad component rather than serving a partial showcase — the "keep serving others" half applies only to the running server.)
 
 ## 4. Shared commons bundle + externalized vendors (D3) — ATTEMPTED, REVERTED

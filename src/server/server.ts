@@ -30,15 +30,12 @@ import type { PrimerHtmlResult } from '../render/ssr-primer'
 import type { CaseRenderer } from '../render/ssr-render'
 import { renderShellToHtml } from '../render/ssr-shell'
 import type { Theme } from '../ui/shell-core'
-import { publicEnvDefines } from './build-case'
+import { buildCaseBundles, publicEnvDefines } from './build-case'
 
 const HERE = resolve(import.meta.dir, '..')
 const BROWSER_ENTRY = join(HERE, 'ui', 'browser-entry.tsx')
 const CHROME_CSS = join(HERE, 'ui', 'chrome.css')
 const CLI = join(HERE, 'cli.ts')
-// The per-component bundler, run as a subprocess (see `buildCase`) so a native
-// bundler crash is an attributable child exit, not a dead server.
-const BUILD_CASE_SCRIPT = join(HERE, 'server', 'build-case.ts')
 
 // The package's own design system — "The Vitrine". Display Case dogfoods it:
 // the browse chrome is styled entirely from these `--dc-*` tokens. The token
@@ -671,52 +668,29 @@ export async function startDisplayCase(
     // current module after an edit (same reason the manifest is a subprocess).
     const seq = ++ssrBuildSeq
     try {
-      // Bundle this one component in a subprocess (see build-case.ts): a native
-      // bundler crash is then an attributable child exit, not a dead server, and
-      // the CPU-bound build never blocks the request loop. The child writes the
-      // browser bundle (→ /dist/render-case-<id>.js, served by the `/dist/`
-      // handler) and the SSR bundle to the cache, and reports the module graph.
-      const proc = Bun.spawn(
-        [
-          'bun',
-          BUILD_CASE_SCRIPT,
-          pkgDir,
-          file,
-          configPath,
-          componentId,
-          String(seq),
-        ],
-        { stdout: 'pipe', stderr: 'pipe' },
-      )
-      const [out, errText, code] = await Promise.all([
-        new Response(proc.stdout).text(),
-        new Response(proc.stderr).text(),
-        proc.exited,
-      ])
-      if (errText.trim()) {
-        process.stderr.write(errText.endsWith('\n') ? errText : `${errText}\n`)
-      }
-      let parsed: { ok: boolean; inputs: string[]; error?: string } | undefined
-      try {
-        parsed = JSON.parse(out)
-      } catch {
-        // No parseable result → the child died abnormally (e.g. a native bundler
-        // crash). Attribute it to this component instead of taking the server down.
-      }
-      if (!parsed?.ok) {
+      // Build this one component's bundles (browser → /dist/render-case-<id>.js,
+      // served by the `/dist/` handler; SSR → the cache). A *build error* is
+      // returned as { ok:false } and surfaced as a per-case diagnostic while every
+      // other component keeps serving. (A native bundler crash is not survivable
+      // in-process; per-component graphs are small enough that it does not arise —
+      // see build-case.ts.)
+      const result = await buildCaseBundles({
+        pkgDir,
+        file,
+        configPath,
+        componentId,
+        seq,
+      })
+      if (!result.ok) {
         console.warn(
-          `  ⚠ ${componentId} could not be bundled (exit ${code}); other cases keep serving`,
+          `  ⚠ ${componentId} could not be bundled; other cases keep serving`,
         )
-        return fail(
-          parsed?.error ?? `bundling exited abnormally (code ${code})`,
-        )
+        return fail(result.error ?? 'bundling failed')
       }
       // Merge the component's module graph so the dev watcher follows its
       // source-resolved deps, then reconcile the dependency watchers.
-      for (const f of parsed.inputs) state.inputs.add(f)
+      for (const f of result.inputs) state.inputs.add(f)
       await onGraphGrew()
-      // The SSR bundle is on disk; importing it in-process is module *evaluation*
-      // (safe — only *bundling* the combined graph crashes Bun).
       const ssrPath = join(
         cacheDir(pkgDir),
         'ssr',
@@ -727,7 +701,7 @@ export async function startDisplayCase(
         ok: true,
         renderCase: mod.renderCaseToHtml,
         browserUrl: `/dist/render-case-${componentId}.js`,
-        inputs: new Set(parsed.inputs),
+        inputs: new Set(result.inputs),
       }
     } catch (err) {
       return fail(

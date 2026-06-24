@@ -65,22 +65,22 @@ references each component's own bundle. The all-cases `codegenRenderEntry` /
 `codegenSsrEntry` are deleted. Verified by publishing the real 35-component
 showcase (35 + 35 bundles, served correctly).
 
-**Each per-component build runs in a subprocess (D4, done).** `Bun.build` is
-CPU-bound and can *segfault* on a pathological graph — in-process that blocks the
-request loop (starving even the cheap shell route) and a crash takes the whole
-server down with a bare native fault. So `buildCase` (server.ts) spawns
-`src/server/build-case.ts` per component instead: the parent only awaits the
-child's exit, so the event loop stays free during the build, and an abnormal exit
-(non-zero, or a crash that yields no JSON result on stdout) is *attributed* to the
-one component — surfaced as a per-case diagnostic — while every other case keeps
-serving. The child writes the browser + SSR bundles to the cache and reports the
-module graph (as JSON) so the parent can keep the dev watcher following
-source-resolved deps; the parent then `import()`s the on-disk SSR bundle
-(evaluation is safe — only *bundling* the combined graph crashes). `buildCase`
-costs ~one `bun` spawn per component's first visit (~20ms over the in-process
-build), amortized by the cache. `build-case.ts` also owns `publicEnvDefines`
-(moved out of server.ts) since both the subprocess and the in-process shell build
-need it.
+**Per-component builds run in-process — a build subprocess (D4) was tried and
+reverted.** The idea was to spawn `bun build-case.ts` per component so a *native*
+bundler segfault would be an attributed child exit rather than a dead server. It
+worked locally, but **CI failed**: a cold `bun` start per build is pathologically
+slow on a contended 2-core runner already saturated by the a11y scanner's own
+Chromium + the e2e workers — the a11y `re-scan` e2e timed out at 45s on
+`page.goto` (the shell stage iframe loads `/render/...`, whose on-demand build was
+stuck behind the spawn). It passed locally (~1s) but not on CI. Since per-component
+bundling already keeps each graph small (the report's individual heavy cases all
+built fine — only the *aggregate* catalog crashed), a native crash doesn't arise,
+so `buildCase` calls `buildCaseBundles` **in-process** (`src/server/build-case.ts`,
+which also owns `publicEnvDefines`). A *build error* is caught there and returned
+`{ ok:false, error }`, which the server caches and serves as a chrome-free
+per-case diagnostic while every other component keeps serving. **Lesson: a
+per-request subprocess spawn is a real cost on constrained CI — don't add one for
+a defensive guard the architecture already makes unnecessary.**
 
 **Live-reload invalidates per-component, by graph membership (D6, done).** Each
 cached component carries its recorded `graphRecorder` input set. The watcher

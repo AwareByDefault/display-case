@@ -71,15 +71,12 @@ exactly as if it had been prepared ahead of time.
 
 ### Requirement: Isolated, diagnosed preparation failure
 
-When a single case cannot be prepared for delivery, Display Case SHALL confine
-that failure to the affected case: the rest of the showcase SHALL remain
-browsable and every other case SHALL still be served. The failure SHALL be
-reported in a form that identifies the offending case — its component, case, and
-source file. Where a case is prepared by an external process that may abort
-abnormally — including a native crash of the underlying bundler — Display Case
-SHALL detect the abnormal termination and attribute it to the case being
-prepared, rather than letting it terminate the showcase or surface an
-undiagnosable crash.
+Display Case SHALL confine a single case's preparation failure to the affected
+case. When a case cannot be prepared for delivery (for example, its module graph
+cannot be bundled), the rest of the showcase SHALL remain browsable and every
+other case SHALL still be served, and the failure SHALL be reported in a form
+that identifies the offending case — its component, case, and source file —
+rather than blanking the surface or surfacing an undiagnosable error.
 
 #### Scenario: One unpreparable case does not sink the showcase
 
@@ -88,12 +85,12 @@ undiagnosable crash.
 - THEN every other case remains browsable and is served
 - AND the failing case is reported by its component, case, and source file
 
-#### Scenario: An abnormal build termination is attributed, not surfaced bare
+#### Scenario: A case that cannot be bundled is diagnosed, not blank
 
-- GIVEN a case whose preparation aborts its build process abnormally
+- GIVEN a case whose preparation fails because its module graph cannot be bundled
 - WHEN that case is requested
-- THEN the abnormal termination is attributed to that case
-- AND the showcase reports the failure rather than terminating without explanation
+- THEN the failure is attributed to that case by its component, case, and source file
+- AND the showcase reports it rather than blanking without explanation
 
 #### Scenario: A failing case does not block a valid case
 

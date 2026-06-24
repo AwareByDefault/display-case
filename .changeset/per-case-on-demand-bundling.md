@@ -9,10 +9,9 @@ libraries).
 
 - **Dev server**: builds each component's render + SSR bundle the first time that
   component is requested, rather than pre-bundling the whole catalog at startup.
-  Startup is now independent of case count. Each build runs in a subprocess, so a
-  component whose bundle fails — or even crashes the bundler — is isolated and
-  shown as a chrome-free diagnostic (component + source file) while every other
-  component keeps serving, and the CPU-bound build never blocks the server.
+  Startup is now independent of case count. A component whose bundle fails to
+  build is isolated and shown as a chrome-free diagnostic (component + source
+  file) while every other component keeps serving.
 - **`publish`**: builds the chrome once, then each component into its own
   content-hashed browser + SSR bundle; the production server serves each
   component's own bundle. A large showcase now publishes without crashing.

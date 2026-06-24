@@ -9,23 +9,16 @@ import { mdxPlugin } from '../core/mdx-plugin'
 import { pinReact } from '../core/pin-react'
 
 /**
- * Build one component's bundles in a **subprocess**. The dev server spawns this
- * per component on first request (see `buildCase` in server.ts), rather than
- * calling `Bun.build` in-process, for two reasons:
- *
- *  1. **Crash isolation.** Bun's bundler can segfault on a large module graph —
- *     "a bug in Bun, not your code". In-process that takes the whole dev server
- *     down with a bare native crash and no indication of the culprit. As a child
- *     process, an abnormal termination is just a non-zero/signal exit the parent
- *     attributes to *this* component, while every other component keeps serving.
- *  2. **A responsive event loop.** `Bun.build` is CPU-bound; running it in the
- *     server's request path would block the loop and starve concurrent requests
- *     (even the cheap shell route). In a child, the parent only awaits the exit.
- *
- * This module owns the per-component build so the same code path serves the
- * subprocess `main` below and is unit-testable directly. A *build error* (an
- * unresolved import, a syntax error) is returned as `{ ok: false, error }` — only
- * an abnormal bundler crash takes the process down (which is the point).
+ * Builds one component's bundles on demand (see `buildCase` in server.ts), called
+ * in-process so there is no per-build process spawn — a cold `bun` start per
+ * build is pathologically slow under a contended CI runner already saturated by
+ * the a11y scanner's browser and the e2e workers. Bun's bundler can in principle
+ * segfault on a very large graph, but per-component bundling keeps each graph
+ * small (the report's individual heavy cases all built fine; only the *aggregate*
+ * catalog crashed), so that does not arise here. A *build error* (an unresolved
+ * import, a syntax error) is caught and returned as `{ ok: false, error }`, which
+ * the server surfaces as a per-case diagnostic while every other component keeps
+ * serving. The build is factored out here so it is unit-testable directly.
  */
 
 /**
@@ -189,21 +182,4 @@ export async function buildCaseBundles(
       error: err instanceof Error ? (err.message ?? String(err)) : String(err),
     }
   }
-}
-
-// Subprocess entry: `bun build-case.ts <pkgDir> <file> <configPath> <id> <seq>`.
-// Emits the JSON result on stdout and exits 0 (built) / 1 (build error). A native
-// bundler crash exits abnormally with no stdout — the parent treats either as a
-// per-component failure.
-if (import.meta.main) {
-  const [pkgDir, file, configPath, componentId, seqStr] = process.argv.slice(2)
-  const result = await buildCaseBundles({
-    pkgDir,
-    file,
-    configPath,
-    componentId,
-    seq: Number(seqStr),
-  })
-  process.stdout.write(JSON.stringify(result))
-  process.exit(result.ok ? 0 : 1)
 }
