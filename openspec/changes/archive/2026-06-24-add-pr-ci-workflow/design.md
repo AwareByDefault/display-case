@@ -77,10 +77,20 @@ clean.
   branch is reached only through PRs, so a separate push run would be redundant.
 - **`concurrency` with `cancel-in-progress`.** A new push to a PR cancels the
   superseded run, saving runner minutes.
-- **No CI in OpenSpec specs.** Specs describe Display Case's observable behavior
-  and may not name tools or survive only one stack; a GitHub Actions workflow is
-  repository infrastructure. So this change carries no spec delta — the contract
-  lives in the workflow file and the linting guide.
+- **An `openspec` merge-guard gates proposal hygiene.** A proposal may stay open
+  while its PR is reviewed, but must not land on the mainline unarchived.
+  `tools/openspec-merge-guard.ts` diffs the PR against its base sha and fails when
+  it adds or modifies an active (unarchived) proposal, while allowing deletions
+  there (archiving moves a proposal out of the active tree) and any archived
+  proposals or canonical spec updates. It is PR-only — it needs the base commit —
+  so, unlike the quality jobs, it has no husky-hook counterpart; locally it runs
+  via `bun run check:openspec-merge` against `origin/main`.
+- **The `continuous-integration` capability is specced tool-agnostically.** The
+  spec names no provider, runner, or package manager — only the observable gates a
+  proposed change must clear (the quality suite, each layer independent, cancelled
+  superseded runs, and the proposal-hygiene gate). The GitHub Actions wiring is the
+  implementation, captured here and in the workflow file, so the spec survives a
+  stack migration.
 
 ## Risks / Trade-offs
 

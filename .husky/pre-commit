@@ -6,3 +6,4 @@ bun run lint:fix
 bun run typecheck
 bun run check
 bun test
+bun run test:tools   # unit tests for the tools/ scripts (outside the src/ test root)

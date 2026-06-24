@@ -111,11 +111,7 @@
       }
     },
     {
-      "includes": [
-        "**/*.d.ts",
-        "**/playwright.config.ts",
-        "**/commitlint.config.js"
-      ],
+      "includes": ["**/*.d.ts", "**/playwright.config.ts"],
       "linter": {
         "rules": {
           "style": {

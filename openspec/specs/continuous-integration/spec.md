@@ -1,5 +1,17 @@
-## ADDED Requirements
+# continuous-integration Specification
 
+## Purpose
+
+The repository runs its full quality suite — static analysis, type checking, the
+project's own static checks, unit tests, and end-to-end tests — automatically
+against every proposed change before it can be integrated into the mainline, and
+reports each layer as an independent signal. The render-backed checks may be
+scoped to the components a change affects, and a proposed change cannot integrate
+while it still carries an open, unarchived proposal. This is the integration
+backstop: nothing reaches the mainline without clearing the same gate a
+contributor runs locally.
+
+## Requirements
 ### Requirement: Proposed changes are gated by the full quality suite
 
 The repository SHALL automatically run its full quality suite — static analysis,
@@ -60,3 +72,26 @@ verifying outdated content.
 - WHEN a newer revision of the same change is pushed before the run finishes
 - THEN the in-progress run for the superseded revision is cancelled
 - AND the suite runs against the newer revision instead
+
+### Requirement: Integration is blocked while a change carries an open proposal
+
+The repository SHALL block a proposed change from integrating into the mainline
+while that change carries an open, unarchived change proposal, until the proposal
+is archived. A change MAY keep an open proposal during review; the only proposal
+material it may integrate is archived proposals and the canonical specification
+updates that archiving produces. Removing an open proposal SHALL be permitted,
+since that is how archiving moves it out of the active set.
+
+#### Scenario: A change would integrate an open proposal
+
+- GIVEN a proposed change whose content adds or modifies an open, unarchived proposal
+- WHEN the quality suite runs against the change
+- THEN the change is reported as failing its quality gate
+- AND it cannot integrate until the proposal is archived
+
+#### Scenario: A change archives a proposal
+
+- GIVEN a proposed change that removes an open proposal and adds its archived form together with the canonical specification updates
+- WHEN the quality suite runs against the change
+- THEN the proposal-hygiene gate reports the change as passing
+

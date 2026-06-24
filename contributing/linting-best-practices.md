@@ -49,9 +49,12 @@ commands on every open pull request so nothing merges unchecked:
 - **`check`** — `bun run check` (structure + tokens + ssr)
 - **`test`** — `bun test`
 - **`e2e`** — `bun run e2e` (installs Chromium via `playwright install --with-deps chromium`)
+- **`openspec`** — `bun tools/openspec-merge-guard.ts` (blocks an unarchived
+  OpenSpec proposal from merging to main — see the checks table below). PR-only;
+  it needs the PR's base commit, so it has no local pre-commit equivalent.
 
-The four jobs run in parallel so each surfaces as its own PR check. The first
-three need no browser; only `e2e` provisions Chromium.
+The jobs run in parallel so each surfaces as its own PR check; only `e2e`
+provisions Chromium.
 
 ---
 
@@ -87,11 +90,15 @@ display-case check .                               # everything, including a11y 
 | `biome` plugin: e2e locators | e2e specs must not call `getByText()`/`getByRole()` — drive the chrome via `getByTestId(DcTestIds.*)` (see [testing-best-practices.md](testing-best-practices.md) §6). GritQL plugin [tools/lint/e2e-locators.grit](../tools/lint/e2e-locators.grit), scoped to `e2e/**` by a `biome.json` override; runs in `biome check`. | `e2e/**` | `// biome-ignore lint/plugin: <reason>` on the line |
 | `biome` plugin: no inline svg | No inline `<svg>` in the browse chrome — the Vitrine design system is "Unicode glyphs only". AST name-match, so `<svgPath>`/`<Svg>` are not flagged. GritQL plugin [tools/lint/no-custom-svg.grit](../tools/lint/no-custom-svg.grit), scoped to `src/ui/**`; runs in `biome check`. | `src/ui/**` | `// biome-ignore lint/plugin: <reason>` (in JSX, immediately before the element) |
 | `spec-purity` | No implementation/tool names in a behavior spec; bullet `GIVEN/WHEN/THEN`, not bolded (`--fix` converts bolded keywords) | `openspec/specs/**/spec.md` | `<!-- allow: <reason> -->` on the line |
+| `openspec-merge-guard` | A proposal may stay open while its PR is reviewed, but must not merge to main unarchived. A PR's `openspec/` diff may only **add/modify** archived proposals (`openspec/changes/archive/**`) and spec changes (`openspec/specs/**`); adding or modifying an active (unarchived) proposal under `openspec/changes/<name>/**` fails the run. Deletions there are fine — that is what archiving looks like. A diff-vs-base check ([`tools/openspec-merge-guard.ts`](../tools/openspec-merge-guard.ts)), so it runs **only in CI** (the `openspec` job), not in `bun run lint`/pre-commit. | `openspec/changes/**` in the PR diff | archive the change (`bun run openspec archive <name>` → moves it to `archive/` and folds its spec deltas into `openspec/specs/`) |
 
-`spec-purity` is the one remaining **script** check (it scans Markdown, which a
-GritQL JS plugin can't) — it lives in [`tools/lint/`](../tools/lint/) and runs via
-`bun run lint:checks`. The two AST-pattern rules (e2e locators, no inline `<svg>`)
-are Biome **GritQL plugins** that run inside `biome check`.
+`spec-purity` is the one remaining **script** check inside `bun run lint:checks`
+(it scans Markdown, which a GritQL JS plugin can't) — it lives in
+[`tools/lint/`](../tools/lint/). The two AST-pattern rules (e2e locators, no
+inline `<svg>`) are Biome **GritQL plugins** that run inside `biome check`.
+`openspec-merge-guard` is a separate **CI-only** script (it needs a diff base, so
+it isn't in `lint:checks`); run it locally with `bun run check:openspec-merge`
+(diffs against `origin/main` by default).
 
 > **OpenSpec structural validity** (required sections, ≥1 scenario per requirement)
 > is the OpenSpec CLI's job (`openspec validate`), not duplicated here. The CLI
