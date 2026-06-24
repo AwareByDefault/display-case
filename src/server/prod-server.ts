@@ -36,8 +36,22 @@ async function load(buildDir: string): Promise<Loaded> {
   const manifest = (await Bun.file(
     join(buildDir, 'manifest.json'),
   ).json()) as Manifest
-  const ssrMod = (await import(join(buildDir, 'server', 'ssr-entry.js'))) as {
-    renderCaseToHtml: CaseRenderer
+  // Each component is published as its own SSR bundle (`ssr-case-<id>.js`), built
+  // separately so the catalog is never one graph. Import them by component id and
+  // dispatch — importing is module evaluation (safe), unlike bundling them as one.
+  const renderers = new Map<string, CaseRenderer>()
+  for (const c of manifest.components) {
+    const mod = (await import(
+      join(buildDir, 'server', `ssr-case-${c.id}.js`)
+    )) as { renderCaseToHtml: CaseRenderer }
+    renderers.set(c.id, mod.renderCaseToHtml)
+  }
+  const renderCase: CaseRenderer = (state) => {
+    const r = renderers.get(state.componentId)
+    // No such component → no server markup; the client mounts nothing (the chrome
+    // shows a not-found state). Mirrors a browser-only case's empty render.
+    if (!r) return { html: '', browserOnly: true }
+    return r(state)
   }
   let renderPrimer: (() => PrimerHtmlResult) | null = null
   if (descriptor.hasPrimer) {
@@ -50,7 +64,7 @@ async function load(buildDir: string): Promise<Loaded> {
     buildDir,
     descriptor,
     manifest,
-    renderCase: ssrMod.renderCaseToHtml,
+    renderCase,
     renderPrimer,
   }
 }
@@ -132,7 +146,8 @@ function documentFor(loaded: Loaded, path: string, url: URL): string {
       markup,
       ssr,
       headStyles,
-      assets,
+      // This component's own bundle (the catalog is split per component).
+      scriptSrc: assets.render[rs.componentId] ?? '',
     })
   }
 

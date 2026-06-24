@@ -16,10 +16,12 @@ const FONT_LINKS =
   '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>' +
   '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"/>'
 
-/** Content-hashed entry URLs the production build emitted (already base-prefixed). */
+/** Content-hashed entry URLs the production build emitted (already base-prefixed).
+ *  `render` is a per-component map (componentId → bundle URL): each component is
+ *  built into its own bundle so the catalog is never built as one graph. */
 export interface DocAssets {
   browser: string
-  render: string
+  render: Record<string, string>
   primer: string
 }
 
@@ -46,7 +48,8 @@ export function shellDoc(opts: {
   return `<!doctype html><html lang="en" data-theme="${opts.theme}"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>${opts.title}</title>${FONT_LINKS}<style>${opts.tokensCss}\n${opts.globalCss}\n${reset}\n${opts.vitrineCss}</style></head><body><div id="root" data-ssr="${opts.ssr ? '1' : '0'}">${opts.markup}</div><script>window.__dcSeed=${seed}</script><script type="module" src="${opts.assets.browser}"></script></body></html>`
 }
 
-/** The isolated case render document. */
+/** The isolated case render document. `scriptSrc` is this component's own bundle
+ *  URL (the catalog is split per component, so there is no single render entry). */
 export function renderDoc(opts: {
   globalCss: string
   vitrineCss: string
@@ -57,7 +60,7 @@ export function renderDoc(opts: {
   ssr: boolean
   /** Style-engine output, placed after the static <style> block. `''` when none. */
   headStyles?: string
-  assets: DocAssets
+  scriptSrc: string
 }): string {
   const exhibitCenter =
     'body[data-decorated] #root>*{justify-content:center;align-content:center}'
@@ -68,7 +71,7 @@ export function renderDoc(opts: {
   // The Vitrine stylesheet follows globalCss so a dogfooded design-system case
   // paints before scripts; for a non-dogfooding consumer these are inert chrome
   // rules in a dev-time-only preview document (see server.ts renderHtml).
-  return `<!doctype html><html lang="en" data-theme="${opts.theme}" data-theme-pref="${opts.theme}"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Display Case render</title><style>html,body{margin:0}body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-sans, ui-sans-serif, system-ui, sans-serif)}${exhibitCenter}${opts.globalCss}\n${opts.vitrineCss}</style>${opts.headStyles ?? ''}</head><body${bodyAttrs}><main id="root"${rootAttrs}>${opts.markup}</main><script type="module" src="${opts.assets.render}"></script></body></html>`
+  return `<!doctype html><html lang="en" data-theme="${opts.theme}" data-theme-pref="${opts.theme}"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Display Case render</title><style>html,body{margin:0}body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-sans, ui-sans-serif, system-ui, sans-serif)}${exhibitCenter}${opts.globalCss}\n${opts.vitrineCss}</style>${opts.headStyles ?? ''}</head><body${bodyAttrs}><main id="root"${rootAttrs}>${opts.markup}</main><script type="module" src="${opts.scriptSrc}"></script></body></html>`
 }
 
 /** The primer reading-page document. */

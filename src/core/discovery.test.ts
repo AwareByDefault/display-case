@@ -6,8 +6,9 @@ import { makeTempDir, writeFiles } from '../testing/test-helpers'
 import {
   baselineDir,
   cacheDir,
+  codegenCaseRenderEntry,
+  codegenCaseSsrEntry,
   codegenPrimerEntry,
-  codegenRenderEntry,
   discoverCaseFiles,
   loadModules,
   resolveConfig,
@@ -156,19 +157,32 @@ describe('cacheDir / baselineDir', () => {
 })
 
 describe('codegen entries', () => {
-  test('codegenRenderEntry imports every case, tags its source path, and mounts', async () => {
+  test('codegenCaseRenderEntry imports exactly one case and mounts only it', async () => {
     const dir = await setup({})
-    const files = [join(dir, 'a/Button.case.tsx'), join(dir, 'b/Card.case.tsx')]
+    const file = join(dir, 'a/Button.case.tsx')
     const configPath = join(dir, 'display-case.config.ts')
-    const entry = await codegenRenderEntry(dir, files, configPath)
-    expect(entry).toBe(join(cacheDir(dir), 'render-entry.tsx'))
+    const entry = await codegenCaseRenderEntry(dir, file, configPath, 'button')
+    expect(entry).toBe(join(cacheDir(dir), 'render-case-button.tsx'))
     const src = await Bun.file(entry).text()
     expect(src).toContain('AUTO-GENERATED')
     expect(src).toContain('import m0 from')
-    expect(src).toContain('import m1 from')
+    // Exactly one case module — never a second import (the whole point: no
+    // all-cases graph in a single bundler pass).
+    expect(src).not.toContain('import m1 from')
     expect(src).toContain('mountRender([')
     expect(src).toContain(`sourcePath: ${JSON.stringify('a/Button.case.tsx')}`)
-    expect(src).toContain(`sourcePath: ${JSON.stringify('b/Card.case.tsx')}`)
+  })
+
+  test('codegenCaseSsrEntry imports one case and exports its renderer, with a fresh per-seq name', async () => {
+    const dir = await setup({})
+    const file = join(dir, 'a/Button.case.tsx')
+    const configPath = join(dir, 'display-case.config.ts')
+    const entry = await codegenCaseSsrEntry(dir, file, configPath, 'button', 3)
+    expect(entry).toBe(join(cacheDir(dir), 'ssr-case-button-3.tsx'))
+    const src = await Bun.file(entry).text()
+    expect(src).toContain('import m0 from')
+    expect(src).not.toContain('import m1 from')
+    expect(src).toContain('export const renderCaseToHtml = makeCaseRenderer([')
   })
 
   test('codegenPrimerEntry imports the MDX document and mounts the primer', async () => {

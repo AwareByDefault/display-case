@@ -4,10 +4,10 @@ import { renderWithStyles } from './collect-styles'
 import { type CaseTreeState, caseTree, NOOP_GOTO } from './render-node'
 
 /**
- * Server-side case rendering. The codegen'd SSR entry (see
- * `codegenSsrEntry`) imports every discovered case module plus the consumer
- * config, hands them here, and exports the resulting `renderCaseToHtml`. The
- * server imports that freshly-built bundle each rebuild — the bundle inlines the
+ * Server-side case rendering. The codegen'd per-component SSR entry (see
+ * `codegenCaseSsrEntry`) imports one component's case module plus the consumer
+ * config, hands it here, and exports the resulting `renderCaseToHtml`. The server
+ * builds and imports that bundle on demand per component — the bundle inlines the
  * case source from disk, so its modules are always current, sidestepping the
  * per-path module cache that forces the manifest into a subprocess.
  */

@@ -11,8 +11,6 @@ import type { LoadedModule } from '../core/discovery'
 import {
   cacheDir,
   codegenPrimerEntry,
-  codegenRenderEntry,
-  codegenSsrEntry,
   codegenSsrPrimerEntry,
   discoverCaseFiles,
   loadModules,
@@ -32,6 +30,7 @@ import type { PrimerHtmlResult } from '../render/ssr-primer'
 import type { CaseRenderer } from '../render/ssr-render'
 import { renderShellToHtml } from '../render/ssr-shell'
 import type { Theme } from '../ui/shell-core'
+import { buildCaseBundles, publicEnvDefines } from './build-case'
 
 const HERE = resolve(import.meta.dir, '..')
 const BROWSER_ENTRY = join(HERE, 'ui', 'browser-entry.tsx')
@@ -101,9 +100,6 @@ interface BuiltState {
   placardById: Map<string, string>
   /** Concatenated consumer global stylesheet contents. */
   globalCss: string
-  /** Pre-render a case to markup for the isolated `/render` document. Rebuilt
-   *  fresh each rebuild so its case modules track edits (see `rebuild`). */
-  renderCase: CaseRenderer
   /** Pre-render the primer to markup, or null when no primer is configured. */
   renderPrimer: (() => PrimerHtmlResult) | null
   /** Absolute paths of every on-disk file the bundles read this build — the
@@ -254,23 +250,26 @@ async function rebuild(
   config: DisplayCaseConfig,
   configPath: string,
 ): Promise<BuiltState> {
-  const files = await discoverCaseFiles(pkgDir, config)
-  // Collect the real module graph across every bundle pass (render, SSR, and the
-  // primer) so the dev watcher can follow source-resolved workspace deps. The
-  // recorder is registered first in each plugin list so MDX-handled paths land
-  // here too. See graphRecorder.
+  // Collect the real module graph across the shell + primer bundle passes so the
+  // dev watcher can follow source-resolved workspace deps. The recorder is
+  // registered first in each plugin list so MDX-handled paths land here too. The
+  // per-component case bundles are built on demand (see `ensureCase`); their
+  // inputs are appended to this set as each component is first served. See
+  // graphRecorder.
   const inputs = new Set<string>()
 
-  const renderEntry = await codegenRenderEntry(pkgDir, files, configPath)
   const outdir = join(cacheDir(pkgDir), 'dist')
-  // The Primer is its own isolated document (like /render), so it's a separate
-  // bundle entry — keeping the consumer's `.mdx` and the arbitrary components it
-  // imports out of the browse chrome's bundle.
+  const ssrOutDir = join(cacheDir(pkgDir), 'ssr')
+  // The browse chrome (shell) carries no case modules — cases live only in the
+  // per-component render bundles built on demand — so this pass holds a small,
+  // catalog-size-independent graph. The Primer is its own isolated document
+  // (like /render), bundled here as a separate entry, keeping the consumer's
+  // `.mdx` and the arbitrary components it imports out of the chrome's bundle.
   const primerSrc = primerFile(pkgDir, config)
   const primerEntry = primerSrc
     ? await codegenPrimerEntry(pkgDir, config.primer as string)
     : null
-  const entrypoints = [BROWSER_ENTRY, renderEntry]
+  const entrypoints = [BROWSER_ENTRY]
   if (primerEntry) entrypoints.push(primerEntry)
   const result = await Bun.build({
     entrypoints,
@@ -296,40 +295,6 @@ async function rebuild(
     throw new Error('Display Case bundle failed')
   }
 
-  // Pre-render bundle: the same case import list as the browser render bundle,
-  // but built for Bun and imported in-process so the server can render a case to
-  // markup before delivering its document. Built to a fresh, sequence-named file
-  // each rebuild because Bun caches imports by resolved path — a stable name
-  // would return the stale renderer after an edit (the same staleness that forces
-  // the manifest into a subprocess). The bundle inlines case source from disk, so
-  // importing the fresh file yields current modules. pinReact bundles the
-  // consumer's React (instead of leaving it external) so `renderToString` and
-  // the consumer's components share one React — the same dual-React hazard the
-  // browser bundle faces, here for the in-process server render.
-  const ssrEntry = await codegenSsrEntry(pkgDir, files, configPath)
-  const ssrOutDir = join(cacheDir(pkgDir), 'ssr')
-  const ssrName = `ssr-entry-${++ssrBuildSeq}`
-  const ssrResult = await Bun.build({
-    entrypoints: [ssrEntry],
-    outdir: ssrOutDir,
-    target: 'bun',
-    plugins: [graphRecorder(inputs), mdxPlugin(), pinReact(pkgDir)],
-    define: await publicEnvDefines(pkgDir),
-    naming: {
-      entry: `${ssrName}.[ext]`,
-      chunk: '[name]-[hash].[ext]',
-      asset: '[name]-[hash].[ext]',
-    },
-  })
-  if (!ssrResult.success) {
-    for (const log of ssrResult.logs) console.error(log)
-    throw new Error('Display Case SSR bundle failed')
-  }
-  const ssrModule = (await import(join(ssrOutDir, `${ssrName}.js`))) as {
-    renderCaseToHtml: CaseRenderer
-  }
-  const renderCase = ssrModule.renderCaseToHtml
-
   // Pre-render bundle for the primer, built and imported the same way (and only
   // when a primer is configured). Its specimens are real consumer components, so
   // — like a case — one may be browser-only; the renderer reports that and the
@@ -341,7 +306,7 @@ async function rebuild(
       config.primer as string,
       configPath,
     )
-    const ssrPrimerName = `ssr-primer-entry-${ssrBuildSeq}`
+    const ssrPrimerName = `ssr-primer-entry-${++ssrBuildSeq}`
     const ssrPrimerResult = await Bun.build({
       entrypoints: [ssrPrimerEntry],
       outdir: ssrOutDir,
@@ -364,8 +329,8 @@ async function rebuild(
     renderPrimer = ssrPrimerModule.renderPrimerToHtml
   }
 
-  // The render bundle above is rebuilt fresh from disk by Bun.build; the
-  // manifest comes from a fresh subprocess for the same reason (see above).
+  // The shell bundle above is rebuilt fresh from disk by Bun.build; the manifest
+  // comes from a fresh subprocess for the same reason (see above).
   const manifest = await loadManifestFresh(pkgDir)
   const placardById = new Map<string, string>()
   for (const c of manifest.components) {
@@ -375,7 +340,7 @@ async function rebuild(
   console.log(
     `  ${manifest.components.length} component(s), ${manifest.components.reduce((n, c) => n + c.cases.length, 0)} case(s)`,
   )
-  return { manifest, placardById, globalCss, renderCase, renderPrimer, inputs }
+  return { manifest, placardById, globalCss, renderPrimer, inputs }
 }
 
 /**
@@ -515,6 +480,7 @@ function renderHtml(
   vitrineCss: string,
   liveReload: boolean,
   doc: RenderDoc,
+  scriptSrc: string,
 ): string {
   // A complete document (title, lang, single <main> landmark) so the a11y runner
   // reports only real component issues, not isolated-harness chrome violations.
@@ -546,7 +512,33 @@ function renderHtml(
   // block as its own discrete markup — emotion/styled-components tag their output
   // with attributes the client runtime keys on to adopt it, so it must not be
   // folded into the block above. Empty string when no engine is configured.
-  return `<!doctype html><html lang="en" data-theme="${doc.theme}" data-theme-pref="${doc.theme}"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Display Case render</title><style>html,body{margin:0}body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-sans, ui-sans-serif, system-ui, sans-serif)}${exhibitCenter}${globalCss}\n${vitrineCss}</style>${doc.headStyles ?? ''}</head><body${bodyAttrs}><main id="root"${rootAttrs}>${doc.markup}</main>${ERROR_OVERLAY_SCRIPT}${liveReload ? LIVERELOAD_SCRIPT : ''}<script type="module" src="/dist/render-entry.js"></script></body></html>`
+  return `<!doctype html><html lang="en" data-theme="${doc.theme}" data-theme-pref="${doc.theme}"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Display Case render</title><style>html,body{margin:0}body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-sans, ui-sans-serif, system-ui, sans-serif)}${exhibitCenter}${globalCss}\n${vitrineCss}</style>${doc.headStyles ?? ''}</head><body${bodyAttrs}><main id="root"${rootAttrs}>${doc.markup}</main>${ERROR_OVERLAY_SCRIPT}${liveReload ? LIVERELOAD_SCRIPT : ''}<script type="module" src="${scriptSrc}"></script></body></html>`
+}
+
+/**
+ * A chrome-free diagnostic document served when a single component's bundle
+ * fails to build. It names the offending component and its source file so the
+ * failure is attributable (not a blank frame), and — like every `/render`
+ * document — it is isolated: only this one case shows the error; every other
+ * component still builds and serves. Carries no case script (the build that
+ * would produce it is what failed).
+ */
+function renderErrorHtml(
+  globalCss: string,
+  vitrineCss: string,
+  liveReload: boolean,
+  doc: { theme: Theme; componentId: string; caseFile: string; error: string },
+): string {
+  const esc = (s: string) =>
+    s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  const banner =
+    `<div style="margin:2rem;padding:1rem 1.25rem;border:1px solid #c00;border-radius:8px;` +
+    `font-family:ui-monospace,monospace;font-size:13px;line-height:1.5;color:#c00;background:#fff5f5">` +
+    `<strong>Display Case build error</strong><br>` +
+    `Component <code>${esc(doc.componentId)}</code> (<code>${esc(doc.caseFile)}</code>) ` +
+    `could not be bundled, so this case can't be shown. Every other case still works.<br>` +
+    `<br><pre style="white-space:pre-wrap;margin:0">${esc(doc.error)}</pre></div>`
+  return `<!doctype html><html lang="en" data-theme="${doc.theme}" data-theme-pref="${doc.theme}"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Display Case build error</title><style>html,body{margin:0}body{background:var(--color-bg);color:var(--color-fg)}${globalCss}\n${vitrineCss}</style></head><body><main id="root">${banner}</main>${liveReload ? LIVERELOAD_SCRIPT : ''}</body></html>`
 }
 
 function primerHtml(
@@ -574,66 +566,6 @@ function primerHtml(
   // Style-engine output follows the static <style> block as discrete markup (see
   // renderHtml). `''` when no engine is configured.
   return `<!doctype html><html lang="en" data-theme="${doc.theme}" data-theme-pref="${doc.theme}"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Primer</title>${FONT_LINKS}<style>${tokensCss}\n${globalCss}\n${reset}\n${vitrineCss}</style>${doc.headStyles ?? ''}</head><body><main id="root"${rootAttrs}>${doc.markup}</main>${ERROR_OVERLAY_SCRIPT}${liveReload ? LIVERELOAD_SCRIPT : ''}<script type="module" src="/dist/primer-entry.js"></script></body></html>`
-}
-
-/**
- * Build a `Bun.build` `define` map that inlines the consumer's public env
- * (`BUN_PUBLIC_*`) into the browser bundle — the same values the app's own
- * production build inlines (`bun build … --env='BUN_PUBLIC_*'`).
- *
- * Why `define` and not `Bun.build({ env: 'BUN_PUBLIC_*' })`: the `env` option
- * only inlines vars present in the environment Bun snapshotted at *process*
- * startup (plus the CWD-relative `.env` Bun auto-loads). Display Case runs from
- * the repo root, not the consumer package, so a public var defined only in
- * `<pkg>/.env` (e.g. the API base URL) is absent at build time — and mutating
- * `process.env` at runtime does not influence it. Left unreplaced, a
- * `process.env.BUN_PUBLIC_*` read survives as a literal that throws
- * `process is not defined` in the browser, blanking the whole single-bundle
- * showcase (not just the case that reached it). `define` replaces the literal
- * unconditionally, independent of env timing.
- *
- * Scoped strictly to the public prefix so non-public env (secrets, NODE_ENV,
- * ports) never enters the bundle. A real exported `process.env` value wins over
- * the file so local overrides still apply.
- */
-async function publicEnvDefines(
-  pkgDir: string,
-): Promise<Record<string, string>> {
-  const values = new Map<string, string>()
-  for (const name of ['.env', '.env.local']) {
-    const file = Bun.file(join(pkgDir, name))
-    if (!(await file.exists())) continue
-    for (const raw of (await file.text()).split('\n')) {
-      const line = raw.trim()
-      if (!line || line.startsWith('#')) continue
-      const eq = line.indexOf('=')
-      if (eq === -1) continue
-      const key = line
-        .slice(0, eq)
-        .replace(/^export\s+/, '')
-        .trim()
-      if (!key.startsWith('BUN_PUBLIC_')) continue
-      let value = line.slice(eq + 1).trim()
-      if (
-        (value.startsWith('"') && value.endsWith('"')) ||
-        (value.startsWith("'") && value.endsWith("'"))
-      ) {
-        value = value.slice(1, -1)
-      }
-      values.set(key, value)
-    }
-  }
-  // A real exported env value overrides the file (local override wins).
-  for (const [key, value] of Object.entries(process.env)) {
-    if (key.startsWith('BUN_PUBLIC_') && value !== undefined) {
-      values.set(key, value)
-    }
-  }
-  const defines: Record<string, string> = {}
-  for (const [key, value] of values) {
-    defines[`process.env.${key}`] = JSON.stringify(value)
-  }
-  return defines
 }
 
 export interface StartOptions {
@@ -696,6 +628,102 @@ export async function startDisplayCase(
   // server skips the server-render attempt and serves an adopt-free document
   // that the client mounts. Cleared on rebuild so a fixed case recovers.
   const browserOnly = new Set<string>()
+
+  // Per-component on-demand bundle cache. Each component (one case file) is built
+  // into its own browser + in-process SSR bundle the first time it is requested,
+  // so the catalog's combined module graph is never built in a single bundler
+  // pass — the precondition for the Bun-bundler crash on large showcases. Cleared
+  // on rebuild so edits are picked up. A failed build is cached too (so it isn't
+  // retried every request) and surfaced as a per-case diagnostic.
+  type CaseEntry =
+    | {
+        ok: true
+        renderCase: CaseRenderer
+        browserUrl: string
+        /** This component's module graph, so a file edit invalidates only the
+         *  components whose graph includes it (see scheduleRebuild). */
+        inputs: Set<string>
+      }
+    | { ok: false; componentId: string; caseFile: string; error: string }
+  const caseCache = new Map<string, CaseEntry>()
+  // In-flight builds, so concurrent requests for the same component (e.g. the
+  // a11y startup sweep) share one build instead of racing.
+  const caseBuilding = new Map<string, Promise<CaseEntry | null>>()
+  // Late-bound so `buildCase` can reconcile dependency watchers without a
+  // temporal-dead-zone reference to `syncGraphWatchers` (defined after the
+  // server). A no-op until wired up below.
+  let onGraphGrew: () => Promise<void> = async () => {}
+
+  const buildCase = async (componentId: string): Promise<CaseEntry | null> => {
+    const comp = state.manifest.components.find((c) => c.id === componentId)
+    if (!comp) return null // unknown id → the chrome shows a not-found state
+    const file = resolve(REPO_ROOT, comp.caseFile)
+    const fail = (error: string): CaseEntry => ({
+      ok: false,
+      componentId,
+      caseFile: comp.caseFile,
+      error,
+    })
+    // Sequence-name the SSR bundle so Bun's resolved-path import cache returns the
+    // current module after an edit (same reason the manifest is a subprocess).
+    const seq = ++ssrBuildSeq
+    try {
+      // Build this one component's bundles (browser → /dist/render-case-<id>.js,
+      // served by the `/dist/` handler; SSR → the cache). A *build error* is
+      // returned as { ok:false } and surfaced as a per-case diagnostic while every
+      // other component keeps serving. (A native bundler crash is not survivable
+      // in-process; per-component graphs are small enough that it does not arise —
+      // see build-case.ts.)
+      const result = await buildCaseBundles({
+        pkgDir,
+        file,
+        configPath,
+        componentId,
+        seq,
+      })
+      if (!result.ok) {
+        console.warn(
+          `  ⚠ ${componentId} could not be bundled; other cases keep serving`,
+        )
+        return fail(result.error ?? 'bundling failed')
+      }
+      // Merge the component's module graph so the dev watcher follows its
+      // source-resolved deps, then reconcile the dependency watchers.
+      for (const f of result.inputs) state.inputs.add(f)
+      await onGraphGrew()
+      const ssrPath = join(
+        cacheDir(pkgDir),
+        'ssr',
+        `ssr-case-${componentId}-${seq}.js`,
+      )
+      const mod = (await import(ssrPath)) as { renderCaseToHtml: CaseRenderer }
+      return {
+        ok: true,
+        renderCase: mod.renderCaseToHtml,
+        browserUrl: `/dist/render-case-${componentId}.js`,
+        inputs: new Set(result.inputs),
+      }
+    } catch (err) {
+      return fail(
+        err instanceof Error ? (err.stack ?? err.message) : String(err),
+      )
+    }
+  }
+
+  const ensureCase = async (componentId: string): Promise<CaseEntry | null> => {
+    const cached = caseCache.get(componentId)
+    if (cached) return cached
+    const inflight = caseBuilding.get(componentId)
+    if (inflight) return inflight
+    const p = buildCase(componentId)
+      .then((entry) => {
+        if (entry) caseCache.set(componentId, entry)
+        return entry
+      })
+      .finally(() => caseBuilding.delete(componentId))
+    caseBuilding.set(componentId, p)
+    return p
+  }
 
   // SSE fan-out: open streams (one per browser tab) that a rebuild pushes a
   // `reload` event to, and that completed a11y scans push an `a11y` event to.
@@ -874,11 +902,29 @@ export async function startDisplayCase(
         const scanning = url.searchParams.has('dcscan')
         const rs = parseRenderState(url)
         const key = `${rs.componentId}/${rs.caseId}`
+        // Build this component's bundle on demand (cached). Each component is its
+        // own small bundler pass, so the catalog's combined graph is never built
+        // at once — what crashes Bun's bundler at scale.
+        const built = rs.componentId ? await ensureCase(rs.componentId) : null
+        if (built && !built.ok) {
+          // The build failed: serve a chrome-free diagnostic for this case alone.
+          // Every other component still builds and serves — one bad case can't
+          // take down the whole showcase.
+          return new Response(
+            renderErrorHtml(state.globalCss, vitrineCss, reload && !scanning, {
+              theme: rs.theme,
+              componentId: built.componentId,
+              caseFile: built.caseFile,
+              error: built.error,
+            }),
+            { headers: { 'content-type': 'text/html; charset=utf-8' } },
+          )
+        }
         // Pre-render the case to markup, baked into the document so it's present
         // before the page's scripts run. A browser-only case (or one already
         // recorded as such) is served adopt-free for the client to mount.
-        if (rs.componentId && rs.caseId && !browserOnly.has(key)) {
-          const result = state.renderCase({
+        if (built?.ok && rs.caseId && !browserOnly.has(key)) {
+          const result = built.renderCase({
             componentId: rs.componentId,
             caseId: rs.caseId,
             width: rs.width,
@@ -895,8 +941,19 @@ export async function startDisplayCase(
             rs.headStyles = result.headStyles
           }
         }
+        // The per-component bundle (or a harmless fallback for an unknown id, which
+        // renders nothing — the chrome shows a not-found state).
+        const scriptSrc = built?.ok
+          ? built.browserUrl
+          : `/dist/render-case-${rs.componentId}.js`
         return new Response(
-          renderHtml(state.globalCss, vitrineCss, reload && !scanning, rs),
+          renderHtml(
+            state.globalCss,
+            vitrineCss,
+            reload && !scanning,
+            rs,
+            scriptSrc,
+          ),
           {
             headers: { 'content-type': 'text/html; charset=utf-8' },
           },
@@ -987,8 +1044,12 @@ export async function startDisplayCase(
   // in-flight bookkeeping (the on-disk hashes still decide what re-scans), and —
   // when reload is on — pushes a reload so the iframe + manifest refresh. In dev
   // it also re-reads the inlined chrome CSS/tokens (the shell full-reloads).
+  // Absolute paths changed since the last rebuild, accumulated across the debounce
+  // window so the rebuild invalidates only the components whose graph includes one.
+  const pendingChanges = new Set<string>()
   let timer: ReturnType<typeof setTimeout> | null = null
-  const scheduleRebuild = (label: string) => {
+  const scheduleRebuild = (label: string, paths: string[] = []) => {
+    for (const p of paths) pendingChanges.add(p)
     if (timer) clearTimeout(timer)
     timer = setTimeout(async () => {
       try {
@@ -997,8 +1058,15 @@ export async function startDisplayCase(
           vitrineCss = await readVitrineCss()
           tokensCss = await readDesignTokens()
         }
+        const changed = [...pendingChanges]
+        pendingChanges.clear()
         state = await rebuild(pkgDir, config, configPath)
         browserOnly.clear()
+        // Invalidate only the components whose graph includes a changed file (and
+        // every failed entry, so a fix is retried) — not the whole cache — so an
+        // edit doesn't force every other component to rebuild on its next visit.
+        // No specific paths (a conservative fallback) drops everything.
+        for (const id of staleCaseIds(caseCache, changed)) caseCache.delete(id)
         scanner?.invalidateAll()
         // The module graph may have shifted (a new sibling import, or one
         // dropped) — reconcile the dependency watchers against it.
@@ -1044,8 +1112,12 @@ export async function startDisplayCase(
       srcDir,
       (err, events) => {
         if (err) return
-        if (events.some((e) => watched.test(e.path)))
-          scheduleRebuild('change detected')
+        const hits = events.filter((e) => watched.test(e.path))
+        if (hits.length)
+          scheduleRebuild(
+            'change detected',
+            hits.map((e) => e.path),
+          )
       },
       { ignore },
     )
@@ -1058,8 +1130,12 @@ export async function startDisplayCase(
       HERE,
       (err, events) => {
         if (err) return
-        if (events.some((e) => /\.(tsx?|css)$/.test(e.path)))
-          scheduleRebuild('app source changed')
+        const hits = events.filter((e) => /\.(tsx?|css)$/.test(e.path))
+        if (hits.length)
+          scheduleRebuild(
+            'app source changed',
+            hits.map((e) => e.path),
+          )
       },
       { ignore },
     )
@@ -1088,8 +1164,12 @@ export async function startDisplayCase(
         dir,
         (err, events) => {
           if (err) return
-          if (events.some((e) => watched.test(e.path)))
-            scheduleRebuild('dependency change detected')
+          const hits = events.filter((e) => watched.test(e.path))
+          if (hits.length)
+            scheduleRebuild(
+              'dependency change detected',
+              hits.map((e) => e.path),
+            )
         },
         { ignore },
       )
@@ -1102,6 +1182,10 @@ export async function startDisplayCase(
       }
     }
   }
+
+  // Wire the on-demand case builder's graph-grew hook to the real reconciler now
+  // that it exists (declared late to avoid a temporal-dead-zone reference).
+  onGraphGrew = syncGraphWatchers
 
   // Initialize the dependency watchers from the first build's graph, then keep
   // them reconciled after every rebuild (the call in scheduleRebuild).
@@ -1122,6 +1206,30 @@ export async function getManifest(pkgDir: string): Promise<Manifest> {
   for (const e of errors) console.error(`  ✗ ${relPath(e.file)}: ${e.error}`)
   const hasPrimer = primerFile(pkgDir, config) !== null
   return buildManifest(pkgDir, modules, config, hasPrimer).manifest
+}
+
+/** A per-component cache entry, reduced to what {@link staleCaseIds} reasons
+ *  about: whether it built, and (if so) the files its bundle read. */
+export type Invalidatable = { ok: true; inputs: Set<string> } | { ok: false }
+
+/**
+ * Given the cached components and the absolute paths that changed since the last
+ * rebuild, return the component ids to drop from the cache: every component whose
+ * recorded input graph includes a changed file (its bundle is stale), plus every
+ * failed entry (so a fix is retried on next visit). With no changed paths — a
+ * conservative fallback — everything is invalidated. Pure so the graph-aware
+ * invalidation is tested deterministically, without the OS file watcher.
+ */
+export function staleCaseIds(
+  cache: ReadonlyMap<string, Invalidatable>,
+  changed: readonly string[],
+): Set<string> {
+  if (changed.length === 0) return new Set(cache.keys())
+  const ids = new Set<string>()
+  for (const [id, entry] of cache) {
+    if (!entry.ok || changed.some((p) => entry.inputs.has(p))) ids.add(id)
+  }
+  return ids
 }
 
 export { slugify }

@@ -50,10 +50,12 @@ describe('publish: artifacts', () => {
   })
   afterAll(() => rm(out, { recursive: true, force: true }))
 
-  test('emits content-hashed browser + render bundles', async () => {
+  test('emits content-hashed browser + per-component render bundles', async () => {
     const assets = await readdir(join(out, 'assets'))
     expect(assets.some((f) => /^browser-entry-.+\.js$/.test(f))).toBe(true)
-    expect(assets.some((f) => /^render-entry-.+\.js$/.test(f))).toBe(true)
+    // Each component is its own bundle, never a single all-cases render entry.
+    expect(assets.some((f) => /^render-case-.+-.+\.js$/.test(f))).toBe(true)
+    expect(assets.some((f) => /^render-entry-.+\.js$/.test(f))).toBe(false)
   })
 
   test('descriptor: production, a11y disabled, base-prefixed assets', () => {
@@ -63,7 +65,12 @@ describe('publish: artifacts', () => {
     expect(descriptor.assets.browser).toMatch(
       /^\/assets\/browser-entry-.+\.js$/,
     )
-    expect(descriptor.assets.render).toMatch(/^\/assets\/render-entry-.+\.js$/)
+    // `render` is a per-component map; every entry is a hashed per-component bundle.
+    const renderUrls = Object.values(descriptor.assets.render)
+    expect(renderUrls.length).toBeGreaterThan(0)
+    expect(
+      renderUrls.every((u) => /^\/assets\/render-case-.+-.+\.js$/.test(u)),
+    ).toBe(true)
   })
 
   test('frozen manifest + build descriptor written to disk', async () => {
@@ -78,10 +85,11 @@ describe('publish: artifacts', () => {
     expect(dc.a11y).toBe(false)
   })
 
-  test('SSR renderers are built for the production server', async () => {
-    expect(await Bun.file(join(out, 'server', 'ssr-entry.js')).exists()).toBe(
-      true,
-    )
+  test('per-component SSR renderers are built for the production server', async () => {
+    const server = await readdir(join(out, 'server'))
+    // One SSR bundle per component (`ssr-case-<id>.js`); no all-cases ssr-entry.
+    expect(server.some((f) => /^ssr-case-.+\.js$/.test(f))).toBe(true)
+    expect(server.includes('ssr-entry.js')).toBe(false)
   })
 
   test('generated server.ts uses the prod-server, carries no dev machinery', async () => {
@@ -169,7 +177,8 @@ describe('publish: the served build is a functional showcase', () => {
     expect(r.status).toBe(200)
     const html = await r.text()
     expect(html).toContain('data-ssr="1"')
-    expect(html).toContain(descriptor.assets.render)
+    // References this component's own bundle (the catalog is split per component).
+    expect(html).toContain(descriptor.assets.render[c.id])
     // Chrome-free: the shell's title chrome is absent from the isolated doc.
     expect(html).not.toContain('Plain Consumer')
   })

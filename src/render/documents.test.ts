@@ -4,7 +4,7 @@ import { type DocAssets, primerDoc, renderDoc, shellDoc } from './documents'
 
 const assets: DocAssets = {
   browser: '/assets/browser-abc123.js',
-  render: '/assets/render-def456.js',
+  render: { button: '/assets/render-case-button-def456.js' },
   primer: '/assets/primer-ghi789.js',
 }
 
@@ -91,7 +91,7 @@ describe('renderDoc', () => {
       fit: false,
       markup: '<button>x</button>',
       ssr: true,
-      assets,
+      scriptSrc: '/assets/render-case-button-def456.js',
       ...over,
     })
 
@@ -100,7 +100,7 @@ describe('renderDoc', () => {
     expect(html).toContain('data-theme="light"')
     expect(html).toContain('data-theme-pref="light"')
     expect(html).toContain('<button>x</button>')
-    expect(html).toContain('src="/assets/render-def456.js"')
+    expect(html).toContain('src="/assets/render-case-button-def456.js"')
   })
 
   test('inlines the global and Vitrine CSS so a dogfooded case is styled pre-script', () => {

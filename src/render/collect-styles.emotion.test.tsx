@@ -5,7 +5,7 @@ import createCache from '@emotion/cache'
 import { CacheProvider, css } from '@emotion/react'
 import createEmotionServer from '@emotion/server/create-instance'
 import { type DisplayCaseConfig, defineCases, type StyleEngine } from '../index'
-import { type DocAssets, renderDoc } from './documents'
+import { renderDoc } from './documents'
 import type { CaseTreeState } from './render-node'
 import { makeCaseRenderer } from './ssr-render'
 
@@ -46,12 +46,6 @@ const state = (over: Partial<CaseTreeState>): CaseTreeState => ({
   ...over,
 })
 
-const assets: DocAssets = {
-  browser: '/b.js',
-  render: '/r.js',
-  primer: '/p.js',
-}
-
 // A component styled by emotion at render time (the `css` prop).
 const Hot = () => <div css={css({ color: 'rgb(12, 34, 56)' })}>hot</div>
 const Cool = () => <div css={css({ color: 'rgb(98, 76, 54)' })}>cool</div>
@@ -87,7 +81,7 @@ describe('emotion style engine (real library)', () => {
       markup: result.html,
       ssr: true,
       headStyles: result.headStyles,
-      assets,
+      scriptSrc: '/r.js',
     })
     // The real data-emotion tags land between the static block's close and </head>
     // — verbatim, not folded into the base <style> (so client adoption works).

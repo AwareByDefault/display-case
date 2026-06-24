@@ -4,6 +4,109 @@ Non-obvious decisions, debugging notes, and architectural context for the Displa
 
 ---
 
+## 2026-06-24: The dev server bundles cases per-component, on demand (not one all-cases graph)
+
+**The bug it fixes.** The dev server used to codegen a single render entry (and a
+single SSR entry) that *statically imported every case*, then hand that one
+module graph to one `Bun.build`. On a large showcase whose cases pull in real app
+code + big vendor barrels (e.g. `@phosphor-icons/react`), the aggregate graph
+grows large enough to **segfault Bun's bundler at startup** ("This indicates a
+bug in Bun, not your code") — before the server ever listens. It tracks total
+graph size, not any one case: a single heavy case builds fine; ~50 together
+crash even with the icon lib trivialized. `--print-manifest` (evaluates every
+module, runs no `Bun.build`) succeeds — proving it's *bundling* the combined
+graph, not evaluation. (Reported from a consuming repo; see the
+`per-case-on-demand-bundling` OpenSpec change.)
+
+**The shape that made the fix clean.** Cases only ever enter the graph through
+two entries — the browser render bundle and the in-process SSR bundle — and
+*both are addressed per-case* by the `/render/<comp>/<case>` route. The browse
+chrome (`browser-entry`) carries **no** case modules (it's the shell + manifest
+seed; the case shows in an iframe at `/render/...`). So the `/render` route is
+the natural seam: build one component at a time, lazily.
+
+**What changed:**
+
+- `rebuild()` (server.ts) now builds **only** the chrome (+ primer) and the
+  manifest at startup — never the cases. Startup is O(1) in catalog size.
+- `ensureCase(componentId)` builds one component's browser bundle
+  (`/dist/render-case-<id>.js`) + its in-process SSR bundle on **first request**
+  to its `/render` address, and caches it (in-memory map + on-disk bundle).
+  `codegenCaseRenderEntry` / `codegenCaseSsrEntry` (discovery.ts) emit the
+  single-case entries. Each `Bun.build` sees one component's graph — bounded
+  regardless of catalog size, so the crash precondition is gone.
+- The cache is cleared wholesale on a watch rebuild (edits picked up; granular
+  per-graph invalidation is a later milestone). A **build failure** for one
+  component is cached and served as a chrome-free diagnostic naming the component
+  + source file (`renderErrorHtml`) — every other component still serves.
+
+**The iframe gotcha (and why the chrome didn't need to change).** The chrome sets
+the stage iframe `src` **once** and swaps cases *in place* via `dc-render`
+postMessage, never reloading — but a per-component bundle only contains its own
+component. So `mountRender` (render-mount.tsx) now checks: if a `dc-render`
+targets a component this bundle doesn't hold, it `location.assign`s the frame to
+that component's `/render` address (loading its bundle) instead of swapping in
+place. Because the navigation target is **exactly the component the chrome just
+selected**, chrome and iframe stay in sync with no chrome-side changes — the
+naïve "iframe self-navigates" worry only breaks if the navigation is
+*uncoordinated* with chrome state, which this isn't. Net effect: switching
+*between* components reloads the stage (acceptable); switching case variants /
+tweaks / theme *within* a component is still an in-place swap. (The e2e
+cross-component navigation specs pass unchanged.)
+
+**Publish is per-component too (D5, done).** `commands/publish.ts` builds the
+chrome (+ primer) once, then **each component in its own `Bun.build`** (browser →
+`render-case-<id>-<hash>.js`, SSR → `server/ssr-case-<id>.js`) — batching all
+entrypoints into one build would recreate the crash. The descriptor's
+`assets.render` is now a per-component map (componentId → URL), and `prod-server`
+dispatches the SSR renderer by component id (importing per-component modules is
+evaluation, which is safe — only *bundling* the combined graph crashes) and
+references each component's own bundle. The all-cases `codegenRenderEntry` /
+`codegenSsrEntry` are deleted. Verified by publishing the real 35-component
+showcase (35 + 35 bundles, served correctly).
+
+**Per-component builds run in-process — a build subprocess (D4) was tried and
+reverted.** The idea was to spawn `bun build-case.ts` per component so a *native*
+bundler segfault would be an attributed child exit rather than a dead server. It
+worked locally, but **CI failed**: a cold `bun` start per build is pathologically
+slow on a contended 2-core runner already saturated by the a11y scanner's own
+Chromium + the e2e workers — the a11y `re-scan` e2e timed out at 45s on
+`page.goto` (the shell stage iframe loads `/render/...`, whose on-demand build was
+stuck behind the spawn). It passed locally (~1s) but not on CI. Since per-component
+bundling already keeps each graph small (the report's individual heavy cases all
+built fine — only the *aggregate* catalog crashed), a native crash doesn't arise,
+so `buildCase` calls `buildCaseBundles` **in-process** (`src/server/build-case.ts`,
+which also owns `publicEnvDefines`). A *build error* is caught there and returned
+`{ ok:false, error }`, which the server caches and serves as a chrome-free
+per-case diagnostic while every other component keeps serving. **Lesson: a
+per-request subprocess spawn is a real cost on constrained CI — don't add one for
+a defensive guard the architecture already makes unnecessary.**
+
+**Live-reload invalidates per-component, by graph membership (D6, done).** Each
+cached component carries its recorded `graphRecorder` input set. The watcher
+threads the *changed file paths* through the debounce to the rebuild, which then
+drops only the components whose graph includes a changed path (plus any failed
+entry, to retry a fix) — not the whole cache. So editing one component doesn't
+force every other to rebuild on its next visit, while editing a shared file (the
+config, `render-mount`, a workspace sibling — all in every component's graph)
+still invalidates everything. A `server.test.ts` live-reload test guards the
+correctness property (an edit must reflect, never serve stale).
+
+**A shared React vendor chunk (D3) was attempted and reverted — do not retry
+naïvely.** The idea: externalize React from every per-component bundle and load
+it once via a vendor bundle + an `<script type="importmap">`. It *looked* like it
+worked in unminified dev (e2e was green) — but that was a **false positive**: the
+SSR markup masked broken client hydration. A real-browser check on a *browser-only*
+component (no SSR mask) rendered nothing, with `react does not provide an export
+named 'StrictMode'` / `'jsx'` / `'flushSync'`. Root cause: Bun's `export * from
+'react'` over a **CJS** module does not expose React's *named* exports across the
+import-map boundary to a separately-built bundle (you get `default` but not the
+named members). Making this correct needs cjs-module-lexer-style enumeration of
+React's named exports and explicit re-exports — what Vite's `optimizeDeps` does.
+Until that's built, per-component bundles bundle React via `pinReact` (correct,
+~140KB each). **Lesson: validate client rendering with a browser on a browser-only
+case, not just SSR'd output — SSR markup hides a dead client bundle.**
+
 ## 2026-06-24: `openspec archive` ships a placeholder `## Purpose` — fill it in
 
 When `openspec archive <change>` creates a *new* canonical capability spec under

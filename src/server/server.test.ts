@@ -1,7 +1,14 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { rm } from 'node:fs/promises'
+import { resolve } from 'node:path'
 import { makeTempDir, writeFiles } from '../testing/test-helpers'
-import { getManifest, slugify } from './server'
+import {
+  getManifest,
+  type Invalidatable,
+  slugify,
+  staleCaseIds,
+  startDisplayCase,
+} from './server'
 
 const dirs: string[] = []
 const setup = async (files: Record<string, string>) => {
@@ -115,5 +122,98 @@ describe('getManifest', () => {
 describe('slugify (re-exported from the server entry)', () => {
   test('matches the catalog slugifier', () => {
     expect(slugify('Sign In')).toBe('sign-in')
+  })
+})
+
+// Integration: the dev server prepares each component on demand rather than
+// bundling the whole catalog at once. Booted against Display Case's own
+// dogfooded showcase (dozens of components) — a single-graph build of that
+// catalog is what crashes Bun's bundler at scale; this confirms the server
+// starts and serves without ever building it as one graph.
+describe('per-component on-demand bundling (integration)', () => {
+  // The worktree/repo root: has display-case.config.ts and node_modules (pinReact
+  // resolves the consumer React from here).
+  const Repo = resolve(import.meta.dir, '..', '..')
+
+  test('serves a large showcase, building each component only when first requested', async () => {
+    const server = await startDisplayCase(Repo, { port: 0 })
+    try {
+      const base = String(server.url).replace(/\/$/, '')
+
+      // The browsing surface and catalog are served even though the catalog is
+      // large and no case bundle has been built yet (size-independent startup).
+      expect((await fetch(`${base}/`)).ok).toBe(true)
+      const manifest = (await (
+        await fetch(`${base}/manifest.json`)
+      ).json()) as {
+        components: { id: string; cases: { id: string; renderUrl: string }[] }[]
+      }
+      expect(manifest.components.length).toBeGreaterThan(10)
+
+      // A case builds on first request to its address and references that one
+      // component's bundle — which is then served.
+      const comp = manifest.components[0]
+      const cs = comp.cases[0]
+      const doc = await (await fetch(`${base}${cs.renderUrl}`)).text()
+      expect(doc).toContain(`/dist/render-case-${comp.id}.js`)
+      expect(doc).toContain('data-ssr="1"')
+      expect(
+        (await fetch(`${base}/dist/render-case-${comp.id}.js`)).status,
+      ).toBe(200)
+
+      // An unknown component does not crash the server — it serves a document and
+      // every other case keeps working (failure is isolated, never fatal).
+      expect((await fetch(`${base}/render/__no-such-component__/x`)).ok).toBe(
+        true,
+      )
+      const other = manifest.components[1]
+      const otherDoc = await (
+        await fetch(`${base}${other.cases[0].renderUrl}`)
+      ).text()
+      expect(otherDoc).toContain(`/dist/render-case-${other.id}.js`)
+    } finally {
+      server.stop(true)
+    }
+  }, 60_000)
+})
+
+// Live reload: a watch rebuild must invalidate exactly the components whose
+// module graph includes a changed file — so an edit is reflected (never stale)
+// without forcing every other component to rebuild. Tested at the pure-function
+// level (the OS file watcher that feeds it the paths is not deterministic enough
+// to assert on under `bun test`).
+describe('staleCaseIds (graph-aware invalidation)', () => {
+  const ok = (...inputs: string[]): Invalidatable => ({
+    ok: true,
+    inputs: new Set(inputs),
+  })
+  // Two components: A imports a shared dep, B is independent.
+  const cache = (): Map<string, Invalidatable> =>
+    new Map<string, Invalidatable>([
+      ['a', ok('/p/src/A.case.tsx', '/p/src/shared.ts')],
+      ['b', ok('/p/src/B.case.tsx')],
+    ])
+
+  test('editing a case file invalidates only that component', () => {
+    expect(staleCaseIds(cache(), ['/p/src/A.case.tsx'])).toEqual(new Set(['a']))
+  })
+
+  test('editing a shared (non-entry) dependency invalidates its dependents only', () => {
+    // The shared file is in A's graph but not B's — only A is dropped.
+    expect(staleCaseIds(cache(), ['/p/src/shared.ts'])).toEqual(new Set(['a']))
+  })
+
+  test('an unrelated change invalidates nothing', () => {
+    expect(staleCaseIds(cache(), ['/p/src/other.ts'])).toEqual(new Set())
+  })
+
+  test('a failed entry is always invalidated (so a fix is retried)', () => {
+    const c = cache()
+    c.set('bad', { ok: false })
+    expect(staleCaseIds(c, ['/p/src/other.ts'])).toEqual(new Set(['bad']))
+  })
+
+  test('no changed paths is a conservative fallback — invalidate everything', () => {
+    expect(staleCaseIds(cache(), [])).toEqual(new Set(['a', 'b']))
   })
 })
