@@ -253,13 +253,16 @@ Findings go **on the PR**, not just back to chat, and the skill is **re-runnable
 on the same PR**: a second run reconciles against what the first run posted
 rather than duplicating it.
 
-**Inline comments are as short as possible** — the minimum of *what's wrong*
-plus a *recommended fix when it's simple*. **≤2 lines is the target**; spend more
-only on a genuinely complex problem. No preamble, no restating the diff. Shape:
+**Every comment — inline, summary bullet, nit, or FYI — is as short as possible.**
+Assume an **expert author who prefers brevity**: the minimum of *what's wrong*
+plus a *fix when it's simple*, and nothing else. **≤2 lines**; spend more only on
+a genuinely complex problem. No preamble, no restating the diff, no narrating what
+you checked. Shape:
 
-- Breaks a numbered rule → **lead with the linked rule** (step 9 format), then the
-  one-liner: `[coding 3.1 Keep render pure](<main-link>): <what's wrong>. <fix>.`
-- No rule behind it → `severity: <what's wrong>. <fix>.`
+- Cites a numbered rule → **lead with the linked rule**; a Markdown link to its
+  line on `main` is **MANDATORY** (step 9 format) — in nits and FYIs too, never a
+  bare "testing 3.1": `[coding 3.1 Keep render pure](<main-link>): <what's wrong>. <fix>.`
+- No rule behind it → `<what's wrong>. <fix>.`
 
 **Resolvable inline comments are ALWAYS preferred.** Every finding that maps to a
 changed line goes inline so the author can resolve the thread. Only a finding
@@ -296,9 +299,9 @@ SUMMARY_ID=$(gh api "repos/$O/$R/issues/<pr>/comments" --paginate \
   --jq 'map(select(.body|contains("pr-review:summary")))|.[0].id // empty')
 ```
 
-**b. Classify in memory, then post the summary FIRST.** Compare the current run's
-code-tied findings (`CURRENT`, by key) against the prior threads (`PRIOR`, by
-key) and decide each one's action — but **post nothing yet**:
+**b. Classify and draft — post nothing yet.** Compare the current run's code-tied
+findings (`CURRENT`, by key) against the prior threads (`PRIOR`, by key) and decide
+each one's action:
 
 | | in `CURRENT` | not in `CURRENT` (fixed) |
 |---|---|---|
@@ -306,35 +309,60 @@ key) and decide each one's action — but **post nothing yet**:
 | **in `PRIOR`, open** | **leave untouched** — no new comment; kept in the summary | **reply then resolve** |
 | **in `PRIOR`, resolved** | regressed → reply "Reopened: …" (leave resolved unless obvious) | skip |
 
-**The summary comes before every other comment this skill makes**, so post it
-*now*, ahead of any inline comment or reply. On a first run, creating it first
-gives it the earliest timestamp; on a re-run, `PATCH` updates it in place and
-keeps its original position ahead of the rest. (You already know the full picture
-from the classification above, so the body is complete before any inline write.)
-```bash
-# body ends with <!-- pr-review:summary -->
-[ -n "$SUMMARY_ID" ] \
-  && gh api -X PATCH "repos/$O/$R/issues/comments/$SUMMARY_ID" --input summary.json \
-  ||  gh api "repos/$O/$R/issues/<pr>/comments" --input summary.json
-```
-The summary is **only what still needs fixing**: a one-line verdict
-(`Approve` / `Approve with nits` / `Request changes` / `Blocked`) and one terse
-bullet per **open** finding (still-open-prior + new). A bullet that cites a rule
-MUST link it the same way an inline comment does (number + name + line on `main`):
+Now draft the **summary body** and each **new inline comment** as text — still
+posting nothing.
+
+The summary is **only what still needs fixing — nothing else.** *Forbidden:*
+listing what passed, naming out-of-scope / `n/a` considerations or defending why
+they aren't oversights, any scan/checklist of what you reviewed. The author cares
+about open issues, not your process.
+- **Verdict** — one line. For a clean `Approve` that line is essentially the whole
+  comment (`**Approve** — no blocking issues.`); do **not** pad it with what passed
+  or what you verified.
+- **One terse bullet per open finding** (still-open-prior + new). A bullet citing a
+  rule MUST link it (step 9 format).
+- **Nits / FYIs** — optional and rare; **one** terse line each, same MUST-link
+  rule. If a nit needs a paragraph to justify, it isn't worth posting — cut it.
 
 ```md
+**Approve** — no blocking issues.
+
 **Request changes** — 2 open
 - [coding 3.1 Keep render pure](https://github.com/OWNER/REPO/blob/main/contributing/coding-best-practices.md#L68): `Date.now()` in render — src/foo.tsx:42
 - missing changeset — `Changeset present` will fail
 ```
 
 On an update, **drop everything now fixed** — completed items leave the summary
-entirely; only remaining issues stay. **No checklist / per-consideration table** —
-the author cares what to fix, not what was scanned, and resolution shows on the
-thread itself, not here. Never `APPROVE`/`REQUEST_CHANGES` the PR's review state
-unprompted; the verdict lives in the text. Map a real review event only if asked.
+entirely; only remaining issues stay. No per-consideration table; resolution shows
+on the thread, not here.
 
-**c. Apply the inline changes** (only after the summary exists):
+**c. Self-review the drafts before posting (sub-agent gate).** Hand the drafted
+summary + every new inline comment to a fresh sub-agent whose only job is to catch
+*this skill's own* rule breaks and rewrite them. It checks, and fixes in place:
+- **every** best-practice citation — summary, inline, nit, FYI — is a Markdown
+  link to the rule's line on `main`; **no bare "testing 3.1"**;
+- each comment is **≤2 lines**, expert-terse, no narration of what was checked;
+- the summary carries **only open issues** — strip any "what passed", any
+  out-of-scope / `n/a` justification, any checklist;
+- markers intact (`pr-review:finding:<key>` on each inline, `pr-review:summary`
+  on the summary).
+
+Take the sub-agent's corrected text as the final copy. (For a tiny first run with
+one or two clean comments, a careful self-check against the same list is enough.)
+
+**d. Post the summary FIRST.** It must precede every other comment this skill
+makes. On a first run, creating it first gives it the earliest timestamp; on a
+re-run, `PATCH` updates it in place and keeps its position ahead of the rest.
+```bash
+# body ends with <!-- pr-review:summary -->
+[ -n "$SUMMARY_ID" ] \
+  && gh api -X PATCH "repos/$O/$R/issues/comments/$SUMMARY_ID" --input summary.json \
+  ||  gh api "repos/$O/$R/issues/<pr>/comments" --input summary.json
+```
+Never `APPROVE`/`REQUEST_CHANGES` the PR's review state unprompted; the verdict
+lives in the text. Map a real review event only if asked.
+
+**e. Apply the inline changes** (only after the summary exists):
 
 - **Fixed → resolve with a 👍.** For each prior open thread whose key is gone from
   `CURRENT`, reply then resolve:
@@ -379,14 +407,20 @@ summary-comment URL. Don't re-paste the body.
   specs ⊇ behavior); code matches design. Walk that chain in order. Archival
   (consideration 4) is **not** reviewed — the `openspec` CI guard blocks an
   unarchived proposal from merging, so just read its check status.
-- **Scope `n/a` honestly.** A pure-engine PR legitimately skips e2e and dogfood
-  cases; a docs-only PR skips changesets-with-bump and specs. State *why* it's
-  out of scope so a reader can't mistake an omission for an oversight.
-- **Output is the PR review, terse.** Resolvable inline comments are *preferred*
-  for code-tied findings, but the **summary is posted first** so it sits ahead of
-  every comment the skill makes. Inline comments target **≤2 lines** — what's
-  wrong + a simple fix — more only for a genuinely complex problem. Every extra
-  word is a word the author skims past.
+- **Judge `n/a` for yourself; never write it on the PR.** Deciding e2e or a
+  proposal is out of scope is *your* reasoning — keep it internal. The summary
+  shows **only open issues**; out-of-scope considerations, "what passed", and
+  "why the gaps aren't oversights" are silence, not content. The author wants what
+  to fix, not proof you looked.
+- **Output is the PR review, terse — for an expert.** Resolvable inline comments
+  are *preferred* for code-tied findings; the **summary is posted first** so it
+  sits ahead of every comment the skill makes. Every comment (inline, summary
+  bullet, nit, FYI) is **≤2 lines** — what's wrong + a simple fix — more only for a
+  genuinely complex problem. A clean `Approve` is one line; don't pad it.
+- **Self-review before posting.** Run the drafted summary + inline comments through
+  a sub-agent (step 11c) that catches this skill's own rule breaks — unlinked rule
+  citations, over-long comments, out-of-scope padding in the summary — and rewrites
+  them. Post the corrected copy.
 - **Re-runs reconcile, never duplicate.** Hidden markers
   (`pr-review:summary`, `pr-review:finding:<key>`) let a second run update the
   one summary in place, resolve fixed threads with a 👍 reply, open threads only
