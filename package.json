@@ -70,6 +70,7 @@
     "check:openspec-merge": "bun tools/openspec-merge-guard.ts",
     "baselines:record": "bun scripts/record-baselines.ts",
     "test": "bun test",
+    "test:tools": "bun test ./tools",
     "test:container": "bun test ./test/publish-container.test.ts",
     "e2e": "playwright test",
     "e2e:headed": "playwright test --headed",

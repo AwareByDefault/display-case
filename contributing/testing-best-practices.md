@@ -24,7 +24,9 @@ Display Case has three independent test layers. Know which one a given check bel
 
 **2.1** [`bunfig.toml`](../bunfig.toml) sets `[test] root = "src"`. This is load-bearing, not cosmetic: the Playwright `e2e/` suite also uses the `*.spec.ts` naming convention, and Playwright's `test.describe()` **throws** when invoked under Bun's runner. Without the `root` scope, `bun test` would discover and crash on the e2e specs. Run the e2e suite with `bun run e2e` (Playwright), never with `bun test`.
 
-**2.2** Because of 2.1, a `*.spec.ts` file is a Playwright spec and belongs under `e2e/`; a `*.test.ts` file is a Bun unit test and belongs under `src/`. Do not mix the conventions. A unit test placed outside `src/` will silently never run.
+**2.2** Because of 2.1, a `*.spec.ts` file is a Playwright spec and belongs under `e2e/`; a `*.test.ts` file is a Bun unit test and belongs under `src/`. Do not mix the conventions. A unit test placed outside `src/` will *not* be auto-discovered by `bun test`.
+
+**2.3** The deliberate exception is the repo tooling under [`tools/`](../tools/): its scripts (`tools/lint/spec-purity.ts`, `tools/openspec-merge-guard.ts`) are not shipped source, so their colocated `*.test.ts` files live next to them, outside the `src/` root. They run via an **explicit path**, not auto-discovery — `bun run test:tools` (= `bun test ./tools`) — which is wired into both `.husky/pre-commit` and the CI `test` job. Each tool exports its pure core (e.g. `scanSpecText`, `findOffenders`) and guards its CLI behind `import.meta.main`, so the test imports the logic without running the script. (Same explicit-path pattern as the Docker-gated `test:container`, §11.)
 
 ---
 

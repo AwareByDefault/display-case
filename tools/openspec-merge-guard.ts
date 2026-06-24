@@ -17,58 +17,76 @@
  *
  * Base ref: `$BASE_SHA` (the PR base in CI), else argv[2], else `origin/main`.
  * Compares with the three-dot range so it reads the branch's own additions.
+ *
+ * The pure classifier `findOffenders` is exported for tests
+ * (`openspec-merge-guard.test.ts`); the git call + process exit run only when
+ * this module is the entrypoint.
  */
 import { execFileSync } from 'node:child_process'
 
 const ACTIVE = 'openspec/changes/'
 const ARCHIVE = 'openspec/changes/archive/'
 
-const base = process.env.BASE_SHA || process.argv[2] || 'origin/main'
-
-let nameStatus: string
-try {
-  nameStatus = execFileSync(
-    'git',
-    [
-      'diff',
-      '--name-status',
-      '--no-renames',
-      `${base}...HEAD`,
-      '--',
-      'openspec/',
-    ],
-    { encoding: 'utf8' },
-  )
-} catch (err) {
-  console.error(
-    `openspec-merge-guard: \`git diff\` against "${base}" failed — is the base ref fetched? (CI needs fetch-depth: 0)\n${
-      err instanceof Error ? err.message : String(err)
-    }`,
-  )
-  process.exit(2)
+/**
+ * Given `git diff --name-status --no-renames` output (paths under `openspec/`),
+ * return the active (unarchived) proposal paths a PR may not land: files **added
+ * or modified** under `openspec/changes/` but not under
+ * `openspec/changes/archive/`. Deletions (status `D…`) are allowed — that is how
+ * a change leaves the active tree on archival.
+ */
+export function findOffenders(nameStatus: string): string[] {
+  const offenders: string[] = []
+  for (const line of nameStatus.split('\n')) {
+    if (!line.trim()) continue
+    const [status, ...rest] = line.split('\t')
+    const path = rest.join('\t')
+    if (!status || status.startsWith('D')) continue
+    if (path.startsWith(ACTIVE) && !path.startsWith(ARCHIVE))
+      offenders.push(path)
+  }
+  return offenders
 }
 
-const offenders: string[] = []
-for (const line of nameStatus.split('\n')) {
-  if (!line.trim()) continue
-  const [status, ...rest] = line.split('\t')
-  const path = rest.join('\t')
-  // Only additions/modifications put proposal content onto main; a deletion
-  // (status starting with D) is how an active change leaves `changes/`.
-  if (!status || status.startsWith('D')) continue
-  if (path.startsWith(ACTIVE) && !path.startsWith(ARCHIVE)) offenders.push(path)
-}
+function main(): void {
+  const base = process.env.BASE_SHA || process.argv[2] || 'origin/main'
 
-if (offenders.length > 0) {
-  const list = offenders.map((p) => `  ${p}`).join('\n')
-  console.error(
-    `::error::Unarchived OpenSpec proposal cannot merge to main. Archive the change before merging — ` +
-      `move openspec/changes/<name>/ → openspec/changes/archive/YYYY-MM-DD-<name>/ and fold its spec ` +
-      `deltas into openspec/specs/ (\`bun run openspec archive <name>\`). Offending paths:\n${list}`,
+  let nameStatus: string
+  try {
+    nameStatus = execFileSync(
+      'git',
+      [
+        'diff',
+        '--name-status',
+        '--no-renames',
+        `${base}...HEAD`,
+        '--',
+        'openspec/',
+      ],
+      { encoding: 'utf8' },
+    )
+  } catch (err) {
+    console.error(
+      `openspec-merge-guard: \`git diff\` against "${base}" failed — is the base ref fetched? (CI needs fetch-depth: 0)\n${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    )
+    process.exit(2)
+  }
+
+  const offenders = findOffenders(nameStatus)
+  if (offenders.length > 0) {
+    const list = offenders.map((p) => `  ${p}`).join('\n')
+    console.error(
+      `::error::Unarchived OpenSpec proposal cannot merge to main. Archive the change before merging — ` +
+        `move openspec/changes/<name>/ → openspec/changes/archive/YYYY-MM-DD-<name>/ and fold its spec ` +
+        `deltas into openspec/specs/ (\`bun run openspec archive <name>\`). Offending paths:\n${list}`,
+    )
+    process.exit(1)
+  }
+
+  console.log(
+    'openspec-merge-guard: OK — no unarchived proposal in this PR diff.',
   )
-  process.exit(1)
 }
 
-console.log(
-  'openspec-merge-guard: OK — no unarchived proposal in this PR diff.',
-)
+if (import.meta.main) main()
