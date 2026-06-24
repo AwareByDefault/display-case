@@ -1,7 +1,15 @@
 # change-scoped-checks Specification
 
 ## Purpose
-TBD - created by archiving change add-change-scoped-checks. Update Purpose after archive.
+
+The gating render checks — accessibility and visual-regression — re-render every
+component by default, which is wasted work on a change that touches only a few.
+This capability points those checks at a chosen subset of components: named
+explicitly, or derived from the files a change touched via each component's
+import closure. A conservative fallback keeps it sound — a change to an input no
+component's closure claims scopes to every component, and a change with no
+render-relevant input scopes to none — so a regression is never silently skipped.
+
 ## Requirements
 ### Requirement: Gating render checks can be scoped to selected components
 

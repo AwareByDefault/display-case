@@ -4,6 +4,18 @@ Non-obvious decisions, debugging notes, and architectural context for the Displa
 
 ---
 
+## 2026-06-24: `openspec archive` ships a placeholder `## Purpose` — fill it in
+
+When `openspec archive <change>` creates a *new* canonical capability spec under
+`openspec/specs/<cap>/spec.md` (folding an ADDED delta), it injects a stub
+Purpose: `TBD - created by archiving change <name>. Update Purpose after
+archive.` That TODO is permanent canonical content the CLI will not revisit, and
+`openspec validate` does **not** flag it (a `## Purpose` section is present, just
+useless). After any archive that *creates* a spec, replace the stub with the
+real one-paragraph, tool-agnostic intro the spec rules require (`# Title` →
+`## Purpose` → `## Requirements`). Archiving into an *existing* spec keeps that
+spec's Purpose, so this only bites the first change to introduce a capability.
+
 ## 2026-06-23: Two browse axes — `level` (Components) vs IA `group` (Exhibits)
 
 The catalog is browsed in two catalog modes plus the optional Primer. The split

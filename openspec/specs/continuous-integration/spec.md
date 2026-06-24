@@ -1,7 +1,16 @@
 # continuous-integration Specification
 
 ## Purpose
-TBD - created by archiving change add-pr-ci-workflow. Update Purpose after archive.
+
+The repository runs its full quality suite — static analysis, type checking, the
+project's own static checks, unit tests, and end-to-end tests — automatically
+against every proposed change before it can be integrated into the mainline, and
+reports each layer as an independent signal. The render-backed checks may be
+scoped to the components a change affects, and a proposed change cannot integrate
+while it still carries an open, unarchived proposal. This is the integration
+backstop: nothing reaches the mainline without clearing the same gate a
+contributor runs locally.
+
 ## Requirements
 ### Requirement: Proposed changes are gated by the full quality suite
 
