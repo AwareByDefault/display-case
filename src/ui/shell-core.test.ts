@@ -5,6 +5,7 @@ import {
   buildExhibitView,
   buildRenderSrc,
   buildUrl,
+  clampSidebarWidth,
   componentMatchesFilter,
   gridPad,
   groupByLevel,
@@ -17,6 +18,8 @@ import {
   primerForLocation,
   resolveMode,
   type Selection,
+  SIDEBAR_MAX_W,
+  SIDEBAR_MIN_W,
   selSignature,
 } from './shell-core'
 
@@ -327,6 +330,15 @@ describe('groupByLevel', () => {
     expect(groups).toHaveLength(1)
     expect(groups[0].key).toBe('unclassified')
     expect(groups[0].components).toHaveLength(1)
+  })
+})
+
+describe('clampSidebarWidth', () => {
+  test('clamps to the min and max bounds and passes values within range', () => {
+    expect(clampSidebarWidth(SIDEBAR_MIN_W - 100)).toBe(SIDEBAR_MIN_W)
+    expect(clampSidebarWidth(SIDEBAR_MAX_W + 100)).toBe(SIDEBAR_MAX_W)
+    const mid = Math.round((SIDEBAR_MIN_W + SIDEBAR_MAX_W) / 2)
+    expect(clampSidebarWidth(mid)).toBe(mid)
   })
 })
 

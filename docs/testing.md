@@ -88,6 +88,7 @@ The structure phase (`check --structure`) is a set of static best-practice rules
 - `flow-multi-step` — a flow has more than one step.
 - `unique-slugs` — no two components, or two cases within a component, collide on their address slug.
 - `tweak-defaults-valid` — a `choice` tweak's default is one of its options.
+- `nav-groups-resolve` — every `nav.groups` reference (`order`/`labels`/`collapsed`) names a group some surface resolves to (warning).
 
 **Case-content rules** (default on, error):
 

@@ -97,6 +97,11 @@ export const SIDEBAR_MIN_W = 240 // 15rem — matches --dc-sidebar-w
 export const SIDEBAR_MAX_W = 480 // 30rem
 export const SIDEBAR_STORAGE_KEY = 'dc-sidebar-w'
 
+/** Clamp a sidebar width to the allowed range [min, max]. */
+export function clampSidebarWidth(w: number): number {
+  return Math.max(SIDEBAR_MIN_W, Math.min(SIDEBAR_MAX_W, w))
+}
+
 // Stage crossfade duration (ms): the exhibit fades out when the selection
 // changes, swaps while hidden, then fades back in once measured. Mirrors the
 // CSS opacity transition on the stage.

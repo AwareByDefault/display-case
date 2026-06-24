@@ -13,6 +13,7 @@ import {
   buildExhibitView,
   buildRenderSrc,
   buildUrl,
+  clampSidebarWidth,
   DEVICES,
   DOC_DEFAULT_W,
   DOC_MAX_W,
@@ -35,7 +36,6 @@ import {
   RESPONSIVE,
   resolveMode,
   type Selection,
-  SIDEBAR_MAX_W,
   SIDEBAR_MIN_W,
   SIDEBAR_STORAGE_KEY,
   STAGE_FADE_MS,
@@ -462,8 +462,7 @@ export function useShell(seed: ShellSeed): ShellViewModel | { manifest: null } {
   useEffect(() => {
     try {
       const saved = Number(window.localStorage.getItem(SIDEBAR_STORAGE_KEY))
-      if (saved)
-        setSidebarWidth(Math.max(SIDEBAR_MIN_W, Math.min(SIDEBAR_MAX_W, saved)))
+      if (saved) setSidebarWidth(clampSidebarWidth(saved))
     } catch {
       // Storage unavailable (private mode, etc.) — keep the default.
     }
@@ -1109,10 +1108,7 @@ export function useShell(seed: ShellSeed): ShellViewModel | { manifest: null } {
       const startW = sidebarWidth
       let latest = startW
       const onMove = (ev: PointerEvent) => {
-        latest = Math.max(
-          SIDEBAR_MIN_W,
-          Math.min(SIDEBAR_MAX_W, startW + (ev.clientX - startX)),
-        )
+        latest = clampSidebarWidth(startW + (ev.clientX - startX))
         setSidebarWidth(latest)
       }
       const onUp = () => {
@@ -1138,7 +1134,7 @@ export function useShell(seed: ShellSeed): ShellViewModel | { manifest: null } {
       if (!step) return
       e.preventDefault()
       setSidebarWidth((w) => {
-        const next = Math.max(SIDEBAR_MIN_W, Math.min(SIDEBAR_MAX_W, w + step))
+        const next = clampSidebarWidth(w + step)
         persistSidebarWidth(next)
         return next
       })

@@ -43,10 +43,12 @@ export interface ManifestGroup {
   children: ManifestGroup[]
 }
 
-/** A top-level browse mode. `components` lists the building-block kit by level;
- *  `exhibits` lists page/flow surfaces by their information-architecture group;
- *  `primer` is the optional long-form reading page. */
-export type BrowseMode = 'primer' | 'components' | 'exhibits'
+/** Top-level browse modes, in canonical (switch + landing-fallback) order:
+ *  `primer` is the optional long-form reading page; `components` lists the
+ *  building-block kit by level; `exhibits` lists page/flow surfaces by their
+ *  information-architecture group. */
+export const BROWSE_MODES = ['primer', 'components', 'exhibits'] as const
+export type BrowseMode = (typeof BROWSE_MODES)[number]
 
 export interface Manifest {
   title: string

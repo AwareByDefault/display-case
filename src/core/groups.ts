@@ -130,8 +130,14 @@ function emit(
   const labels = groups?.labels ?? {}
   const collapsed = (groups?.collapsed ?? []).map((c) => c.trim().toLowerCase())
   // Stable: keep insertion order, then float config-ordered groups to the front.
+  // (Both-unlisted ⇒ Infinity − Infinity = NaN, which corrupts the sort, so
+  // compare for equality first.)
   const arr = [...nodes.values()]
-  arr.sort((a, b) => orderIndex(a, order) - orderIndex(b, order))
+  arr.sort((a, b) => {
+    const ia = orderIndex(a, order)
+    const ib = orderIndex(b, order)
+    return ia === ib ? 0 : ia - ib
+  })
   return arr.map((node) => {
     const joined = node.path.join('/').toLowerCase()
     const seg = node.segment.toLowerCase()

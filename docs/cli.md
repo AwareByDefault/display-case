@@ -61,6 +61,8 @@ Builds the manifest once, prints it to stdout as formatted JSON, and exits `0`. 
 display-case . --print-manifest
 ```
 
+Each component entry also carries its resolved information-architecture `group` (a path; `[]` for the building-block kit and default-group surfaces), and the top level reports `modes` (the present browse modes, e.g. `["primer","components","exhibits"]`), the resolved `landing` mode, and `groups` (the Exhibits group tree). A surface's in-app address uses the `/e/` prefix and a kit case the `/c/` prefix; `renderUrl` is unified.
+
 See [AI agents](ai-agents.md) for the manifest shape and how to use it.
 
 ## `display-case check <pkgDir>` — structure + token + a11y + visual checks

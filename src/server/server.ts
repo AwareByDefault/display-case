@@ -903,7 +903,7 @@ export async function startDisplayCase(
         )
       }
 
-      // Shell handles `/`, `/primer`, and all `/c/...` browse routes. The server
+      // Shell handles `/`, `/primer`, and all `/c/...` + `/e/...` browse routes. The server
       // pre-renders the shell from the in-memory manifest + this request's route
       // so the landing surface and every deep link arrive painted; the client
       // adopts it. The shell does a full reload only in `--dev` (chrome may have

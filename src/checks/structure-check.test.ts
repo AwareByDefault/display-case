@@ -680,4 +680,22 @@ describe('checkStructure', () => {
     })
     expect(only(await run(dir), 'nav-groups-resolve')).toHaveLength(0)
   })
+
+  test('nav-groups-resolve also checks labels and collapsed refs', async () => {
+    const dir = await setup({
+      'display-case.config.ts': config(
+        { 'nav-groups-resolve': true },
+        ", nav: { groups: { labels: { Ghost: 'X' }, collapsed: ['Phantom'] } }",
+      ),
+      'marketing/Pricing.case.tsx': caseFile(
+        "defineCases('Pricing', { Default: () => null }, { level: 'page' })",
+      ),
+    })
+    const msgs = only(await run(dir), 'nav-groups-resolve').map(
+      (x) => x.message,
+    )
+    expect(msgs).toHaveLength(2)
+    expect(msgs.join(' ')).toContain('Ghost')
+    expect(msgs.join(' ')).toContain('Phantom')
+  })
 })
