@@ -26,8 +26,9 @@ The CLI looks for `display-case.config.ts` then `display-case.config.tsx` in the
 | --- | --- | --- | --- | --- |
 | `title` | `string` | yes | — | Shown in the browsing chrome and the manifest. |
 | `roots` | `string[]` | yes | — | Globs (relative to the package) locating `*.case.tsx` files. |
-| `primer` | `string` | no | none | Path (relative to the package) to an `.mdx` document rendered as the Primer reading page. When set, the chrome shows a Primer / Cases mode switch. See [`primer`](#primer). |
-| `landing` | `'primer' \| 'cases'` | no | `'primer'` | Which view the chrome lands on at `/` when a Primer is configured. Ignored without a Primer. See [`landing`](#landing). |
+| `primer` | `string` | no | none | Path (relative to the package) to an `.mdx` document rendered as the Primer reading page. When set, a **Primer** tab joins the mode switch. See [`primer`](#primer). |
+| `landing` | `'primer' \| 'components' \| 'exhibits'` | no | first present mode | Which browse mode the chrome lands on at `/`. Honored only when that mode is present; otherwise the first present mode (primer → components → exhibits). See [`landing`](#landing). |
+| `nav` | `NavConfig` | no | none | Information-architecture configuration for the **Exhibits** mode: folder-derivation toggle, surface→group mapping, and group order/labels/default-collapsed. See [`nav`](#nav). |
 | `globalStyles` | `string[]` | no | none | CSS entrypoints (relative to the package) injected into previews. |
 | `decorator` | `ComponentType<{ children, level?, sourcePath?, area? }>` | no | none | Wrapper rendered around every case; also receives the active case's `level`, `sourcePath`, and `area` so it can wrap page/flow cases in app chrome. |
 | `styleEngines` | `StyleEngine[]` | no | none | Engines that collect render-time (CSS-in-JS) styling — emotion/MUI, styled-components — during the server render and deliver it before scripting. Pair with `decorator`. See [`styleEngines`](#styleengines) and [Style engines](style-engines.md). |
@@ -110,14 +111,58 @@ These constraints are checked: a Primer that can't be parsed, or that has no `<D
 
 ### `landing`
 
-Which view the chrome shows first when you open the root path (`/`): the Primer reading page (`'primer'`, the default) or the Cases library (`'cases'`). Use `'cases'` when the components are the main event and the Primer is supplementary reference:
+Which browse mode the chrome shows first when you open the root path (`/`): the
+`'primer'` reading page, the `'components'` kit, or the `'exhibits'` surfaces. Use
+`'components'` when the kit is the main event and the Primer is supplementary:
 
 ```ts
 primer: './src/design-system/primer.mdx',
-landing: 'cases',
+landing: 'components',
 ```
 
-This setting only governs the **bare `/` landing**. The canonical [`/primer`](#primer) route always opens the Primer (it's an explicit request), and a case deep link (`/c/...`) always opens the library — both regardless of `landing`. The option only takes effect when a `primer` is configured; without one there is no Primer to land on, so the library is always the landing view.
+The configured mode is honored only when it is **present** (has content);
+otherwise the chrome falls back to the first present mode in the order
+primer → components → exhibits (so the default, with a Primer configured, is the
+Primer). This setting governs only the **bare `/` landing** — a case deep link
+(`/c/...` or `/e/...`) always opens that case, and `/primer` always opens the
+Primer.
+
+### `nav`
+
+Information architecture for the **Exhibits** mode — how pages and flows are
+grouped. All fields are optional:
+
+```ts
+nav: {
+  // Derive a surface's group from its case-file folder. Default: true.
+  deriveFromFolder: true,
+  // Map surfaces to groups when their folders don't mirror the IA. First match
+  // wins; consulted after an explicit `meta.group` and folder derivation.
+  surface: [
+    { id: 'pricing', group: 'Marketing/Plans' },   // by component id, or a glob
+    { area: 'admin', group: 'Admin' },              // or by the case's `area`
+  ],
+  groups: {
+    order: ['Onboarding', 'Marketing', 'App'],      // unlisted groups follow
+    labels: { app: 'Signed-in app' },               // rename a derived segment
+    collapsed: ['Admin'],                           // collapsed by default
+  },
+  // How a flow is distinguished from a page in the Exhibits sidebar:
+  // 'tag' (default) appends a high-vis `flow` pill after the name;
+  // 'glyph' prefixes the flow row with a leading glyph. Either way a flow's
+  // step rows are numbered and pages render plain.
+  flowMarker: 'tag',
+}
+```
+
+A surface's group resolves first-match-wins: explicit
+[`meta.group`](writing-cases.md#definecasescomponent-cases-meta) → folder
+(relative to the matched `roots` glob; route-group parens like `(marketing)` and
+leading underscores are stripped, segments title-cased) → a `surface` rule → a
+default group. `order`/`labels`/`collapsed` match a group by its segment or its
+`/`-joined path, case-insensitively; naming a group no surface resolves to is
+reported by the `nav-groups-resolve` structure check (a warning). See
+[Hierarchy → Components and Exhibits](hierarchy.md#components-and-exhibits).
 
 ### `decorator`
 

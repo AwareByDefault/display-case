@@ -11,6 +11,9 @@ import { makeModel, RealPrimer, StageSlot } from './shell-fixtures'
  * flow exactly as it walks the live chrome.
  */
 export default defineFlow('Primer to Cases', {
+  // Explicit IA group (overrides the `shell` folder derivation) — nests this flow
+  // under a Walkthroughs sub-group in the Exhibits tree; dogfoods `meta.group`.
+  group: 'Shell/Walkthroughs',
   steps: {
     'Primer view': {
       transitions: ['Cases view'],
@@ -20,7 +23,7 @@ export default defineFlow('Primer to Cases', {
             mode: 'primer',
             shownMode: 'primer',
             setMode: (m) => {
-              if (m === 'library') goto('Cases view')
+              if (m !== 'primer') goto('Cases view')
             },
           })}
           renderFrame={null}
@@ -33,8 +36,8 @@ export default defineFlow('Primer to Cases', {
       render: ({ goto }) => (
         <ShellView
           {...makeModel({
-            mode: 'library',
-            shownMode: 'library',
+            mode: 'components',
+            shownMode: 'components',
             boxW: 240,
             boxH: 120,
             setMode: (m) => {

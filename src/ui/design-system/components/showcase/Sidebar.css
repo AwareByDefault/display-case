@@ -3,4 +3,37 @@
   padding: var(--dc-space-6);
   border-right: var(--dc-border-line);
   background: var(--dc-bg-subtle);
+  /* Positioning context for the resize handle pinned to the right edge. */
+  position: relative;
+}
+/* The rail's draggable right edge: a full-height strip that brightens to
+   marigold on hover/focus; drag (or arrow keys) to resize. The consumer owns the
+   width — this is just the affordance. */
+.dcui-sidebar-resize {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 10px;
+  z-index: 2;
+  cursor: col-resize;
+  touch-action: none;
+}
+.dcui-sidebar-resize::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: transparent;
+  transition: background var(--dc-transition-fast);
+}
+.dcui-sidebar-resize:hover::after,
+.dcui-sidebar-resize:focus-visible::after,
+.dcui-sidebar-resize:active::after {
+  background: var(--dc-brand);
+}
+.dcui-sidebar-resize:focus-visible {
+  outline: none;
 }

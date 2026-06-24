@@ -27,8 +27,18 @@ export default defineConfig({
   // specimens, authored in MDX and dogfooding the design system's own components.
   primer: './src/ui/design-system/primer.mdx',
   // Land on the Primer (the default) — the wall text orients you before you
-  // browse the cases. Switch to 'cases' to open the library first instead.
+  // browse. Set 'components' or 'exhibits' to land on a catalog mode instead.
   landing: 'primer',
+  // Dogfood the information-architecture config. The shell's page demos live
+  // under `components/shell/`, so they derive the `shell` folder group; the
+  // 'Primer to Cases' flow declares an explicit nested `group` (see its case),
+  // giving a `Browse chrome › Walkthroughs` tree. Here we relabel the folder
+  // group, exercising folder derivation + explicit `meta.group` + `nav.labels`.
+  nav: {
+    groups: {
+      labels: { shell: 'Browse chrome' },
+    },
+  },
   // The server inlines the components' (dcui-*) CSS into every document; the
   // cases here only need the design system's --dc-* tokens + fonts so the
   // isolated /render doc resolves those custom properties. globalStyles are

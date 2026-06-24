@@ -45,8 +45,24 @@ export const DcTestIds = {
    *  component, so it's scoped by the owning component id. */
   navCase: (componentId: string, caseId: string): string =>
     `dc-nav-case-${componentId}-${caseId}`,
-  /** A Primer ↔ Cases mode-switch tab, keyed by mode. */
-  modeSwitch: (mode: 'primer' | 'library'): string => `dc-modeswitch-${mode}`,
+  /** A mode-switch tab (Primer · Components · Exhibits), keyed by mode. */
+  modeSwitch: (mode: 'primer' | 'components' | 'exhibits'): string =>
+    `dc-modeswitch-${mode}`,
+  /** The header's ☰ nav toggle (collapses the rail / opens the mobile drawer). */
+  navToggle: 'dc-nav-toggle',
+  /** The sidebar filter input. */
+  navFilter: 'dc-nav-filter',
+  /** The sidebar resize handle (drag/keyboard to widen the rail). */
+  sidebarResize: 'dc-sidebar-resize',
+  /** An Exhibits-mode group row, keyed by its lowercased `/`-joined path. */
+  navGroup: (path: string): string => `dc-nav-group-${path}`,
+  /** A flow's marker (the `flow` tag or leading glyph) on its component row. */
+  navMarker: (componentId: string): string => `dc-nav-marker-${componentId}`,
+  /** A flow step row's leading index, keyed by component + case. */
+  navStepIndex: (componentId: string, caseId: string): string =>
+    `dc-nav-step-${componentId}-${caseId}`,
+  /** The active surface's group-path breadcrumb in the stage header. */
+  breadcrumb: 'dc-breadcrumb',
   /** A violation row in the accessibility panel, keyed by its axe rule id
    *  (e.g. 'color-contrast'); present only for a failing variant. */
   a11yViolation: (ruleId: string): string => `dc-a11y-violation-${ruleId}`,

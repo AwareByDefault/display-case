@@ -7,14 +7,18 @@ import type {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Manifest, ManifestComponent } from '../core/manifest'
 import type { A11yViolation } from '../index'
+import { isSurfaceLevel } from '../index'
 import {
   buildAddressUrl,
+  buildExhibitView,
   buildRenderSrc,
   buildUrl,
+  clampSidebarWidth,
   DEVICES,
   DOC_DEFAULT_W,
   DOC_MAX_W,
   DOC_MIN_W,
+  type ExhibitNode,
   GRID,
   gridPad,
   groupByLevel,
@@ -22,15 +26,18 @@ import {
   initialSelectionFor,
   MIN_PAD,
   MODE_FADE_MS,
+  type Mode,
   NAV_COLLAPSE_MAX,
+  NAV_DRAWER_MAX,
   type ParsedRoute,
   type PrimerGroup,
   type PrimerSection,
   parseLocation,
-  primerForLocation,
   RESPONSIVE,
   resolveMode,
   type Selection,
+  SIDEBAR_MIN_W,
+  SIDEBAR_STORAGE_KEY,
   STAGE_FADE_MS,
   selSignature,
   type Theme,
@@ -73,11 +80,16 @@ export interface ShellViewModel {
   setTheme: (update: (t: Theme) => Theme) => void
   navCollapsed: boolean
   setNavCollapsed: (update: (c: boolean) => boolean) => void
+  /** Sidebar (nav rail) width in px — drag its right edge to resize; remembered
+   *  across sessions. Applied as the `--dc-sidebar-w` grid column. */
+  sidebarWidth: number
+  startSidebarResize: (e: ReactPointerEvent<HTMLDivElement>) => void
+  onSidebarResizeKey: (e: ReactKeyboardEvent<HTMLDivElement>) => void
 
-  // Primer ↔ Cases mode.
-  mode: 'primer' | 'library'
-  setMode: (m: 'primer' | 'library') => void
-  shownMode: 'primer' | 'library'
+  // Browse mode: Primer · Components · Exhibits.
+  mode: Mode
+  setMode: (m: Mode) => void
+  shownMode: Mode
   modeFadeStyle: CSSProperties
 
   // Device toolbar / zoom / grid.
@@ -132,7 +144,16 @@ export interface ShellViewModel {
   // Nav rail (scroll-fade refs + library tree).
   navScrollRef: RefCallback<HTMLDivElement> | { current: HTMLDivElement | null }
   navBodyRef: RefCallback<HTMLDivElement> | { current: HTMLDivElement | null }
+  /** Components mode: the kit grouped by level. */
   groups: ReturnType<typeof groupByLevel>
+  /** Exhibits mode: ungrouped surfaces + the nested IA group tree. */
+  exhibitView: { ungrouped: ManifestComponent[]; tree: ExhibitNode[] }
+  /** Sidebar filter text (both catalog modes); empty = no filter. */
+  filter: string
+  setFilter: (s: string) => void
+  /** The active surface's group path, for the Exhibits-mode stage breadcrumb;
+   *  empty for a kit component or a default-group surface. */
+  breadcrumb: string[]
   expanded: Set<string>
   toggleExpanded: (id: string) => void
   selectComponent: (c: ManifestComponent) => void
@@ -198,6 +219,14 @@ export function useShell(seed: ShellSeed): ShellViewModel | { manifest: null } {
   // means the Primer — without resubscribing the listener on every manifest change.
   const manifestRef = useRef(manifest)
   manifestRef.current = manifest
+  // Whether a component id is a surface (page/flow) — picks the `/e/` vs `/c/`
+  // URL prefix. Reads the manifest ref so it needs no deps.
+  const isSurfaceId = useCallback((componentId: string): boolean => {
+    const m = manifestRef.current
+    return isSurfaceLevel(
+      m?.components.find((c) => c.id === componentId)?.level,
+    )
+  }, [])
   const [sel, setSel] = useState<Selection | null>(seedSel)
   const [theme, setTheme] = useState<Theme>(seed.theme)
   // Page origin for absolute shareable addresses. Empty during the server render
@@ -347,6 +376,10 @@ export function useShell(seed: ShellSeed): ShellViewModel | { manifest: null } {
   // Starts expanded deterministically (the server has no viewport width); an
   // effect collapses it on a narrow viewport after mount, so hydration matches.
   const [navCollapsed, setNavCollapsed] = useState(false)
+  // Sidebar width. Seeded to the minimum so the server render and the client's
+  // first render agree (the CSS default is the same 15rem); a mount effect then
+  // applies any width remembered from a previous session.
+  const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_MIN_W)
   // Which components are expanded in the nav. Collapsed by default; the
   // initially-selected component is seeded open so its active case is visible.
   const [expanded, setExpanded] = useState<Set<string>>(
@@ -362,12 +395,14 @@ export function useShell(seed: ShellSeed): ShellViewModel | { manifest: null } {
   // Which sidebar view is active. The Primer, when configured, is the default
   // landing view (it orients you before you browse) — but a deep link to a case
   // opens straight into the library.
-  const [mode, setMode] = useState<'primer' | 'library'>(seedMode)
+  const [mode, setMode] = useState<Mode>(seedMode)
+  // Sidebar filter text, shared by the Components and Exhibits modes.
+  const [filter, setFilter] = useState('')
   // The mode actually on screen. `mode` is the target (drives the mode-switch
   // highlight box, which lerps to it instantly); `shownMode` lags by one fade so
   // the nav, screen content, and header controls swap while hidden — a crossfade
   // rather than a hard cut. Mirrors the `sel`/`shownSel` stage pattern above.
-  const [shownMode, setShownMode] = useState<'primer' | 'library'>(seedMode)
+  const [shownMode, setShownMode] = useState<Mode>(seedMode)
   const shownModeRef = useRef(shownMode)
   shownModeRef.current = shownMode
   // Drives the opacity of the faded regions: true = shown, false = mid-swap.
@@ -420,6 +455,17 @@ export function useShell(seed: ShellSeed): ShellViewModel | { manifest: null } {
   // client, after hydration, so the first render matches on both sides.
   useEffect(() => {
     if (window.innerWidth <= NAV_COLLAPSE_MAX) setNavCollapsed(true)
+  }, [])
+
+  // Restore the remembered sidebar width on the client, after hydration (the
+  // server can't read localStorage, so the first render uses the default).
+  useEffect(() => {
+    try {
+      const saved = Number(window.localStorage.getItem(SIDEBAR_STORAGE_KEY))
+      if (saved) setSidebarWidth(clampSidebarWidth(saved))
+    } catch {
+      // Storage unavailable (private mode, etc.) — keep the default.
+    }
   }, [])
 
   // Crossfade the chrome when the view mode changes. The highlight box lerps to
@@ -519,30 +565,81 @@ export function useShell(seed: ShellSeed): ShellViewModel | { manifest: null } {
     )
   }, [])
 
-  const select = useCallback((next: Selection) => {
-    setSel(next)
-    window.history.pushState(
-      null,
-      '',
-      buildUrl(next.componentId, next.caseId, next.tweaks, docOpenRef.current),
-    )
-  }, [])
+  const select = useCallback(
+    (next: Selection) => {
+      const surface = isSurfaceId(next.componentId)
+      setSel(next)
+      // Align the mode to the selected component's kind. Within a mode this is a
+      // no-op; for a cross-mode filter match (a surface chosen from "In Exhibits"
+      // while in Components, or vice versa) it switches the nav + mode switch to
+      // the right mode — `pushState` alone wouldn't (it doesn't fire popstate).
+      setMode(surface ? 'exhibits' : 'components')
+      // On a phone the open nav is a full-width drawer over the stage; close it
+      // once a case is chosen so the selection is visible.
+      if (window.innerWidth <= NAV_DRAWER_MAX) setNavCollapsed(true)
+      window.history.pushState(
+        null,
+        '',
+        buildUrl(
+          next.componentId,
+          next.caseId,
+          next.tweaks,
+          docOpenRef.current,
+          surface,
+        ),
+      )
+    },
+    [isSurfaceId],
+  )
 
-  // Switch between the Primer and the library, reflecting the mode in the
-  // address so the boundary is a real navigation step: back/forward cross it and
-  // a copied link reopens the same view. The Primer lives at `/primer`; the
-  // library at the *remembered* case address — so toggling back to Cases returns
-  // you to the exhibit you were last on (held in `sel`, never unmounted) rather
-  // than a reset. `setMode` then runs the crossfade as before.
-  const changeMode = useCallback((m: 'primer' | 'library') => {
-    setMode(m)
-    const s = selRef.current
-    const url =
-      m === 'primer' || !s
-        ? '/primer'
-        : buildUrl(s.componentId, s.caseId, s.tweaks, docOpenRef.current)
-    window.history.pushState(null, '', url)
-  }, [])
+  // Switch browse mode, reflecting it in the address so the boundary is a real
+  // navigation step (back/forward cross it; a copied link reopens the view). The
+  // Primer is `/primer`. A catalog mode reuses the current selection when it
+  // already belongs to that mode (so toggling back returns you to where you
+  // were), else jumps to the first component of the mode's kind — Exhibits to the
+  // first surface, Components to the first kit component. `setMode` runs the
+  // crossfade; changing `sel` swaps the stage behind it.
+  const changeMode = useCallback(
+    (m: Mode) => {
+      setMode(m)
+      if (m === 'primer') {
+        window.history.pushState(null, '', '/primer')
+        return
+      }
+      const wantSurface = m === 'exhibits'
+      const cur = selRef.current
+      let target =
+        cur && isSurfaceId(cur.componentId) === wantSurface ? cur : null
+      if (!target) {
+        const first = manifestRef.current?.components.find(
+          (c) => isSurfaceLevel(c.level) === wantSurface,
+        )
+        if (first)
+          target = {
+            componentId: first.id,
+            caseId: first.cases[0]?.id ?? '',
+            tweaks: {},
+          }
+      }
+      if (target) {
+        setSel(target)
+        window.history.pushState(
+          null,
+          '',
+          buildUrl(
+            target.componentId,
+            target.caseId,
+            target.tweaks,
+            docOpenRef.current,
+            wantSurface,
+          ),
+        )
+      } else {
+        window.history.pushState(null, '', wantSurface ? '/e' : '/c')
+      }
+    },
+    [isSurfaceId],
+  )
 
   // Open/close the docs panel and reflect it in the address (replaceState, so a
   // toggle isn't a back-button step) so the open panel is deep-linkable.
@@ -553,10 +650,16 @@ export function useShell(seed: ShellSeed): ShellViewModel | { manifest: null } {
       window.history.replaceState(
         null,
         '',
-        buildUrl(sel.componentId, sel.caseId, sel.tweaks, open),
+        buildUrl(
+          sel.componentId,
+          sel.caseId,
+          sel.tweaks,
+          open,
+          isSurfaceId(sel.componentId),
+        ),
       )
     },
-    [sel],
+    [sel, isSurfaceId],
   )
 
   // Browser back/forward only changes the address; this is the read side that
@@ -566,21 +669,19 @@ export function useShell(seed: ShellSeed): ShellViewModel | { manifest: null } {
   useEffect(() => {
     const onPop = () => {
       const loc = parseLocation()
+      // A case address (`/c/...` or `/e/...`) updates the stage selection; the
+      // mode is read from the address (the path prefix), so back/forward across a
+      // mode boundary restores the right view. A non-case address (`/primer`,
+      // `/`) leaves `sel` untouched so a later toggle back restores it.
       if (loc.componentId) {
         setSel({
           componentId: loc.componentId,
           caseId: loc.caseId,
           tweaks: loc.tweaks,
         })
-        setMode('library')
-      } else {
-        // Non-case address: `/primer` is the Primer; the bare `/` honors the
-        // configured landing (Primer unless `landing: 'cases'`). The library
-        // `sel` is left untouched so a later toggle back to Cases still restores
-        // it.
-        const m = manifestRef.current
-        setMode(m && primerForLocation(m) ? 'primer' : 'library')
       }
+      const m = manifestRef.current
+      if (m) setMode(resolveMode(loc, m))
       setDocOpen(loc.docs)
     }
     window.addEventListener('popstate', onPop)
@@ -632,14 +733,22 @@ export function useShell(seed: ShellSeed): ShellViewModel | { manifest: null } {
   const didInitialNavScrollRef = useRef(false)
   // biome-ignore lint/correctness/useExhaustiveDependencies: `expanded` isn't read here but a case row only mounts once its component is expanded, so re-run to find it
   useEffect(() => {
-    if (shownMode !== 'library') return
+    if (shownMode === 'primer') return
     const container = navScrollRef.current
     if (!container || !sel?.componentId) return
-    const id = sel.caseId
-      ? DcTestIds.navCase(sel.componentId, sel.caseId)
-      : DcTestIds.navComponent(sel.componentId)
     const raf = requestAnimationFrame(() => {
-      const el = container.querySelector<HTMLElement>(`[data-testid="${id}"]`)
+      // Prefer the active case row; fall back to the component row when there is
+      // none (a single-case leaf, or a collapsed parent, renders no case row).
+      const caseEl = sel.caseId
+        ? container.querySelector<HTMLElement>(
+            `[data-testid="${DcTestIds.navCase(sel.componentId, sel.caseId)}"]`,
+          )
+        : null
+      const el =
+        caseEl ??
+        container.querySelector<HTMLElement>(
+          `[data-testid="${DcTestIds.navComponent(sel.componentId)}"]`,
+        )
       if (!el) return
       el.scrollIntoView({
         block: didInitialNavScrollRef.current ? 'nearest' : 'center',
@@ -690,6 +799,19 @@ export function useShell(seed: ShellSeed): ShellViewModel | { manifest: null } {
     () => groupByLevel(manifest?.components ?? []),
     [manifest],
   )
+
+  // Exhibits mode: ungrouped surfaces + the nested IA group tree.
+  const exhibitView = useMemo(
+    () => (manifest ? buildExhibitView(manifest) : { ungrouped: [], tree: [] }),
+    [manifest],
+  )
+
+  // The active surface's group path for the stage breadcrumb. Empty for a kit
+  // component or a surface in the default group.
+  const breadcrumb = useMemo(() => {
+    const comp = manifest?.components.find((c) => c.id === sel?.componentId)
+    return comp && isSurfaceLevel(comp.level) ? comp.group : []
+  }, [manifest, sel?.componentId])
 
   const primerGroups = useMemo(
     () => groupPrimerSections(primerSections),
@@ -967,6 +1089,59 @@ export function useShell(seed: ShellSeed): ShellViewModel | { manifest: null } {
     [],
   )
 
+  // Persist the sidebar width on an explicit resize (drag end / key), so a blank
+  // mount never clobbers a remembered value.
+  const persistSidebarWidth = useCallback((w: number) => {
+    try {
+      window.localStorage.setItem(SIDEBAR_STORAGE_KEY, String(w))
+    } catch {
+      // Storage unavailable — width simply won't persist this session.
+    }
+  }, [])
+
+  // Drag the sidebar's right edge: moving right widens it, clamped to
+  // [min, max]; the final width is remembered.
+  const startSidebarResize = useCallback(
+    (e: ReactPointerEvent<HTMLDivElement>) => {
+      e.preventDefault()
+      const startX = e.clientX
+      const startW = sidebarWidth
+      let latest = startW
+      const onMove = (ev: PointerEvent) => {
+        latest = clampSidebarWidth(startW + (ev.clientX - startX))
+        setSidebarWidth(latest)
+      }
+      const onUp = () => {
+        window.removeEventListener('pointermove', onMove)
+        window.removeEventListener('pointerup', onUp)
+        document.body.style.cursor = ''
+        document.body.style.userSelect = ''
+        persistSidebarWidth(latest)
+      }
+      document.body.style.cursor = 'col-resize'
+      document.body.style.userSelect = 'none'
+      window.addEventListener('pointermove', onMove)
+      window.addEventListener('pointerup', onUp)
+    },
+    [sidebarWidth, persistSidebarWidth],
+  )
+  // Keyboard resize: arrows nudge by one grid step (right widens, like the drag).
+  const onSidebarResizeKey = useCallback(
+    (e: ReactKeyboardEvent<HTMLDivElement>) => {
+      let step = 0
+      if (e.key === 'ArrowRight') step = GRID
+      else if (e.key === 'ArrowLeft') step = -GRID
+      if (!step) return
+      e.preventDefault()
+      setSidebarWidth((w) => {
+        const next = clampSidebarWidth(w + step)
+        persistSidebarWidth(next)
+        return next
+      })
+    },
+    [persistSidebarWidth],
+  )
+
   // Drive the token theme from the document root so html/body (not just the
   // app chrome) pick up the themed background — no white bars around the app.
   useEffect(() => {
@@ -1168,6 +1343,9 @@ export function useShell(seed: ShellSeed): ShellViewModel | { manifest: null } {
     setTheme,
     navCollapsed,
     setNavCollapsed,
+    sidebarWidth,
+    startSidebarResize,
+    onSidebarResizeKey,
     mode,
     setMode: changeMode,
     shownMode,
@@ -1204,6 +1382,10 @@ export function useShell(seed: ShellSeed): ShellViewModel | { manifest: null } {
     navScrollRef,
     navBodyRef,
     groups,
+    exhibitView,
+    filter,
+    setFilter,
+    breadcrumb,
     expanded,
     toggleExpanded,
     selectComponent,

@@ -25,6 +25,17 @@ export interface NavItemProps {
    *  parent flags "issues here" without competing with the child numbers. Omit
    *  or `0` for none. */
   alert?: number | 'dot'
+  /** Decorative leading glyph before the label (e.g. a flow marker). Hidden from
+   *  assistive tech — the accessible name stays `label`. */
+  icon?: ReactNode
+  /** Leading index before a case label (e.g. a flow step number). Decorative. */
+  index?: ReactNode
+  /** A small trailing pill after the label (e.g. a `flow` tag). */
+  tag?: ReactNode
+  /** `data-testid` for the leading `icon`/trailing `tag` marker slot. */
+  markerTestId?: string
+  /** `data-testid` for the leading `index` slot. */
+  indexTestId?: string
   onSelect?: () => void
   onToggle?: () => void
   /** `data-testid` for the select (name) button. */
@@ -42,6 +53,11 @@ export function NavItem({
   current = false,
   expanded = false,
   alert,
+  icon,
+  index,
+  tag,
+  markerTestId,
+  indexTestId,
   onSelect,
   onToggle,
   testId,
@@ -84,7 +100,28 @@ export function NavItem({
         aria-current={current ? 'true' : undefined}
         data-testid={testId}
         onClick={onSelect}>
+        {index != null ? (
+          <span
+            className="dcui-nav-index"
+            data-testid={indexTestId}
+            aria-hidden="true">
+            {index}
+          </span>
+        ) : null}
+        {icon != null ? (
+          <span
+            className="dcui-nav-icon"
+            data-testid={markerTestId}
+            aria-hidden="true">
+            {icon}
+          </span>
+        ) : null}
         <span className="dcui-nav-label">{label}</span>
+        {tag != null ? (
+          <span className="dcui-nav-tag" data-testid={markerTestId}>
+            {tag}
+          </span>
+        ) : null}
         {showAlert && alert !== undefined && (
           <A11yBadge value={alert} testId={alertTestId} />
         )}

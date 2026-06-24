@@ -25,6 +25,33 @@ Levels are ordered by increasing composition. The descriptions below follow the 
 
 The internal order is fixed as `atom, molecule, organism, template, page, flow`. Components are sorted by level (atoms first), then alphabetically by name. A component with **no** declared level is treated as "unclassified" and sorts after everything else.
 
+## Components and Exhibits
+
+The level classifies *every* component, but it only *groups the sidebar* for the
+building-block kit. The catalog is browsed in two modes (a third, **Primer**,
+appears when one is configured):
+
+- **Components** — the kit (`atom` through `template`, plus unclassified),
+  grouped by level exactly as above. The reusable parts.
+- **Exhibits** — the application's **surfaces** (`page` and `flow`), grouped not
+  by level but by their **information-architecture group**: a nestable path that
+  mirrors the app's own feature/route structure (e.g. `App / Settings /
+  Billing`). This scales where a single flat "Pages" list would not. Within a
+  group, a **flow** is distinguished from a page by a high-vis `flow` tag (or a
+  leading glyph — see [`nav.flowMarker`](configuration.md#nav)) and numbered step
+  rows; pages render plain.
+
+The mode switch shows only the modes that have content, so a pure design-system
+package shows just Components and a surfaces-only package shows just Exhibits.
+Each mode deep-links by its case-path prefix: `/c/<component>/<case>` for a
+Components case, `/e/<component>/<case>` for an Exhibits case.
+
+A surface's group comes from the first of: an explicit
+[`meta.group`](writing-cases.md#definecasescomponent-cases-meta) → the case
+file's folder (on by default) → showcase [`nav`](configuration.md#nav) config → a
+default group. `level` is unchanged and still drives the structure checks; the IA
+`group` is a second, independent axis.
+
 ## Flows
 
 A flow is a multi-step behavioural journey rather than a set of independent variants. Author it with `defineFlow` — it is always placed at the `flow` level, and you do not pass a `level` yourself.

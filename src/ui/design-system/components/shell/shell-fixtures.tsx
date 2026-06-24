@@ -14,7 +14,11 @@ import type {
 } from '../../../../core/manifest'
 import type { A11yViolation, TweakSchema } from '../../../../index'
 import { Display } from '../../../primer'
-import { groupByLevel, groupPrimerSections } from '../../../shell-core'
+import {
+  buildExhibitView,
+  groupByLevel,
+  groupPrimerSections,
+} from '../../../shell-core'
 import type { A11ySurface, ShellViewModel } from '../../../use-shell'
 import { Button, Chip } from '..'
 
@@ -43,6 +47,7 @@ function mkComponent(
 ): ManifestComponent {
   return {
     isFlow: false,
+    group: [],
     caseFile: `src/ui/design-system/components/${c.id}.case.tsx`,
     placardDoc: null,
     ...c,
@@ -76,8 +81,9 @@ export const BUTTON_PLAYGROUND_TWEAKS: TweakSchema = {
  */
 export const mockManifest: Manifest = {
   title: 'Display Case',
-  primer: true,
+  modes: ['primer', 'components', 'exhibits'],
   landing: 'primer',
+  groups: [],
   components: [
     mkComponent({
       id: 'button',
@@ -452,9 +458,12 @@ export function makeModel(
     setTheme: noop,
     navCollapsed: false,
     setNavCollapsed: noop,
-    mode: 'library',
+    sidebarWidth: 240,
+    startSidebarResize: noop,
+    onSidebarResizeKey: noop,
+    mode: 'components',
     setMode: noop,
-    shownMode: 'library',
+    shownMode: 'components',
     modeFadeStyle: { opacity: 1 },
     sizeId: 'full',
     setSizeId: noop,
@@ -486,6 +495,10 @@ export function makeModel(
     navScrollRef: nullRef,
     navBodyRef: nullRef,
     groups: groupByLevel(mockManifest.components),
+    exhibitView: buildExhibitView(mockManifest),
+    filter: '',
+    setFilter: noop,
+    breadcrumb: [],
     expanded: picked.expanded,
     toggleExpanded: noop,
     selectComponent: noop,

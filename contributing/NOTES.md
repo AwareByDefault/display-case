@@ -4,6 +4,35 @@ Non-obvious decisions, debugging notes, and architectural context for the Displa
 
 ---
 
+## 2026-06-23: Two browse axes — `level` (Components) vs IA `group` (Exhibits)
+
+The catalog is browsed in two catalog modes plus the optional Primer. The split
+has a few non-obvious seams:
+
+- **`level` and `group` are independent axes.** `level` classifies *every*
+  component and drives the structure checks; it groups only the **Components**
+  mode (atom–template). Pages/flows are **surfaces** — `isSurfaceLevel(level)`
+  (in `src/index.ts`, shared) — organized in the **Exhibits** mode by a nestable
+  `group` path instead. Don't fold surfaces into `groupByLevel`; `KIT_GROUP_ORDER`
+  excludes page/flow.
+- **The mode is the URL prefix.** `/c/<comp>/<case>` = Components, `/e/<comp>/<case>`
+  = Exhibits, `/primer` = Primer, `/` = `manifest.landing`. `/render/...` stays
+  unified (mode-agnostic). `resolveMode` reads the prefix; `buildUrl` and
+  `ManifestCase.browseUrl` pick the prefix by `isSurfaceLevel`. `Manifest` carries
+  `modes` (present, in canonical order) + a resolved `landing` — these *replaced*
+  the old `primer: boolean` / `landing: 'primer'|'library'`.
+- **Gotcha — `sourcePath` isn't set in the manifest path.** `loadModules` doesn't
+  tag modules with `sourcePath` (only the codegen'd browser/SSR entries do, for
+  the decorator). Folder-derived groups need it, so `buildManifest` sets
+  `module.sourcePath = relative(pkgDir, file)` before `buildCatalog`. Without that,
+  every surface resolves to the default (empty) group.
+- **`src/core/groups.ts` is server-side** (it uses `Bun.Glob` for surface-rule id
+  globs). `shell-core.ts` stays browser-safe and imports only the pure
+  `isSurfaceLevel` from `src/index.ts`; group *resolution* runs at manifest-build
+  time and the resolved paths ride the manifest to the client.
+
+---
+
 ## 2026-06-23: The dev watcher follows the module graph, not just the target's `src`
 
 The dev server (`--dev`, and any interactive run) watches `<pkgDir>/src` (plus
