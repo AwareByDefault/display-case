@@ -62,6 +62,14 @@ describe('deriveGroupFromFolder', () => {
     expect(deriveGroupFromFolder('src/app/Home.case.tsx', ROOTS)).toEqual([])
   })
 
+  test('a `./`-prefixed root glob still matches the relative sourcePath', () => {
+    expect(
+      deriveGroupFromFolder('src/app/marketing/pricing/Pricing.case.tsx', [
+        './src/app/**/*.case.tsx',
+      ]),
+    ).toEqual(['Marketing', 'Pricing'])
+  })
+
   test('a path outside every root yields no group', () => {
     expect(deriveGroupFromFolder('other/place/X.case.tsx', ROOTS)).toEqual([])
   })

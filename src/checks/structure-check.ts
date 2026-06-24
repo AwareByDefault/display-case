@@ -349,15 +349,11 @@ async function ruleNavGroupsResolve(
       module.sourcePath != null
         ? module
         : { ...module, sourcePath: relative(s.pkgDir, file) }
-    const path = resolveGroup(mod)
-    for (let i = 0; i < path.length; i++) {
-      valid.add(path[i].toLowerCase())
-      valid.add(
-        path
-          .slice(0, i + 1)
-          .join('/')
-          .toLowerCase(),
-      )
+    const acc: string[] = []
+    for (const seg of resolveGroup(mod)) {
+      acc.push(seg)
+      valid.add(seg.toLowerCase())
+      valid.add(acc.join('/').toLowerCase())
     }
   }
 

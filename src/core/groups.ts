@@ -17,10 +17,13 @@ export { isSurfaceLevel }
  * the pure browser catalog stays config-free and receives the resolver.
  */
 
-/** The static (wildcard-free) directory prefix of a roots glob, with its trailing slash. */
+/** The static (wildcard-free) directory prefix of a roots glob, with its trailing
+ *  slash. A leading `./` is stripped so it lines up with `sourcePath`, which is
+ *  `relative(pkgDir, …)` and never `./`-prefixed. */
 function globStaticPrefix(glob: string): string {
-  const wildcard = glob.search(/[*?[\]{}]/)
-  const head = wildcard === -1 ? glob : glob.slice(0, wildcard)
+  const g = glob.replace(/^\.\//, '')
+  const wildcard = g.search(/[*?[\]{}]/)
+  const head = wildcard === -1 ? g : g.slice(0, wildcard)
   const slash = head.lastIndexOf('/')
   return slash === -1 ? '' : head.slice(0, slash + 1)
 }
