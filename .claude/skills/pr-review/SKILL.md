@@ -226,10 +226,26 @@ describes the issue — don't manufacture a citation.
   headline finding. **A change is complete only when unit tests, the static
   checks, and lint all pass, and chrome changes are covered by e2e** (testing
   10).
-- **Changeset (releasing)** — every PR needs a `.changeset/*.md` declaring the
-  bump (or an empty one for no-release), or `Changeset present` fails. Sanity-
-  check the level against the actual surface impact (major = breaking public
-  API/CLI). Defer the write itself to the `display-case-changeset` skill.
+- **Changeset accuracy & impact (releasing)** — every PR needs a `.changeset/*.md`
+  (or `Changeset present` fails). Don't just check it exists — verify it is
+  **accurate to this PR's diff** on both axes:
+  - **Bump level matches the real effect on the published package** (the
+    `src/index.ts` authoring API, the `./tokens-check` / `./prod-server` exports,
+    the `display-case` CLI behavior, and the bundled consumer `skills/`):
+    - **major** — a breaking change to that surface (renamed/removed export or
+      option, changed output/contract).
+    - **minor** — a backward-compatible new capability (new flag, export, case or
+      check feature).
+    - **patch** — a bug fix or internal change that still ships in the package.
+    - **none** (empty changeset) — changes that never reach the package: CI, docs,
+      tests, `.claude/` skills, repo tooling (`tools/`), OpenSpec.
+    Derive the correct level from the diff yourself, then compare. A new CLI flag
+    declared `patch`, a breaking change declared `minor`, or a src-only fix
+    declared `none` is a **finding** — cite the diff that proves the right level.
+  - **Description matches the change** — it names the actual user-facing change for
+    the CHANGELOG reader, not a stale, vague, or copy-pasted summary.
+  Missing, mis-levelled, or inaccurate → a finding. Defer the *writing/fixing* to
+  the `display-case-changeset` skill; the review's job is to catch the mismatch.
 
 ### 10. Documentation fully updated? *(consideration 11)*
 
