@@ -4,6 +4,61 @@ Non-obvious decisions, debugging notes, and architectural context for the Displa
 
 ---
 
+## 2026-06-25: ALL bundling runs in fresh child processes — never in the dev server
+
+**Supersedes the "in-process build" decision below.** 1.3.0 moved *case* bundling
+off the startup path and the *manifest* into a subprocess, but a follow-up report
+proved `--dev` on a large showcase **still segfaulted at startup, in the main
+process**, with a Bun heap-corruption signature (poison address `0x…AAAE`, variable
+timing, size-deterministic). The decisive evidence: `--print-manifest` `await
+import()`s the **entire** catalog graph and exits 0 every time in its child, while
+the same catalog kills the main `--dev` process. So loading the graph isn't the
+problem — the differentiator is that the main process is the one **running Bun's
+bundler** (the shell `Bun.build` + plugins) in a long-lived process; bundler heap
+state accumulating there is the crash precondition.
+
+**The fix: the long-lived server NEVER calls `Bun.build`.** `src/server/build-case.ts`
+is now the **build worker** — a CLI (`bun build-case.ts <kind> …`) spawned per
+build (`kind` = `shell` or `case`), whose heap dies with the process. The server
+(`server.ts`) only orchestrates: `spawnBuild()` runs the worker, reads the on-disk
+bundles + the worker's reported module graph (JSON), and `import()`s the SSR bundle
+(evaluation, which is safe — `--print-manifest` proves it). `rebuild()` spawns the
+`shell` worker (no more in-process shell/primer `Bun.build`); `buildCase` spawns the
+`case` worker. Confirm with `grep -nE 'await Bun\.build|Bun\.build\(\{'
+src/server/server.ts` → **zero**. This is the generalization of `loadManifestFresh`.
+
+**Crash containment:** `spawnBuild` treats a worker that died on a **signal** (a
+native segfault), or yielded no `{ok:true}` JSON, as a bundler crash attributed to
+that surface — a per-case crash serves the chrome-free diagnostic; a shell crash at
+startup sets `state.shellError` and the server serves `shellErrorHtml` rather than
+the tool dying with a bare panic.
+
+**Two CI-contention guards** (the earlier per-case subprocess was reverted because
+it timed CI's a11y e2e):
+1. **Bounded concurrency** — `withBuildSlot` caps concurrent worker spawns
+   (`clamp(cpus-1,1,4)`, `DISPLAY_CASE_BUILD_CONCURRENCY`), so the isolation can't
+   oversubscribe a 2-core runner.
+2. **The stage iframe no longer blocks page `load`** — `use-shell.ts` sets the
+   stage `src` only *after* `window` load (a `pageLoaded` gate). Previously the
+   iframe's first-visit build became a load-blocking subresource and a slow build
+   under contention timed out `page.goto(..., waitUntil:'load')` at 45 s. Now a
+   navigation completes on the chrome alone; the stage appears just after.
+
+**A neat confirmation of the thesis:** in `bun test` (a long-lived, module-heavy
+process) an *in-process* `buildShellBundles` call **fails to bundle the chrome**,
+while the *spawned* worker building the same chrome succeeds — in-process `Bun.build`
+in a stateful process misbehaves; a fresh child doesn't. (So the worker unit tests
+spawn `build-case.ts`; there is no in-process shell-build unit test.)
+
+**`DISPLAY_CASE_TRACE=1`** logs wall-time + module counts for the shell-build and
+manifest children, verifying size-independent startup (the shell graph stays ~72
+modules regardless of catalog size).
+
+**Deferred follow-ups:** publish crash-containment (route publish's per-component
+builds through the worker too) and a preventative budget/barrel `check`.
+
+---
+
 ## 2026-06-24: The dev server bundles cases per-component, on demand (not one all-cases graph)
 
 **The bug it fixes.** The dev server used to codegen a single render entry (and a

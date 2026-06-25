@@ -390,6 +390,13 @@ export function useShell(seed: ShellSeed): ShellViewModel | { manifest: null } {
   // width, tweaks) is pushed in via postMessage so it never reloads/flickers.
   const [frameSrc, setFrameSrc] = useState<string | null>(null)
   const [frameReady, setFrameReady] = useState(false)
+  // The stage iframe's first load triggers an on-demand build server-side; if its
+  // src were set during hydration it would become a pending subresource that
+  // blocks the page's own `load` event until that build finishes. Gate the src on
+  // the page having loaded so a navigation never waits on a build (a slow build
+  // under contention previously timed out navigation). Progressive enhancement —
+  // the stage appears just after the chrome, not as a load-blocking subresource.
+  const [pageLoaded, setPageLoaded] = useState(false)
 
   // ── Primer (the optional .mdx reading page) ──────────────────────────────
   // Which sidebar view is active. The Primer, when configured, is the default
@@ -1148,10 +1155,25 @@ export function useShell(seed: ShellSeed): ShellViewModel | { manifest: null } {
     document.documentElement.dataset.theme = theme
   }, [theme])
 
-  // Capture a fixed initial src once a case is available; never change it after.
+  // Mark the page loaded so the stage src can be set without blocking page load.
+  // If the page is already complete (the load event fired before hydration ran),
+  // it's safe to set immediately — the iframe then loads after, not blocking.
+  useEffect(() => {
+    if (document.readyState === 'complete') {
+      setPageLoaded(true)
+      return
+    }
+    const onLoad = () => setPageLoaded(true)
+    window.addEventListener('load', onLoad, { once: true })
+    return () => window.removeEventListener('load', onLoad)
+  }, [])
+
+  // Capture a fixed initial src once a case is available *and the page has loaded*;
+  // never change it after. Setting it post-load keeps the first-visit build off the
+  // navigation's critical path.
   // biome-ignore lint/correctness/useExhaustiveDependencies: initial-only (frameSrc gate); fit is the initial mode's value
   useEffect(() => {
-    if (frameSrc || !activeCase) return
+    if (frameSrc || !activeCase || !pageLoaded) return
     setFrameSrc(
       buildRenderSrc(
         activeCase.renderUrl,
@@ -1161,7 +1183,7 @@ export function useShell(seed: ShellSeed): ShellViewModel | { manifest: null } {
         stageDecor,
       ),
     )
-  }, [frameSrc, activeCase, theme, shownSel?.tweaks])
+  }, [frameSrc, activeCase, theme, shownSel?.tweaks, pageLoaded])
 
   // Listen for the render frame's readiness handshake and in-flow transitions.
   useEffect(() => {

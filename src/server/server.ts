@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs'
 import { createServer } from 'node:net'
+import { cpus } from 'node:os'
 import { join, relative, resolve } from 'node:path'
 import {
   type A11yScanner,
@@ -10,32 +11,110 @@ import { buildCatalog, slugify } from '../core/catalog'
 import type { LoadedModule } from '../core/discovery'
 import {
   cacheDir,
-  codegenPrimerEntry,
-  codegenSsrPrimerEntry,
   discoverCaseFiles,
   loadModules,
   resolveConfig,
 } from '../core/discovery'
-import {
-  findWatchRoot,
-  graphRecorder,
-  graphWatchDirs,
-} from '../core/graph-recorder'
+import { findWatchRoot, graphWatchDirs } from '../core/graph-recorder'
 import { buildGroupTree, makeGroupResolver } from '../core/groups'
 import type { BrowseMode, Manifest } from '../core/manifest'
-import { mdxPlugin } from '../core/mdx-plugin'
-import { pinReact } from '../core/pin-react'
 import { type DisplayCaseConfig, isSurfaceLevel } from '../index'
 import type { PrimerHtmlResult } from '../render/ssr-primer'
 import type { CaseRenderer } from '../render/ssr-render'
 import { renderShellToHtml } from '../render/ssr-shell'
 import type { Theme } from '../ui/shell-core'
-import { buildCaseBundles, publicEnvDefines } from './build-case'
 
 const HERE = resolve(import.meta.dir, '..')
-const BROWSER_ENTRY = join(HERE, 'ui', 'browser-entry.tsx')
 const CHROME_CSS = join(HERE, 'ui', 'chrome.css')
 const CLI = join(HERE, 'cli.ts')
+// The build worker (see build-case.ts). EVERY `Bun.build` runs here, spawned as a
+// fresh short-lived child — never in this long-lived server — so the server never
+// accumulates the bundler heap state that segfaults on a large catalog. This is
+// the generalization of the manifest subprocess (loadManifestFresh).
+const BUILD_WORKER = join(HERE, 'server', 'build-case.ts')
+
+// Cap concurrent build-worker children so the isolation cannot oversubscribe a
+// constrained machine (an unbounded spawn storm under the a11y scanner + e2e
+// workers is what regressed CI in the earlier subprocess attempt). Overridable.
+const BUILD_CONCURRENCY = (() => {
+  const env = Number(process.env.DISPLAY_CASE_BUILD_CONCURRENCY)
+  if (Number.isFinite(env) && env >= 1) return Math.floor(env)
+  return Math.max(1, Math.min(4, cpus().length - 1))
+})()
+let buildActive = 0
+const buildWaiters: Array<() => void> = []
+async function withBuildSlot<T>(fn: () => Promise<T>): Promise<T> {
+  if (buildActive >= BUILD_CONCURRENCY) {
+    await new Promise<void>((res) => buildWaiters.push(res))
+  }
+  buildActive++
+  try {
+    return await fn()
+  } finally {
+    buildActive--
+    buildWaiters.shift()?.()
+  }
+}
+
+// Startup invariant tracing (report §6.B): with DISPLAY_CASE_TRACE set, log the
+// wall-time + reported input count of each startup step, so the "size-independent
+// startup" invariant can be confirmed on a large consumer (no step should grow
+// with catalog size now that bundling and the manifest load are both isolated).
+const TRACE = !!process.env.DISPLAY_CASE_TRACE
+async function trace<T>(label: string, fn: () => Promise<T>): Promise<T> {
+  if (!TRACE) return fn()
+  const t0 = performance.now()
+  const r = await fn()
+  console.log(`  ⏱ ${label}: ${(performance.now() - t0).toFixed(0)}ms`)
+  return r
+}
+
+interface BuildOutcome {
+  ok: boolean
+  inputs: string[]
+  /** Present when `ok` is false. */
+  error?: string
+  /** The worker died on a signal (a native bundler crash), not a logical error. */
+  crashed?: boolean
+}
+
+/**
+ * Spawn the build worker for one build and await it. NEVER calls `Bun.build` in
+ * this process. A worker that dies on a signal (a Bun bundler segfault) or yields
+ * no `{ ok: true }` result is reported as a crash attributed to that surface, so
+ * the native panic is contained here instead of taking the server down.
+ */
+async function spawnBuild(args: string[]): Promise<BuildOutcome> {
+  return withBuildSlot(async () => {
+    const proc = Bun.spawn(['bun', BUILD_WORKER, ...args], {
+      stdout: 'pipe',
+      stderr: 'pipe',
+    })
+    const [out, errText, code] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+      proc.exited,
+    ])
+    if (errText.trim()) {
+      process.stderr.write(errText.endsWith('\n') ? errText : `${errText}\n`)
+    }
+    let parsed: { ok: boolean; inputs: string[]; error?: string } | undefined
+    try {
+      parsed = JSON.parse(out)
+    } catch {
+      // No parseable result → the worker died abnormally (likely a native crash).
+    }
+    if (parsed?.ok) return { ok: true, inputs: parsed.inputs }
+    const signal = proc.signalCode
+    const crashed = !!signal || (!parsed && code !== 1)
+    const error =
+      parsed?.error ??
+      (signal
+        ? `the bundler crashed (killed by ${signal}; likely the large-graph heap bug in Bun)`
+        : `bundling exited abnormally (code ${code})`)
+    return { ok: false, inputs: parsed?.inputs ?? [], error, crashed }
+  })
+}
 
 // The package's own design system — "The Vitrine". Display Case dogfoods it:
 // the browse chrome is styled entirely from these `--dc-*` tokens. The token
@@ -106,6 +185,10 @@ interface BuiltState {
    *  actual module graph, transitive workspace-sibling source included. The dev
    *  watcher follows this so editing a source-resolved dependency rebuilds. */
   inputs: Set<string>
+  /** Set when the chrome (shell) bundle failed or crashed the bundler. The server
+   *  still binds and serves a diagnostic instead of the browse UI, rather than the
+   *  tool terminating with a bare native panic. */
+  shellError?: string
 }
 
 // Monotonic suffix for the SSR bundle's filename. Bun caches `import()` by
@@ -250,88 +333,50 @@ async function rebuild(
   config: DisplayCaseConfig,
   configPath: string,
 ): Promise<BuiltState> {
-  // Collect the real module graph across the shell + primer bundle passes so the
-  // dev watcher can follow source-resolved workspace deps. The recorder is
-  // registered first in each plugin list so MDX-handled paths land here too. The
+  // Collect the real module graph the shell + primer build reads (reported by the
+  // worker) so the dev watcher can follow source-resolved workspace deps. The
   // per-component case bundles are built on demand (see `ensureCase`); their
-  // inputs are appended to this set as each component is first served. See
-  // graphRecorder.
+  // inputs are appended to this set as each component is first served.
   const inputs = new Set<string>()
-
-  const outdir = join(cacheDir(pkgDir), 'dist')
   const ssrOutDir = join(cacheDir(pkgDir), 'ssr')
-  // The browse chrome (shell) carries no case modules — cases live only in the
-  // per-component render bundles built on demand — so this pass holds a small,
-  // catalog-size-independent graph. The Primer is its own isolated document
-  // (like /render), bundled here as a separate entry, keeping the consumer's
-  // `.mdx` and the arbitrary components it imports out of the chrome's bundle.
+
+  // Build the browse chrome (+ optional primer) in the worker child — NOT here.
+  // The chrome carries no case modules, so its graph is small and catalog-size-
+  // independent; running it in a short-lived child is what keeps Bun's bundler
+  // heap out of this long-lived process entirely (the precondition for the crash).
   const primerSrc = primerFile(pkgDir, config)
-  const primerEntry = primerSrc
-    ? await codegenPrimerEntry(pkgDir, config.primer as string)
-    : null
-  const entrypoints = [BROWSER_ENTRY]
-  if (primerEntry) entrypoints.push(primerEntry)
-  const result = await Bun.build({
-    entrypoints,
-    outdir,
-    target: 'browser',
-    // The MDX plugin compiles the primer's `.mdx` (and any `.mdx` it imports)
-    // to JS on load; it's a no-op for builds without a primer entry. pinReact
-    // collapses Display Case's render runtime and the consumer's components onto
-    // a single React copy — see pinReact for the dual-React bug it prevents.
-    plugins: [graphRecorder(inputs), mdxPlugin(), pinReact(pkgDir)],
-    // Inline the consumer's public env (BUN_PUBLIC_*) so a `process.env.*` read
-    // in bundled code (e.g. the API base URL) doesn't survive as a literal that
-    // throws `process is not defined` in the browser. See publicEnvDefines.
-    define: await publicEnvDefines(pkgDir),
-    naming: {
-      entry: '[name].[ext]',
-      chunk: '[name]-[hash].[ext]',
-      asset: '[name]-[hash].[ext]',
-    },
-  })
-  if (!result.success) {
-    for (const log of result.logs) console.error(log)
-    throw new Error('Display Case bundle failed')
-  }
+  const primerPath = primerSrc ? (config.primer as string) : null
+  const seq = ++ssrBuildSeq
+  const result = await trace('shell build (worker)', () =>
+    spawnBuild(['shell', pkgDir, configPath, primerPath ?? '', String(seq)]),
+  )
+  if (TRACE) console.log(`  ⏱ shell graph: ${result.inputs.length} module(s)`)
 
-  // Pre-render bundle for the primer, built and imported the same way (and only
-  // when a primer is configured). Its specimens are real consumer components, so
-  // — like a case — one may be browser-only; the renderer reports that and the
-  // server falls back to client-rendering the whole primer.
   let renderPrimer: (() => PrimerHtmlResult) | null = null
-  if (primerSrc) {
-    const ssrPrimerEntry = await codegenSsrPrimerEntry(
-      pkgDir,
-      config.primer as string,
-      configPath,
+  let shellError: string | undefined
+  if (!result.ok) {
+    // The chrome bundle failed or crashed the bundler. Don't take the tool down —
+    // record it; the server serves a diagnostic instead of the browse UI.
+    shellError = result.error ?? 'shell bundle failed'
+    console.error(
+      `  ✗ chrome ${result.crashed ? 'crashed the bundler' : 'failed to build'}: ${shellError}`,
     )
-    const ssrPrimerName = `ssr-primer-entry-${++ssrBuildSeq}`
-    const ssrPrimerResult = await Bun.build({
-      entrypoints: [ssrPrimerEntry],
-      outdir: ssrOutDir,
-      target: 'bun',
-      plugins: [graphRecorder(inputs), mdxPlugin(), pinReact(pkgDir)],
-      define: await publicEnvDefines(pkgDir),
-      naming: {
-        entry: `${ssrPrimerName}.[ext]`,
-        chunk: '[name]-[hash].[ext]',
-        asset: '[name]-[hash].[ext]',
-      },
-    })
-    if (!ssrPrimerResult.success) {
-      for (const log of ssrPrimerResult.logs) console.error(log)
-      throw new Error('Display Case SSR primer bundle failed')
+  } else {
+    for (const f of result.inputs) inputs.add(f)
+    // The primer's SSR bundle is on disk (the worker wrote it); importing it is
+    // evaluation, not bundling — safe in this process.
+    if (primerPath) {
+      const ssrPrimerModule = (await import(
+        join(ssrOutDir, `ssr-primer-entry-${seq}.js`)
+      )) as { renderPrimerToHtml: () => PrimerHtmlResult }
+      renderPrimer = ssrPrimerModule.renderPrimerToHtml
     }
-    const ssrPrimerModule = (await import(
-      join(ssrOutDir, `${ssrPrimerName}.js`)
-    )) as { renderPrimerToHtml: () => PrimerHtmlResult }
-    renderPrimer = ssrPrimerModule.renderPrimerToHtml
   }
 
-  // The shell bundle above is rebuilt fresh from disk by Bun.build; the manifest
-  // comes from a fresh subprocess for the same reason (see above).
-  const manifest = await loadManifestFresh(pkgDir)
+  // The manifest comes from its own fresh subprocess (independent of the build).
+  const manifest = await trace('manifest (subprocess)', () =>
+    loadManifestFresh(pkgDir),
+  )
   const placardById = new Map<string, string>()
   for (const c of manifest.components) {
     if (c.placardDoc) placardById.set(c.id, resolve(REPO_ROOT, c.placardDoc))
@@ -340,7 +385,7 @@ async function rebuild(
   console.log(
     `  ${manifest.components.length} component(s), ${manifest.components.reduce((n, c) => n + c.cases.length, 0)} case(s)`,
   )
-  return { manifest, placardById, globalCss, renderPrimer, inputs }
+  return { manifest, placardById, globalCss, renderPrimer, inputs, shellError }
 }
 
 /**
@@ -523,6 +568,19 @@ function renderHtml(
  * component still builds and serves. Carries no case script (the build that
  * would produce it is what failed).
  */
+/**
+ * A self-contained diagnostic served when the browse chrome (shell) bundle fails
+ * or crashes the bundler — so the tool keeps running and explains the failure
+ * instead of terminating with a bare native panic. Carries no chrome bundle (the
+ * build that would produce it is what failed); only the optional live-reload
+ * client so it refreshes once the chrome rebuilds.
+ */
+function shellErrorHtml(error: string, liveReload: boolean): string {
+  const esc = (s: string) =>
+    s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Display Case — chrome build failed</title></head><body style="margin:0;font-family:ui-sans-serif,system-ui,sans-serif;background:#fff5f5;color:#600"><div style="margin:2rem;padding:1rem 1.25rem;border:1px solid #c00;border-radius:8px;background:#fff;font-size:14px;line-height:1.6"><strong style="color:#c00">Display Case could not build its browse chrome.</strong><br>The tool is still running, but the chrome bundle failed to build${error.includes('bundler crashed') ? ' (the bundler crashed)' : ''}. Fix the error below and save — the page reloads automatically.<br><br><pre style="white-space:pre-wrap;margin:0;font-family:ui-monospace,monospace;font-size:13px;color:#c00">${esc(error)}</pre></div>${liveReload ? LIVERELOAD_SCRIPT : ''}</body></html>`
+}
+
 function renderErrorHtml(
   globalCss: string,
   vitrineCss: string,
@@ -668,22 +726,22 @@ export async function startDisplayCase(
     // current module after an edit (same reason the manifest is a subprocess).
     const seq = ++ssrBuildSeq
     try {
-      // Build this one component's bundles (browser → /dist/render-case-<id>.js,
-      // served by the `/dist/` handler; SSR → the cache). A *build error* is
-      // returned as { ok:false } and surfaced as a per-case diagnostic while every
-      // other component keeps serving. (A native bundler crash is not survivable
-      // in-process; per-component graphs are small enough that it does not arise —
-      // see build-case.ts.)
-      const result = await buildCaseBundles({
+      // Build this one component in the worker child (browser → /dist/render-case
+      // -<id>.js, served by the `/dist/` handler; SSR → the cache). A build error
+      // OR a native bundler crash (the worker dies on a signal) is contained here
+      // and surfaced as a per-case diagnostic while every other component keeps
+      // serving — the server never runs Bun.build itself.
+      const result = await spawnBuild([
+        'case',
         pkgDir,
         file,
         configPath,
         componentId,
-        seq,
-      })
+        String(seq),
+      ])
       if (!result.ok) {
         console.warn(
-          `  ⚠ ${componentId} could not be bundled; other cases keep serving`,
+          `  ⚠ ${componentId} ${result.crashed ? 'crashed the bundler' : 'could not be bundled'}; other cases keep serving`,
         )
         return fail(result.error ?? 'bundling failed')
       }
@@ -691,6 +749,8 @@ export async function startDisplayCase(
       // source-resolved deps, then reconcile the dependency watchers.
       for (const f of result.inputs) state.inputs.add(f)
       await onGraphGrew()
+      // The SSR bundle is on disk; importing it is module evaluation (safe — only
+      // *bundling* the large graph crashes Bun, and that happens in the worker).
       const ssrPath = join(
         cacheDir(pkgDir),
         'ssr',
@@ -958,6 +1018,16 @@ export async function startDisplayCase(
             headers: { 'content-type': 'text/html; charset=utf-8' },
           },
         )
+      }
+
+      // The chrome bundle failed or crashed the bundler: serve a self-contained
+      // diagnostic instead of the browse UI (whose bundle is missing), so the tool
+      // keeps running and explains the failure rather than terminating.
+      if (state.shellError) {
+        return new Response(shellErrorHtml(state.shellError, reload && dev), {
+          status: 500,
+          headers: { 'content-type': 'text/html; charset=utf-8' },
+        })
       }
 
       // Shell handles `/`, `/primer`, and all `/c/...` + `/e/...` browse routes. The server

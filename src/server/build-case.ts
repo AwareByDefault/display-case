@@ -1,24 +1,31 @@
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import {
   cacheDir,
   codegenCaseRenderEntry,
   codegenCaseSsrEntry,
+  codegenPrimerEntry,
+  codegenSsrPrimerEntry,
 } from '../core/discovery'
 import { graphRecorder } from '../core/graph-recorder'
 import { mdxPlugin } from '../core/mdx-plugin'
 import { pinReact } from '../core/pin-react'
 
 /**
- * Builds one component's bundles on demand (see `buildCase` in server.ts), called
- * in-process so there is no per-build process spawn — a cold `bun` start per
- * build is pathologically slow under a contended CI runner already saturated by
- * the a11y scanner's browser and the e2e workers. Bun's bundler can in principle
- * segfault on a very large graph, but per-component bundling keeps each graph
- * small (the report's individual heavy cases all built fine; only the *aggregate*
- * catalog crashed), so that does not arise here. A *build error* (an unresolved
- * import, a syntax error) is caught and returned as `{ ok: false, error }`, which
- * the server surfaces as a per-case diagnostic while every other component keeps
- * serving. The build is factored out here so it is unit-testable directly.
+ * The **build worker**: every `Bun.build` Display Case runs for the dev server
+ * happens here, spawned by `server.ts` as a short-lived child process (`bun
+ * build-case.ts <kind> …`, see the `import.meta.main` block below) — never in the
+ * long-lived server. This is the generalization of `loadManifestFresh`: the
+ * worker's bundler heap dies with the process, so the server never accumulates the
+ * bundler heap state that corrupts and segfaults on a large catalog ("a bug in
+ * Bun, not your code"). The server only orchestrates the spawn and serves the
+ * bytes the worker wrote to the `.display-case/` cache.
+ *
+ * Two build kinds: `shell` (the browse chrome + optional primer) and `case` (one
+ * component's browser + SSR bundle). Each emits `{ ok, inputs, error? }` JSON on
+ * stdout. A *build error* (an unresolved import) is `{ ok: false }`; a Bun bundler
+ * *crash* kills the worker (a signal exit with no JSON), which the parent detects
+ * and attributes to that surface instead of inheriting the panic. The functions
+ * are also exported so they are unit-testable directly.
  */
 
 /**
@@ -101,11 +108,10 @@ export interface BuildCaseResult {
 
 /**
  * Codegen and build one component's browser render bundle (→
- * `<cache>/dist/render-case-<id>.js`) and in-process SSR bundle (→
- * `<cache>/ssr/ssr-case-<id>-<seq>.js`). Returns the recorded module-graph
- * inputs. A *build failure* is returned as `{ ok: false }`; a native bundler
- * crash is uncatchable and would take the (single, in-process) server down — per
- * component graphs are kept small enough that it does not arise.
+ * `<cache>/dist/render-case-<id>.js`) and SSR bundle (→
+ * `<cache>/ssr/ssr-case-<id>-<seq>.js`). Returns the recorded module-graph inputs.
+ * A *build failure* is returned as `{ ok: false }`; a native bundler crash kills
+ * the worker process (which is the point of running it as a child).
  */
 export async function buildCaseBundles(
   args: BuildCaseArgs,
@@ -174,12 +180,132 @@ export async function buildCaseBundles(
   } catch (err) {
     // Bun.build *rejects* (rather than returning `success: false`) for some
     // failures — an unresolvable import, a syntax error in the graph. Report it
-    // as a structured failure. (A native bundler *crash* is uncatchable and would
-    // take the in-process server down instead — see the module comment.)
+    // as a structured failure. (A native bundler *crash* kills the worker; the
+    // parent sees the signal exit — see the module comment.)
     return {
       ok: false,
       inputs: [...inputs],
       error: err instanceof Error ? (err.message ?? String(err)) : String(err),
     }
   }
+}
+
+export interface BuildShellArgs {
+  pkgDir: string
+  configPath: string
+  /** The config's `primer` value (package-relative), or null when no primer. */
+  primerPath: string | null
+  /** Sequence suffix for the primer SSR bundle's on-disk name (see seq above). */
+  seq: number
+}
+
+const HERE = resolve(import.meta.dir, '..')
+const BROWSER_ENTRY = join(HERE, 'ui', 'browser-entry.tsx')
+
+/**
+ * Build the browse chrome (`browser-entry`) plus, when configured, the primer's
+ * browser entry and its SSR entry — the catalog-size-independent startup bundles.
+ * Mirrors the per-case worker: outputs to the `.display-case/` cache, returns the
+ * recorded module graph. The chrome carries no case modules, so this graph is
+ * small; running it in the worker (not the server) is what keeps the bundler heap
+ * out of the long-lived process entirely.
+ */
+export async function buildShellBundles(
+  args: BuildShellArgs,
+): Promise<BuildCaseResult> {
+  const { pkgDir, configPath, primerPath, seq } = args
+  const inputs = new Set<string>()
+  const outdir = join(cacheDir(pkgDir), 'dist')
+  const ssrOutDir = join(cacheDir(pkgDir), 'ssr')
+  try {
+    const define = await publicEnvDefines(pkgDir)
+    const primerEntry = primerPath
+      ? await codegenPrimerEntry(pkgDir, primerPath)
+      : null
+    const entrypoints = [BROWSER_ENTRY]
+    if (primerEntry) entrypoints.push(primerEntry)
+    const browser = await Bun.build({
+      entrypoints,
+      outdir,
+      target: 'browser',
+      plugins: [graphRecorder(inputs), mdxPlugin(), pinReact(pkgDir)],
+      define,
+      naming: {
+        entry: '[name].[ext]',
+        chunk: '[name]-[hash].[ext]',
+        asset: '[name]-[hash].[ext]',
+      },
+    })
+    if (!browser.success) {
+      return {
+        ok: false,
+        inputs: [...inputs],
+        error: browser.logs.map(String).join('\n') || 'shell bundle failed',
+      }
+    }
+    if (primerPath) {
+      const ssrPrimerEntry = await codegenSsrPrimerEntry(
+        pkgDir,
+        primerPath,
+        configPath,
+      )
+      const ssr = await Bun.build({
+        entrypoints: [ssrPrimerEntry],
+        outdir: ssrOutDir,
+        target: 'bun',
+        plugins: [graphRecorder(inputs), mdxPlugin(), pinReact(pkgDir)],
+        define,
+        naming: {
+          entry: `ssr-primer-entry-${seq}.[ext]`,
+          chunk: '[name]-[hash].[ext]',
+          asset: '[name]-[hash].[ext]',
+        },
+      })
+      if (!ssr.success) {
+        return {
+          ok: false,
+          inputs: [...inputs],
+          error: ssr.logs.map(String).join('\n') || 'primer SSR bundle failed',
+        }
+      }
+    }
+    return { ok: true, inputs: [...inputs] }
+  } catch (err) {
+    return {
+      ok: false,
+      inputs: [...inputs],
+      error: err instanceof Error ? (err.message ?? String(err)) : String(err),
+    }
+  }
+}
+
+// Worker entry: `bun build-case.ts <kind> …`. Emits the JSON result on stdout and
+// exits 0 (built) / 1 (build error) / 2 (bad args). A native bundler crash exits
+// abnormally with no stdout — the parent treats either as a per-surface failure.
+if (import.meta.main) {
+  const [kind, ...rest] = process.argv.slice(2)
+  let result: BuildCaseResult
+  if (kind === 'case') {
+    const [pkgDir, file, configPath, componentId, seqStr] = rest
+    result = await buildCaseBundles({
+      pkgDir: pkgDir as string,
+      file: file as string,
+      configPath: configPath as string,
+      componentId: componentId as string,
+      seq: Number(seqStr),
+    })
+  } else if (kind === 'shell') {
+    const [pkgDir, configPath, primerPath, seqStr] = rest
+    result = await buildShellBundles({
+      pkgDir: pkgDir as string,
+      configPath: configPath as string,
+      primerPath: primerPath ? primerPath : null,
+      seq: Number(seqStr),
+    })
+  } else {
+    process.stderr.write(`build-case: unknown build kind '${kind}'\n`)
+    process.exit(2)
+  }
+  process.stdout.write(JSON.stringify(result))
+  process.exit(result.ok ? 0 : 1)
 }
