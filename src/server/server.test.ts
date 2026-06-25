@@ -211,6 +211,16 @@ describe('classifyBuildResult', () => {
     expect(r.crashed).toBe(false)
     expect(r.error).toContain('code 2')
   })
+
+  test('passes a publish kind’s outputs through on success', () => {
+    const r = classifyBuildResult(
+      '{"ok":true,"inputs":["/a.ts"],"outputs":[{"path":"/out/x-abc.js","kind":"entry-point"}]}',
+      0,
+      null,
+    )
+    expect(r.ok).toBe(true)
+    expect(r.outputs).toEqual([{ path: '/out/x-abc.js', kind: 'entry-point' }])
+  })
 })
 
 describe('shellErrorHtml', () => {

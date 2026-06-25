@@ -11,9 +11,9 @@ import {
   loadModules,
   resolveConfig,
 } from '../core/discovery'
-import { mdxPlugin } from '../core/mdx-plugin'
-import { pinReact } from '../core/pin-react'
 import type { DisplayCaseConfig } from '../index'
+import type { PublishBuildRequest } from '../server/build-case'
+import { spawnBuildWorker } from '../server/build-runner'
 import { getManifest } from '../server/server'
 
 /**
@@ -127,6 +127,34 @@ function entryName(path: string): 'browser' | 'primer' | null {
   return null
 }
 
+/**
+ * Build one publish surface in a fresh child process — never `Bun.build` in this
+ * long-lived publish process (the bundler-heap segfault precondition the segfault
+ * reports identified). A child that dies on a signal (a native bundler crash) is
+ * contained and attributed to the surface, so publish fails with a clear message
+ * and a non-zero exit instead of inheriting the native panic. Returns the
+ * entry-point outputs so the caller maps content-hashed basenames to asset URLs.
+ */
+async function runPublishBuild(
+  surface: string,
+  req: PublishBuildRequest,
+): Promise<{ path: string; kind: string }[]> {
+  const outcome = await spawnBuildWorker(['publish', JSON.stringify(req)])
+  if (!outcome.ok) {
+    if (outcome.crashed) {
+      throw new Error(
+        `Display Case publish: bundling ${surface} crashed the bundler ` +
+          `(${outcome.error}). Split that case's imports — e.g. avoid importing a ` +
+          `whole barrel (an entire icon set); import only the parts the case uses.`,
+      )
+    }
+    throw new Error(
+      `Display Case publish: failed to build ${surface}:\n${outcome.error ?? 'unknown error'}`,
+    )
+  }
+  return outcome.outputs ?? []
+}
+
 export interface BuildDescriptor {
   title: string
   base: string
@@ -182,63 +210,61 @@ export async function publish(
     render: {} as Record<string, string>,
     primer: '',
   }
+  const Hashed = {
+    entry: '[name]-[hash].[ext]',
+    chunk: '[name]-[hash].[ext]',
+    asset: '[name]-[hash].[ext]',
+  }
 
   // 1) Chrome bundle (the browse shell + optional primer) — carries no case
   // modules, so a small graph. Minified, content-hashed, production React.
   // pinReact keeps the render runtime and consumer components on one React copy.
   const chromeEntries = [BROWSER_ENTRY]
   if (primerEntry) chromeEntries.push(primerEntry)
-  const chrome = await Bun.build({
+  const chromeOut = await runPublishBuild('the browse chrome', {
+    pkgDir,
     entrypoints: chromeEntries,
     outdir: join(out, 'assets'),
     target: 'browser',
     minify: true,
-    sourcemap: 'none',
-    plugins: [mdxPlugin(), pinReact(pkgDir)],
+    naming: Hashed,
     define: defines,
-    naming: {
-      entry: '[name]-[hash].[ext]',
-      chunk: '[name]-[hash].[ext]',
-      asset: '[name]-[hash].[ext]',
-    },
+    pinReact: true,
   })
-  if (!chrome.success) {
-    for (const log of chrome.logs) console.error(log)
-    throw new Error('Display Case publish: chrome bundle failed')
-  }
-  for (const o of chrome.outputs) {
-    if (o.kind !== 'entry-point') continue
+  for (const o of chromeOut) {
     const name = entryName(o.path)
     if (name) assets[name] = `${base}/assets/${basename(o.path)}`
   }
 
-  // 2) Per-component browser render bundles — one `Bun.build` each (a bounded,
-  // single-component graph), content-hashed as `render-case-<id>-<hash>.js`.
-  for (const c of components) {
-    const entry = await codegenCaseRenderEntry(pkgDir, c.file, configPath, c.id)
-    const r = await Bun.build({
-      entrypoints: [entry],
-      outdir: join(out, 'assets'),
-      target: 'browser',
-      minify: true,
-      sourcemap: 'none',
-      plugins: [mdxPlugin(), pinReact(pkgDir)],
-      define: defines,
-      naming: {
-        entry: '[name]-[hash].[ext]',
-        chunk: '[name]-[hash].[ext]',
-        asset: '[name]-[hash].[ext]',
-      },
-    })
-    if (!r.success) {
-      for (const log of r.logs) console.error(log)
-      throw new Error(
-        `Display Case publish: render bundle failed for component "${c.id}" (${relative(pkgDir, c.file)})`,
+  // 2) Per-component browser render bundles — one isolated build each (a bounded,
+  // single-component graph), content-hashed as `render-case-<id>-<hash>.js`. Run
+  // through the bounded worker pool so a large catalog publishes concurrently
+  // without ever holding the whole catalog as one graph.
+  await Promise.all(
+    components.map(async (c) => {
+      const entry = await codegenCaseRenderEntry(
+        pkgDir,
+        c.file,
+        configPath,
+        c.id,
       )
-    }
-    const ep = r.outputs.find((o) => o.kind === 'entry-point')
-    if (ep) assets.render[c.id] = `${base}/assets/${basename(ep.path)}`
-  }
+      const outs = await runPublishBuild(
+        `component "${c.id}" (${relative(pkgDir, c.file)})`,
+        {
+          pkgDir,
+          entrypoints: [entry],
+          outdir: join(out, 'assets'),
+          target: 'browser',
+          minify: true,
+          naming: Hashed,
+          define: defines,
+          pinReact: true,
+        },
+      )
+      const ep = outs.find((o) => o.kind === 'entry-point')
+      if (ep) assets.render[c.id] = `${base}/assets/${basename(ep.path)}`
+    }),
+  )
 
   // 3) SSR renderers for the production server: built once (no watching), imported
   // by `prod-server`. React stays external here (unlike the browser bundle and
@@ -259,40 +285,54 @@ export async function publish(
     'react/jsx-runtime',
     'react/jsx-dev-runtime',
   ]
+  const ssrBuilds: Promise<unknown>[] = []
   if (ssrPrimerEntry) {
-    const r = await Bun.build({
-      entrypoints: [ssrPrimerEntry],
-      outdir: join(out, 'server'),
-      target: 'bun',
-      plugins: [mdxPlugin()],
-      define: defines,
-      external: ssrExternal,
-      naming: { entry: '[name].[ext]', chunk: '[name]-[hash].[ext]' },
-    })
-    if (!r.success) {
-      for (const log of r.logs) console.error(log)
-      throw new Error('Display Case publish: SSR primer bundle failed')
-    }
+    ssrBuilds.push(
+      runPublishBuild('the primer renderer', {
+        pkgDir,
+        entrypoints: [ssrPrimerEntry],
+        outdir: join(out, 'server'),
+        target: 'bun',
+        minify: false,
+        naming: { entry: '[name].[ext]', chunk: '[name]-[hash].[ext]' },
+        define: defines,
+        external: ssrExternal,
+        pinReact: false,
+      }),
+    )
   }
   for (const c of components) {
-    const entry = await codegenCaseSsrEntry(pkgDir, c.file, configPath, c.id, 0)
-    const r = await Bun.build({
-      entrypoints: [entry],
-      outdir: join(out, 'server'),
-      target: 'bun',
-      plugins: [mdxPlugin()],
-      define: defines,
-      external: ssrExternal,
-      // Fixed name (no hash) so `prod-server` resolves it by component id.
-      naming: { entry: `ssr-case-${c.id}.[ext]`, chunk: '[name]-[hash].[ext]' },
-    })
-    if (!r.success) {
-      for (const log of r.logs) console.error(log)
-      throw new Error(
-        `Display Case publish: SSR bundle failed for component "${c.id}" (${relative(pkgDir, c.file)})`,
-      )
-    }
+    ssrBuilds.push(
+      (async () => {
+        const entry = await codegenCaseSsrEntry(
+          pkgDir,
+          c.file,
+          configPath,
+          c.id,
+          0,
+        )
+        await runPublishBuild(
+          `the renderer for component "${c.id}" (${relative(pkgDir, c.file)})`,
+          {
+            pkgDir,
+            entrypoints: [entry],
+            outdir: join(out, 'server'),
+            target: 'bun',
+            minify: false,
+            // Fixed name (no hash) so `prod-server` resolves it by component id.
+            naming: {
+              entry: `ssr-case-${c.id}.[ext]`,
+              chunk: '[name]-[hash].[ext]',
+            },
+            define: defines,
+            external: ssrExternal,
+            pinReact: false,
+          },
+        )
+      })(),
+    )
   }
+  await Promise.all(ssrBuilds)
 
   const manifest = await getManifest(pkgDir)
   const descriptor: BuildDescriptor = {

@@ -279,6 +279,81 @@ export async function buildShellBundles(
   }
 }
 
+/**
+ * A serializable `Bun.build` request for one **publish** bundle. The publish
+ * command (`publish.ts`) computes the entry files (codegen), the content-hashed
+ * naming, the `define` map (`BUN_PUBLIC_*` + production `NODE_ENV`), and the SSR
+ * `external` list, then hands this descriptor to the worker so the actual
+ * `Bun.build` runs in a fresh child — never in the long-lived publish process.
+ * Non-serializable plugins are reconstructed worker-side from `pkgDir`/`pinReact`.
+ */
+export interface PublishBuildRequest {
+  pkgDir: string
+  entrypoints: string[]
+  outdir: string
+  target: 'browser' | 'bun'
+  minify: boolean
+  naming: { entry: string; chunk: string; asset?: string }
+  define: Record<string, string>
+  external?: string[]
+  /** Chrome/render bundles pin the consumer React; SSR keeps React external. */
+  pinReact: boolean
+}
+
+export interface PublishBuildResult {
+  ok: boolean
+  inputs: string[]
+  /** Entry-point outputs the build wrote, so the parent maps content-hashed
+   *  basenames to asset URLs. */
+  outputs: { path: string; kind: string }[]
+  error?: string
+}
+
+/**
+ * Run one publish `Bun.build` from a {@link PublishBuildRequest} and report its
+ * entry-point outputs. Mirrors the dev kinds: a *build failure* is `{ ok:false }`;
+ * a native bundler crash kills the worker (the point of the child process).
+ */
+export async function buildPublishBundle(
+  req: PublishBuildRequest,
+): Promise<PublishBuildResult> {
+  const inputs = new Set<string>()
+  try {
+    const plugins = [graphRecorder(inputs), mdxPlugin()]
+    if (req.pinReact) plugins.push(pinReact(req.pkgDir))
+    const result = await Bun.build({
+      entrypoints: req.entrypoints,
+      outdir: req.outdir,
+      target: req.target,
+      minify: req.minify,
+      sourcemap: 'none',
+      plugins,
+      define: req.define,
+      external: req.external,
+      naming: req.naming,
+    })
+    if (!result.success) {
+      return {
+        ok: false,
+        inputs: [...inputs],
+        outputs: [],
+        error: result.logs.map(String).join('\n') || 'publish bundle failed',
+      }
+    }
+    const outputs = result.outputs
+      .filter((o) => o.kind === 'entry-point')
+      .map((o) => ({ path: o.path, kind: o.kind }))
+    return { ok: true, inputs: [...inputs], outputs }
+  } catch (err) {
+    return {
+      ok: false,
+      inputs: [...inputs],
+      outputs: [],
+      error: err instanceof Error ? (err.message ?? String(err)) : String(err),
+    }
+  }
+}
+
 // Worker entry: `bun build-case.ts <kind> …`. Emits the JSON result on stdout and
 // exits 0 (built) / 1 (build error) / 2 (bad args). A native bundler crash exits
 // abnormally with no stdout — the parent treats either as a per-surface failure.
@@ -288,8 +363,20 @@ if (import.meta.main) {
     process.stderr.write(`build-case: bad args for kind '${kind}'\n`)
     process.exit(2)
   }
-  let result: BuildCaseResult
-  if (kind === 'case') {
+  const parsePublishRequest = (json: string): PublishBuildRequest => {
+    try {
+      return JSON.parse(json)
+    } catch {
+      return badArgs()
+    }
+  }
+  let result: BuildCaseResult | PublishBuildResult
+  if (kind === 'publish') {
+    // <descriptorJson> — a JSON-encoded PublishBuildRequest.
+    const [descriptor] = rest
+    if (!descriptor) badArgs()
+    result = await buildPublishBundle(parsePublishRequest(descriptor))
+  } else if (kind === 'case') {
     // <pkgDir> <file> <configPath> <componentId> <seq>
     const [pkgDir, file, configPath, componentId, seqStr] = rest
     if (!pkgDir || !file || !configPath || !componentId || !seqStr) badArgs()

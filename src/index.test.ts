@@ -84,6 +84,22 @@ describe('identity helpers', () => {
     const config = { title: 'X', roots: ['**/*.case.tsx'] }
     expect(defineConfig(config)).toBe(config)
   })
+
+  test('accepts an optional check.graphBudget (both fields optional)', () => {
+    // Type-level coverage: the new config shape compiles in all its forms.
+    defineConfig({ title: 'X', roots: ['*'], check: { graphBudget: {} } })
+    defineConfig({
+      title: 'X',
+      roots: ['*'],
+      check: { graphBudget: { modules: 800 } },
+    })
+    const full = defineConfig({
+      title: 'X',
+      roots: ['*'],
+      check: { graphBudget: { modules: 800, perPackage: 200 } },
+    })
+    expect(full.check?.graphBudget?.perPackage).toBe(200)
+  })
 })
 
 describe('HIERARCHY_LEVELS', () => {

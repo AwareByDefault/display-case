@@ -67,7 +67,7 @@ See [AI agents](ai-agents.md) for the manifest shape and how to use it.
 
 ## `display-case check <pkgDir>` — structure + token + a11y + visual checks
 
-Runs four phases: **structure** best-practice rules (static; no browser), design-token conformance (a static `var()` parse, no browser), headless accessibility (axe-core), and visual-regression (pixel diff). The a11y and visual phases run over every case in both light and dark themes; structure and tokens need neither a browser nor the server. Exits `0` when everything passes, `1` when any **error**-severity finding is produced.
+Runs these phases: **structure** best-practice rules (static; no browser), design-token conformance (a static `var()` parse, no browser), **SSR** pre-render safety, a **bundle-graph budget** (`--graph`), headless accessibility (axe-core), and visual-regression (pixel diff). The a11y and visual phases run over every case in both light and dark themes; structure and tokens need neither a browser nor the server. Exits `0` when everything passes, `1` when any **error**-severity finding is produced.
 
 The a11y phase prints each violation's affected nodes (for colour-contrast, the failing element and the measured-vs-required pair) and writes the full run to `.display-case/a11y/last-check.json` for reading without re-running — see [Testing → Accessibility](testing.md#accessibility).
 
@@ -75,10 +75,12 @@ The a11y phase prints each violation's affected nodes (for colour-contrast, the 
 | --- | --- | --- |
 | `--structure` | — | Run the static best-practice rules (coverage, levels, primer, setup, composition…). See [Testing](testing.md#structure-checks). |
 | `--tokens` | — | Run design-token conformance (static; no browser). See [Testing](testing.md#token-conformance). |
+| `--ssr` | — | Server-render every case and fail on any that can't pre-render. |
+| `--graph` | — | Measure each component's real bundled module graph and warn on an over-budget graph or a barrel import. Builds each component in isolation, so it is **not** part of the fast `--structure --tokens --ssr` gate; it runs in a no-flag full check. Tune budgets with [`check.graphBudget`](configuration.md#check). |
 | `--a11y` | — | Run accessibility checks. |
 | `--visual` | — | Run visual-regression checks. |
 | `--update` | off | (Re)record visual baselines from the current renders. |
-| `--strict` | off | Treat structure warnings as errors for this run. |
+| `--strict` | off | Treat structure and graph warnings as errors for this run. |
 | `--only=ids` | — | Scope the render phases (a11y/visual) to these component ids or globs (comma-separated). |
 | `--changed[=ref]` | — | Scope the render phases to components a change touched since `ref` (default the base branch, or `DISPLAY_CASE_BASE_REF`). |
 | `--port=N` | ephemeral | Port for the internal server the checks drive. |

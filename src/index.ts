@@ -441,7 +441,25 @@ export interface StructureRuleOptions {
 }
 
 /** Phases selectable by `display-case check`. */
-export type CheckPhase = 'tokens' | 'a11y' | 'visual' | 'structure' | 'ssr'
+export type CheckPhase =
+  | 'tokens'
+  | 'a11y'
+  | 'visual'
+  | 'structure'
+  | 'ssr'
+  | 'graph'
+
+/** Budgets for the bundle-graph (`graph`) check phase. A component's real bundled
+ *  module graph is measured (in an isolated child build, so it cannot crash the
+ *  tool); these advisory ceilings warn before a graph grows large enough to
+ *  destabilize bundling. Unset fields use the built-in defaults. */
+export interface GraphBudgetConfig {
+  /** Warn when a component's total module count exceeds this. Default 1500. */
+  modules?: number
+  /** Warn when a single dependency package contributes more than this many
+   *  modules — the barrel-import signal (e.g. a whole icon set). Default 400. */
+  perPackage?: number
+}
 
 export interface CheckConfig {
   /**
@@ -464,6 +482,8 @@ export interface CheckConfig {
     strict?: boolean
     rules?: Partial<Record<StructureRuleId, StructureRuleSetting>>
   }
+  /** Budgets for the bundle-graph (`graph`) phase. Unset ⇒ built-in defaults. */
+  graphBudget?: GraphBudgetConfig
 }
 
 // ── Style engines (render-time CSS-in-JS) ───────────────────────────────────────

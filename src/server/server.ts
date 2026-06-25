@@ -1,6 +1,5 @@
 import { existsSync } from 'node:fs'
 import { createServer } from 'node:net'
-import { cpus } from 'node:os'
 import { join, relative, resolve } from 'node:path'
 import {
   type A11yScanner,
@@ -23,42 +22,19 @@ import type { PrimerHtmlResult } from '../render/ssr-primer'
 import type { CaseRenderer } from '../render/ssr-render'
 import { renderShellToHtml } from '../render/ssr-shell'
 import type { Theme } from '../ui/shell-core'
+import { spawnBuildWorker } from './build-runner'
+
+// Re-exported so existing importers (and tests) resolve these from `./server`
+// unchanged after the spawn/classify primitives moved to `build-runner.ts`.
+export { type BuildOutcome, classifyBuildResult } from './build-runner'
 
 const HERE = resolve(import.meta.dir, '..')
 const CHROME_CSS = join(HERE, 'ui', 'chrome.css')
 const CLI = join(HERE, 'cli.ts')
-// The build worker (see build-case.ts). EVERY `Bun.build` runs here, spawned as a
-// fresh short-lived child — never in this long-lived server — so the server never
-// accumulates the bundler heap state that segfaults on a large catalog. This is
-// the generalization of the manifest subprocess (loadManifestFresh).
-const DEFAULT_BUILD_WORKER = join(HERE, 'server', 'build-case.ts')
-// Resolved per spawn so a test can inject a stub worker (e.g. one that crashes on
-// a signal) via DISPLAY_CASE_BUILD_WORKER to exercise the crash-containment path.
-const buildWorkerPath = (): string =>
-  process.env.DISPLAY_CASE_BUILD_WORKER ?? DEFAULT_BUILD_WORKER
-
-// Cap concurrent build-worker children so the isolation cannot oversubscribe a
-// constrained machine (an unbounded spawn storm under the a11y scanner + e2e
-// workers is what regressed CI in the earlier subprocess attempt). Overridable.
-const BUILD_CONCURRENCY = (() => {
-  const env = Number(process.env.DISPLAY_CASE_BUILD_CONCURRENCY)
-  if (Number.isFinite(env) && env >= 1) return Math.floor(env)
-  return Math.max(1, Math.min(4, cpus().length - 1))
-})()
-let buildActive = 0
-const buildWaiters: Array<() => void> = []
-async function withBuildSlot<T>(fn: () => Promise<T>): Promise<T> {
-  if (buildActive >= BUILD_CONCURRENCY) {
-    await new Promise<void>((res) => buildWaiters.push(res))
-  }
-  buildActive++
-  try {
-    return await fn()
-  } finally {
-    buildActive--
-    buildWaiters.shift()?.()
-  }
-}
+// EVERY `Bun.build` runs in a fresh, short-lived child (see build-case.ts and the
+// build-runner) — never in this long-lived server — so the server never accumulates
+// the bundler heap state that segfaults on a large catalog. The spawn/classify/
+// concurrency primitives live in `build-runner.ts`, shared with `publish.ts`.
 
 // Startup invariant tracing (report §6.B): with DISPLAY_CASE_TRACE set, log the
 // wall-time + reported input count of each startup step, so the "size-independent
@@ -73,82 +49,9 @@ async function trace<T>(label: string, fn: () => Promise<T>): Promise<T> {
   return r
 }
 
-export interface BuildOutcome {
-  ok: boolean
-  inputs: string[]
-  /** Present when `ok` is false. */
-  error?: string
-  /** The worker died on a signal (a native bundler crash), not a logical error. */
-  crashed?: boolean
-}
-
-/**
- * Interpret a build worker's exit into a {@link BuildOutcome}. Pure, so the
- * crash-containment logic is tested deterministically without a real segfault:
- *  - parseable `{ ok: true }`     → success;
- *  - parseable `{ ok: false }`    → a *logical* build error (not a crash);
- *  - no JSON + a `signal`         → a native bundler **crash** (the heap bug);
- *  - no JSON + a non-zero `code`  → an abnormal exit (e.g. bad args), not a crash.
- */
-export function classifyBuildResult(
-  stdout: string,
-  code: number | null,
-  signal: string | null,
-): BuildOutcome {
-  let parsed: { ok: boolean; inputs?: string[]; error?: string } | undefined
-  try {
-    parsed = JSON.parse(stdout)
-  } catch {
-    // No parseable result → the worker died before emitting its JSON.
-  }
-  if (parsed?.ok) return { ok: true, inputs: parsed.inputs ?? [] }
-  if (parsed) {
-    return {
-      ok: false,
-      inputs: parsed.inputs ?? [],
-      error: parsed.error ?? 'bundling failed',
-      crashed: false,
-    }
-  }
-  if (signal) {
-    return {
-      ok: false,
-      inputs: [],
-      error: `the bundler crashed (killed by ${signal}; likely the large-graph heap bug in Bun)`,
-      crashed: true,
-    }
-  }
-  return {
-    ok: false,
-    inputs: [],
-    error: `bundling exited abnormally (code ${code})`,
-    crashed: false,
-  }
-}
-
-/**
- * Spawn the build worker for one build and await it. NEVER calls `Bun.build` in
- * this process. A worker that dies on a signal (a Bun bundler segfault) is
- * reported as a crash attributed to that surface, so the native panic is
- * contained here instead of taking the server down.
- */
-async function spawnBuild(args: string[]): Promise<BuildOutcome> {
-  return withBuildSlot(async () => {
-    const proc = Bun.spawn(['bun', buildWorkerPath(), ...args], {
-      stdout: 'pipe',
-      stderr: 'pipe',
-    })
-    const [out, errText, code] = await Promise.all([
-      new Response(proc.stdout).text(),
-      new Response(proc.stderr).text(),
-      proc.exited,
-    ])
-    if (errText.trim()) {
-      process.stderr.write(errText.endsWith('\n') ? errText : `${errText}\n`)
-    }
-    return classifyBuildResult(out, code, proc.signalCode)
-  })
-}
+// `spawnBuild` is the shared `spawnBuildWorker` (build-runner.ts); the alias keeps
+// the call sites below reading as they did before the extraction.
+const spawnBuild = spawnBuildWorker
 
 // The package's own design system — "The Vitrine". Display Case dogfoods it:
 // the browse chrome is styled entirely from these `--dc-*` tokens. The token
