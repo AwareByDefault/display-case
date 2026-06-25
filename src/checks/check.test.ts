@@ -143,6 +143,7 @@ describe('check: structure phase wiring', () => {
       a11y: false,
       visual: false,
       ssr: false,
+      graph: false,
       update: false,
     })
 

@@ -2,7 +2,11 @@ import { afterAll, describe, expect, test } from 'bun:test'
 import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { writeFiles } from '../testing/test-helpers'
-import { buildCaseBundles } from './build-case'
+import {
+  buildCaseBundles,
+  buildPublishBundle,
+  type PublishBuildRequest,
+} from './build-case'
 
 // A temp showcase INSIDE the repo: pinReact resolves the consumer React by
 // walking up to the repo's node_modules, which a /tmp dir has none of (mirrors
@@ -137,5 +141,65 @@ describe('build worker (spawned)', () => {
   test('an unknown build kind exits 2', async () => {
     const { code } = await run(['bogus'])
     expect(code).toBe(2)
+  })
+
+  test('publish kind builds to an out-dir and reports content-hashed outputs', async () => {
+    const dir = await repoTemp()
+    await writeFiles(dir, {
+      'display-case.config.ts': CONFIG,
+      'Good.case.tsx': GOOD,
+    })
+    const req: PublishBuildRequest = {
+      pkgDir: dir,
+      entrypoints: [join(dir, 'Good.case.tsx')],
+      outdir: join(dir, 'out'),
+      target: 'browser',
+      minify: true,
+      naming: {
+        entry: '[name]-[hash].[ext]',
+        chunk: '[name]-[hash].[ext]',
+        asset: '[name]-[hash].[ext]',
+      },
+      define: { 'process.env.NODE_ENV': '"production"' },
+      pinReact: true,
+    }
+    const { out, code } = await run(['publish', JSON.stringify(req)])
+    expect(code).toBe(0)
+    const parsed = JSON.parse(out)
+    expect(parsed.ok).toBe(true)
+    const ep = parsed.outputs.find(
+      (o: { kind: string }) => o.kind === 'entry-point',
+    )
+    expect(ep).toBeTruthy()
+    // Content-hashed: `Good.case-<hash>.js`.
+    expect(ep.path).toMatch(/Good\.case-[A-Za-z0-9]+\.js$/)
+  })
+
+  test('publish kind with a missing descriptor exits 2', async () => {
+    const { code } = await run(['publish'])
+    expect(code).toBe(2)
+  })
+})
+
+describe('buildPublishBundle (direct)', () => {
+  test('a bundle failure is { ok:false } with the error, not a throw', async () => {
+    const dir = await repoTemp()
+    await writeFiles(dir, {
+      'display-case.config.ts': CONFIG,
+      'Bad.case.tsx': BAD,
+    })
+    const r = await buildPublishBundle({
+      pkgDir: dir,
+      entrypoints: [join(dir, 'Bad.case.tsx')],
+      outdir: join(dir, 'out'),
+      target: 'browser',
+      minify: false,
+      naming: { entry: '[name]-[hash].[ext]', chunk: '[name]-[hash].[ext]' },
+      define: {},
+      pinReact: true,
+    })
+    expect(r.ok).toBe(false)
+    expect(r.error).toBeTruthy()
+    expect(r.outputs).toEqual([])
   })
 })

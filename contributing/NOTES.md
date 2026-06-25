@@ -55,7 +55,48 @@ manifest children, verifying size-independent startup (the shell graph stays ~72
 modules regardless of catalog size).
 
 **Deferred follow-ups:** publish crash-containment (route publish's per-component
-builds through the worker too) and a preventative budget/barrel `check`.
+builds through the worker too) and a preventative budget/barrel `check`. *(Both
+shipped — see the next note.)*
+
+---
+
+## 2026-06-25: publish hardening + bundle-graph budget `check` (the deferred follow-ups)
+
+Closes the two follow-ups left by the bundling-isolation change.
+
+**Shared build runner.** The parent-side spawn/classify/concurrency primitives
+moved out of `server.ts` into `src/server/build-runner.ts`
+(`spawnBuildWorker`, `classifyBuildResult`, `withBuildSlot`, `BuildOutcome`).
+`server.ts` re-exports `classifyBuildResult`/`BuildOutcome` so existing imports
+(and `server.test.ts`) resolve them from `./server` unchanged; `spawnBuild` is now
+just an alias for `spawnBuildWorker`.
+
+**Publish runs every `Bun.build` in a child too.** `publish.ts` previously ran
+`2N+2` `Bun.build`s in one long-lived process — the exact accumulation precondition,
+on the only path that produces a deployable artifact. Now each build goes through a
+new **`publish` worker kind** (`bun build-case.ts publish <descriptorJson>`): the
+parent codegens the entry, computes the `define`/`external`/naming, and hands a
+serializable `PublishBuildRequest` to the child; the child reconstructs the plugins
+(`graphRecorder`+`mdx`+optional `pinReact`) and runs the one `Bun.build`, returning
+`{ok, inputs, outputs}` (the content-hashed entry outputs the parent maps to asset
+URLs). Per-component browser + SSR builds run concurrently through `withBuildSlot`
+(publish got *faster*, not slower). A child that dies on a signal makes publish
+throw an attributed `… crashed the bundler …` and exit non-zero — no partial build.
+Confirm with `grep -nE 'await Bun\.build|Bun\.build\(\{' src/commands/publish.ts` →
+**zero**. `writeStaticExport` only renders (no `Bun.build`), so it inherits the
+containment. Covered by a crash-injection test (`DISPLAY_CASE_BUILD_WORKER` stub).
+
+**Bundle-graph budget `check` (`--graph`).** `src/checks/graph-check.ts` measures
+each component's **real** module graph by building it through the crash-contained
+worker and reading the recorded `inputs` (so measuring a pathological graph can
+never crash the tool — no divergent custom resolver). `analyzeComponentGraph`
+(pure, unit-tested) flags an over-budget total and groups inputs by owning
+`node_modules` package to name a barrel import. Budgets: `check.graphBudget`
+(`modules` 1500, `perPackage` 400 defaults — loose, since the true crash size is
+machine-dependent). Warnings advisory; `--strict` escalates. It builds every
+component, so it's **opt-in to a no-flag full `check`, excluded from the slim
+`--structure --tokens --ssr` gate** (naming those flags makes `anyExplicit` true,
+so `graph` won't run) — keeps `bun run check` fast.
 
 ---
 

@@ -18,6 +18,7 @@ import {
   summaryLines,
   testLine,
 } from './check-reporter'
+import { checkGraph } from './graph-check'
 import { checkSsr } from './ssr-check'
 import { checkStructure } from './structure-check'
 import { checkTokens } from './tokens-check'
@@ -44,8 +45,11 @@ export interface CheckOptions {
   structure: boolean
   /** Server-render every case and fail on any that can't pre-render. */
   ssr: boolean
+  /** Measure each component's real bundled module graph and warn on an
+   *  over-budget graph or a barrel import (builds each component in isolation). */
+  graph: boolean
   update: boolean
-  /** Treat structure warnings as errors (CLI `--strict`). */
+  /** Treat structure (and graph) warnings as errors (CLI `--strict`). */
   strict?: boolean
   /** Restrict the render phases (a11y/visual) to these component ids or globs. */
   only?: string[]
@@ -304,16 +308,44 @@ export async function runChecks(
       console.log(`  ssr: ${declared} case(s) declared browser-only`)
   }
 
-  const staticErrors = tokenViolations + structureErrors + ssrErrors
+  // Bundle-graph budget: build each component in isolation (crash-contained) and
+  // measure its real module graph, warning on an over-budget graph or a barrel
+  // import. Heavier than the other static phases (it builds every component), so
+  // it is opt-in to a full run, not part of the slim `--structure --tokens --ssr`
+  // gate. A component whose build crashes the bundler is a hard error here.
+  let graphErrors = 0
+  let graphWarnings = 0
+  if (opts.graph) {
+    const { measured, findings } = await checkGraph(pkgDir, {
+      strict: opts.strict,
+    })
+    for (const m of measured) {
+      console.log(`  graph: ${m.componentId} — ${m.total} module(s)`)
+    }
+    for (const f of findings) {
+      const line = `  graph ${f.severity === 'error' ? '✗' : '⚠'} ${f.componentId}: ${f.message}`
+      if (f.severity === 'error') {
+        graphErrors++
+        console.error(line)
+      } else {
+        graphWarnings++
+        console.warn(line)
+      }
+    }
+  }
+
+  const staticErrors =
+    tokenViolations + structureErrors + ssrErrors + graphErrors
+  const staticWarnings = structureWarnings + graphWarnings
 
   // The browser phases (a11y + visual) are the only ones needing a live render.
   if (!opts.a11y && !opts.visual) {
     const ok = staticErrors === 0
-    const warn = structureWarnings ? `, ${structureWarnings} warning(s)` : ''
+    const warn = staticWarnings ? `, ${staticWarnings} warning(s)` : ''
     console.log(
       ok
         ? `\n  ✓ checks passed${warn}`
-        : `\n  ✗ ${tokenViolations} token violation(s), ${structureErrors} structure error(s), ${ssrErrors} ssr error(s)${warn}`,
+        : `\n  ✗ ${tokenViolations} token violation(s), ${structureErrors} structure error(s), ${ssrErrors} ssr error(s), ${graphErrors} graph error(s)${warn}`,
     )
     return ok
   }
@@ -364,11 +396,11 @@ export async function runChecks(
     if (scope.size === 0) {
       server.stop(true)
       const ok = staticErrors === 0
-      const warn = structureWarnings ? `, ${structureWarnings} warning(s)` : ''
+      const warn = staticWarnings ? `, ${staticWarnings} warning(s)` : ''
       console.log(
         ok
           ? `\n  ✓ checks passed — no affected components${warn}`
-          : `\n  ✗ ${tokenViolations} token violation(s), ${structureErrors} structure error(s), ${ssrErrors} ssr error(s)${warn}`,
+          : `\n  ✗ ${tokenViolations} token violation(s), ${structureErrors} structure error(s), ${ssrErrors} ssr error(s), ${graphErrors} graph error(s)${warn}`,
       )
       return ok
     }
@@ -542,12 +574,13 @@ export async function runChecks(
     visualChanges === 0 &&
     tokenViolations === 0 &&
     structureErrors === 0 &&
-    ssrErrors === 0
-  const warn = structureWarnings ? `, ${structureWarnings} warning(s)` : ''
+    ssrErrors === 0 &&
+    graphErrors === 0
+  const warn = staticWarnings ? `, ${staticWarnings} warning(s)` : ''
   console.log(
     ok
       ? `\n  ✓ checks passed${warn}`
-      : `\n  ✗ ${a11yViolations} a11y violation(s), ${visualChanges} visual change(s), ${tokenViolations} token violation(s), ${structureErrors} structure error(s), ${ssrErrors} ssr error(s)${warn}`,
+      : `\n  ✗ ${a11yViolations} a11y violation(s), ${visualChanges} visual change(s), ${tokenViolations} token violation(s), ${structureErrors} structure error(s), ${ssrErrors} ssr error(s), ${graphErrors} graph error(s)${warn}`,
   )
   return ok
 }

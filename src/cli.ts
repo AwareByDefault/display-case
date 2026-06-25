@@ -21,7 +21,7 @@ if (typeof globalThis.Bun === 'undefined') {
  *
  *   display-case <pkgDir> [--port=N]        start the dev server
  *   display-case <pkgDir> --print-manifest  print the manifest JSON and exit
- *   display-case check <pkgDir> [--a11y] [--visual] [--tokens] [--structure] [--ssr] [--update] [--strict] [--only=ids] [--changed[=ref]] [--concurrency=N] [--port=N]
+ *   display-case check <pkgDir> [--a11y] [--visual] [--tokens] [--structure] [--ssr] [--graph] [--update] [--strict] [--only=ids] [--changed[=ref]] [--concurrency=N] [--port=N]
  *   display-case init <pkgDir> [--agent=claude] [--with-visual] [--dry-run] [--json]
  *   display-case uninstall <pkgDir> [--agent=claude] [--dry-run] [--json]
  *
@@ -151,13 +151,15 @@ if (argv[0] === 'init' || argv[0] === 'uninstall') {
     visual: flag('visual'),
     structure: flag('structure'),
     ssr: flag('ssr'),
+    graph: flag('graph'),
   }
   const anyExplicit =
     explicit.tokens ||
     explicit.a11y ||
     explicit.visual ||
     explicit.structure ||
-    explicit.ssr
+    explicit.ssr ||
+    explicit.graph
   const defaults = config.check?.defaultPhases ?? {}
   const runs = (phase: keyof typeof explicit): boolean =>
     explicit[phase] || (!anyExplicit && defaults[phase] !== false)
@@ -174,6 +176,7 @@ if (argv[0] === 'init' || argv[0] === 'uninstall') {
     tokens: runs('tokens'),
     structure: runs('structure'),
     ssr: runs('ssr'),
+    graph: runs('graph'),
     update: flag('update'),
     strict: flag('strict'),
     only: onlyValue ? onlyValue.split(',').filter(Boolean) : undefined,

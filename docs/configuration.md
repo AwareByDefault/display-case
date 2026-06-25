@@ -35,7 +35,7 @@ The CLI looks for `display-case.config.ts` then `display-case.config.tsx` in the
 | `baselineDir` | `string` | no | `.display-case/baselines` | Where visual-regression baselines are stored. |
 | `tokens` | `{ allow?: string[] }` | no | none | Design-token conformance options for `--tokens`. `allow` lists custom-property names the package may reference but does not itself define (e.g. host-app-provided tokens). See [Testing](testing.md#token-conformance). |
 | `providers` | `{ driver?, diff? }` | no | built-in | Override the visual-regression backend. When unset, the built-in Playwright/axe driver and pixelmatch/pngjs diff are loaded lazily. See [`providers`](#providers). |
-| `check` | `{ defaultPhases?, concurrency?, structure? }` | no | none | Tune the `check` command: which phases run by default, how many variants the a11y/visual phases scan concurrently, and the structure phase's rules and severities. See [`check`](#check). |
+| `check` | `{ defaultPhases?, concurrency?, structure?, graphBudget? }` | no | none | Tune the `check` command: which phases run by default, how many variants the a11y/visual phases scan concurrently, the structure phase's rules and severities, and the bundle-graph budgets. See [`check`](#check). |
 | `a11y` | `{ enabled?, themes?, exclude?, startup? }` | no | off | Live accessibility surfacing in the running browse chrome. See [`a11y`](#a11y). |
 
 ### `title`
@@ -409,13 +409,17 @@ check: {
       'level-fit': { thresholds: { molecule: 8 } }, // rule-specific options
     },
   },
+
+  // Budgets for the bundle-graph (`--graph`) phase. Unset fields use the defaults.
+  graphBudget: { modules: 1500, perPackage: 400 },
 }
 ```
 
-- **`defaultPhases`** — a `Partial<Record<'tokens' | 'a11y' | 'visual' | 'structure', boolean>>`. Drop a phase from the bare `check` run (e.g. `visual` when no baselines are committed) while keeping it available via its flag.
+- **`defaultPhases`** — a `Partial<Record<'tokens' | 'a11y' | 'visual' | 'structure' | 'ssr' | 'graph', boolean>>`. Drop a phase from the bare `check` run (e.g. `visual` when no baselines are committed) while keeping it available via its flag.
 - **`concurrency`** — how many variants the render phases (a11y/visual) scan at once, each on its own page from a shared browser. Default `4`; override per run with `--concurrency=N`. A custom `providers.driver` must tolerate concurrent `open()` calls (set `1` if it can't). See [Testing → Reporting and concurrency](testing.md#reporting-and-concurrency).
 - **`structure.rules[id]`** — `false` disables the rule; `'warn'`/`'error'` enables it at that severity; an options object (`{ severity?, ignore?, thresholds? }`) enables it with overrides. Unset ⇒ the rule's default. The rule ids, defaults, and escape-hatch markers are listed in [Testing → Structure checks](testing.md#structure-checks).
 - **`structure.strict`** — escalate all structure warnings to errors (the config equivalent of `check --strict`).
+- **`graphBudget`** — budgets for the `--graph` phase, which measures each component's *real* bundled module graph (built in isolation, so measuring can never crash the tool). `modules` (default `1500`) warns when a component's total module count exceeds it; `perPackage` (default `400`) warns when a single dependency contributes more modules than it — the barrel-import signal (e.g. importing a whole icon set). Warnings are advisory; `--strict` makes them errors. The budgets are deliberately loose early-warnings — the true crash threshold is machine-dependent — so tighten them for your codebase as needed.
 
 ### `a11y`
 

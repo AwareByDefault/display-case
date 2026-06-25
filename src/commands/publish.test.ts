@@ -217,3 +217,25 @@ describe('publish: the static export needs no running server', () => {
     expect(await Bun.file(file).text()).toContain('data-ssr="1"')
   })
 })
+
+// Crash containment: inject a build worker that dies on a signal (mimicking the
+// native Bun bundler segfault). Publish must reject with an attributed diagnostic
+// instead of the publish process inheriting the native panic — and this test
+// process must survive to make the assertion.
+describe('publish: build-worker crash containment', () => {
+  test('a bundler crash fails publish with an attributed error, not a panic', async () => {
+    const out = await makeRepoTempDir()
+    const stub = join(REPO, '.tmp', 'publish-crash-worker.ts')
+    await Bun.write(stub, 'process.kill(process.pid, "SIGKILL")\n')
+    process.env.DISPLAY_CASE_BUILD_WORKER = stub
+    try {
+      await expect(publish(FIXTURE, { out })).rejects.toThrow(
+        /crashed the bundler/,
+      )
+    } finally {
+      delete process.env.DISPLAY_CASE_BUILD_WORKER
+      await rm(stub, { force: true })
+      await rm(out, { recursive: true, force: true })
+    }
+  }, 30_000)
+})
