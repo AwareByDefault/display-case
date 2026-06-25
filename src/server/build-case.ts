@@ -47,7 +47,7 @@ import { pinReact } from '../core/pin-react'
  * ports) never enters the bundle. A real exported `process.env` value wins over
  * the file so local overrides still apply.
  */
-export async function publicEnvDefines(
+async function publicEnvDefines(
   pkgDir: string,
 ): Promise<Record<string, string>> {
   const values = new Map<string, string>()
@@ -284,22 +284,30 @@ export async function buildShellBundles(
 // abnormally with no stdout — the parent treats either as a per-surface failure.
 if (import.meta.main) {
   const [kind, ...rest] = process.argv.slice(2)
+  const badArgs = (): never => {
+    process.stderr.write(`build-case: bad args for kind '${kind}'\n`)
+    process.exit(2)
+  }
   let result: BuildCaseResult
   if (kind === 'case') {
+    // <pkgDir> <file> <configPath> <componentId> <seq>
     const [pkgDir, file, configPath, componentId, seqStr] = rest
+    if (!pkgDir || !file || !configPath || !componentId || !seqStr) badArgs()
     result = await buildCaseBundles({
-      pkgDir: pkgDir as string,
-      file: file as string,
-      configPath: configPath as string,
-      componentId: componentId as string,
+      pkgDir,
+      file,
+      configPath,
+      componentId,
       seq: Number(seqStr),
     })
   } else if (kind === 'shell') {
+    // <pkgDir> <configPath> <primerPath|""> <seq>
     const [pkgDir, configPath, primerPath, seqStr] = rest
+    if (!pkgDir || !configPath || primerPath === undefined || !seqStr) badArgs()
     result = await buildShellBundles({
-      pkgDir: pkgDir as string,
-      configPath: configPath as string,
-      primerPath: primerPath ? primerPath : null,
+      pkgDir,
+      configPath,
+      primerPath: primerPath || null,
       seq: Number(seqStr),
     })
   } else {

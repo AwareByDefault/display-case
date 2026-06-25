@@ -31,7 +31,11 @@ const CLI = join(HERE, 'cli.ts')
 // fresh short-lived child — never in this long-lived server — so the server never
 // accumulates the bundler heap state that segfaults on a large catalog. This is
 // the generalization of the manifest subprocess (loadManifestFresh).
-const BUILD_WORKER = join(HERE, 'server', 'build-case.ts')
+const DEFAULT_BUILD_WORKER = join(HERE, 'server', 'build-case.ts')
+// Resolved per spawn so a test can inject a stub worker (e.g. one that crashes on
+// a signal) via DISPLAY_CASE_BUILD_WORKER to exercise the crash-containment path.
+const buildWorkerPath = (): string =>
+  process.env.DISPLAY_CASE_BUILD_WORKER ?? DEFAULT_BUILD_WORKER
 
 // Cap concurrent build-worker children so the isolation cannot oversubscribe a
 // constrained machine (an unbounded spawn storm under the a11y scanner + e2e
@@ -69,7 +73,7 @@ async function trace<T>(label: string, fn: () => Promise<T>): Promise<T> {
   return r
 }
 
-interface BuildOutcome {
+export interface BuildOutcome {
   ok: boolean
   inputs: string[]
   /** Present when `ok` is false. */
@@ -79,14 +83,58 @@ interface BuildOutcome {
 }
 
 /**
+ * Interpret a build worker's exit into a {@link BuildOutcome}. Pure, so the
+ * crash-containment logic is tested deterministically without a real segfault:
+ *  - parseable `{ ok: true }`     → success;
+ *  - parseable `{ ok: false }`    → a *logical* build error (not a crash);
+ *  - no JSON + a `signal`         → a native bundler **crash** (the heap bug);
+ *  - no JSON + a non-zero `code`  → an abnormal exit (e.g. bad args), not a crash.
+ */
+export function classifyBuildResult(
+  stdout: string,
+  code: number | null,
+  signal: string | null,
+): BuildOutcome {
+  let parsed: { ok: boolean; inputs?: string[]; error?: string } | undefined
+  try {
+    parsed = JSON.parse(stdout)
+  } catch {
+    // No parseable result → the worker died before emitting its JSON.
+  }
+  if (parsed?.ok) return { ok: true, inputs: parsed.inputs ?? [] }
+  if (parsed) {
+    return {
+      ok: false,
+      inputs: parsed.inputs ?? [],
+      error: parsed.error ?? 'bundling failed',
+      crashed: false,
+    }
+  }
+  if (signal) {
+    return {
+      ok: false,
+      inputs: [],
+      error: `the bundler crashed (killed by ${signal}; likely the large-graph heap bug in Bun)`,
+      crashed: true,
+    }
+  }
+  return {
+    ok: false,
+    inputs: [],
+    error: `bundling exited abnormally (code ${code})`,
+    crashed: false,
+  }
+}
+
+/**
  * Spawn the build worker for one build and await it. NEVER calls `Bun.build` in
- * this process. A worker that dies on a signal (a Bun bundler segfault) or yields
- * no `{ ok: true }` result is reported as a crash attributed to that surface, so
- * the native panic is contained here instead of taking the server down.
+ * this process. A worker that dies on a signal (a Bun bundler segfault) is
+ * reported as a crash attributed to that surface, so the native panic is
+ * contained here instead of taking the server down.
  */
 async function spawnBuild(args: string[]): Promise<BuildOutcome> {
   return withBuildSlot(async () => {
-    const proc = Bun.spawn(['bun', BUILD_WORKER, ...args], {
+    const proc = Bun.spawn(['bun', buildWorkerPath(), ...args], {
       stdout: 'pipe',
       stderr: 'pipe',
     })
@@ -98,21 +146,7 @@ async function spawnBuild(args: string[]): Promise<BuildOutcome> {
     if (errText.trim()) {
       process.stderr.write(errText.endsWith('\n') ? errText : `${errText}\n`)
     }
-    let parsed: { ok: boolean; inputs: string[]; error?: string } | undefined
-    try {
-      parsed = JSON.parse(out)
-    } catch {
-      // No parseable result → the worker died abnormally (likely a native crash).
-    }
-    if (parsed?.ok) return { ok: true, inputs: parsed.inputs }
-    const signal = proc.signalCode
-    const crashed = !!signal || (!parsed && code !== 1)
-    const error =
-      parsed?.error ??
-      (signal
-        ? `the bundler crashed (killed by ${signal}; likely the large-graph heap bug in Bun)`
-        : `bundling exited abnormally (code ${code})`)
-    return { ok: false, inputs: parsed?.inputs ?? [], error, crashed }
+    return classifyBuildResult(out, code, proc.signalCode)
   })
 }
 
@@ -575,7 +609,7 @@ function renderHtml(
  * build that would produce it is what failed); only the optional live-reload
  * client so it refreshes once the chrome rebuilds.
  */
-function shellErrorHtml(error: string, liveReload: boolean): string {
+export function shellErrorHtml(error: string, liveReload: boolean): string {
   const esc = (s: string) =>
     s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Display Case — chrome build failed</title></head><body style="margin:0;font-family:ui-sans-serif,system-ui,sans-serif;background:#fff5f5;color:#600"><div style="margin:2rem;padding:1rem 1.25rem;border:1px solid #c00;border-radius:8px;background:#fff;font-size:14px;line-height:1.6"><strong style="color:#c00">Display Case could not build its browse chrome.</strong><br>The tool is still running, but the chrome bundle failed to build${error.includes('bundler crashed') ? ' (the bundler crashed)' : ''}. Fix the error below and save — the page reloads automatically.<br><br><pre style="white-space:pre-wrap;margin:0;font-family:ui-monospace,monospace;font-size:13px;color:#c00">${esc(error)}</pre></div>${liveReload ? LIVERELOAD_SCRIPT : ''}</body></html>`

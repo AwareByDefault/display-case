@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { rm } from 'node:fs/promises'
-import { resolve } from 'node:path'
+import { join, resolve } from 'node:path'
 import { makeTempDir, writeFiles } from '../testing/test-helpers'
 import {
+  classifyBuildResult,
   getManifest,
   type Invalidatable,
+  shellErrorHtml,
   slugify,
   staleCaseIds,
   startDisplayCase,
@@ -173,6 +175,84 @@ describe('per-component on-demand bundling (integration)', () => {
       expect(otherDoc).toContain(`/dist/render-case-${other.id}.js`)
     } finally {
       server.stop(true)
+    }
+  }, 60_000)
+})
+
+// The crash-containment logic: how the server interprets a build worker's exit.
+describe('classifyBuildResult', () => {
+  test('a clean {ok:true} JSON is a success', () => {
+    const r = classifyBuildResult('{"ok":true,"inputs":["/a.ts"]}', 0, null)
+    expect(r.ok).toBe(true)
+    expect(r.inputs).toEqual(['/a.ts'])
+  })
+
+  test('an {ok:false} JSON is a logical build error, not a crash', () => {
+    const r = classifyBuildResult(
+      '{"ok":false,"inputs":[],"error":"boom"}',
+      1,
+      null,
+    )
+    expect(r.ok).toBe(false)
+    expect(r.crashed).toBe(false)
+    expect(r.error).toBe('boom')
+  })
+
+  test('a signal death (no JSON) is a bundler crash', () => {
+    const r = classifyBuildResult('', null, 'SIGSEGV')
+    expect(r.ok).toBe(false)
+    expect(r.crashed).toBe(true)
+    expect(r.error).toContain('crashed')
+  })
+
+  test('a non-zero exit with no JSON (e.g. bad args) is abnormal, not a crash', () => {
+    const r = classifyBuildResult('', 2, null)
+    expect(r.ok).toBe(false)
+    expect(r.crashed).toBe(false)
+    expect(r.error).toContain('code 2')
+  })
+})
+
+describe('shellErrorHtml', () => {
+  test('renders a self-contained diagnostic naming the error, no chrome bundle', () => {
+    const html = shellErrorHtml(
+      'the bundler crashed (killed by SIGSEGV)',
+      false,
+    )
+    expect(html.startsWith('<!doctype html>')).toBe(true)
+    expect(html).toContain('could not build its browse chrome')
+    expect(html).toContain('SIGSEGV')
+    expect(html).not.toContain('/dist/browser-entry.js')
+  })
+})
+
+// End-to-end crash containment: inject a worker that dies on a signal (mimicking a
+// native bundler segfault). The server must keep running and serve a diagnostic
+// rather than terminating with the native panic the report describes.
+describe('build-worker crash containment (integration)', () => {
+  const Repo = resolve(import.meta.dir, '..', '..')
+
+  test('a build-worker crash keeps the server up and serves a diagnostic', async () => {
+    const stub = join(Repo, '.tmp', 'crash-worker.ts')
+    await Bun.write(stub, 'process.kill(process.pid, "SIGKILL")\n')
+    process.env.DISPLAY_CASE_BUILD_WORKER = stub
+    try {
+      // The shell build is the crashing worker → rebuild() records shellError but
+      // does not throw, so the server still binds.
+      const server = await startDisplayCase(Repo, { port: 0 })
+      try {
+        const base = String(server.url).replace(/\/$/, '')
+        const r = await fetch(`${base}/`)
+        expect(r.status).toBe(500)
+        expect(await r.text()).toContain('could not build its browse chrome')
+        // Still alive after serving the diagnostic.
+        expect((await fetch(`${base}/health`)).ok).toBe(true)
+      } finally {
+        server.stop(true)
+      }
+    } finally {
+      delete process.env.DISPLAY_CASE_BUILD_WORKER
+      await rm(stub, { force: true })
     }
   }, 60_000)
 })
