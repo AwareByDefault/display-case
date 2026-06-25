@@ -71,3 +71,71 @@ describe('buildCaseBundles', () => {
     expect(r.error).toBeTruthy()
   })
 })
+
+// The worker process is the crash-isolation boundary: the server spawns it and
+// reads its exit + JSON; a worker that dies on a signal (a native bundler crash)
+// is contained and attributed instead of taking the server down.
+describe('build worker (spawned)', () => {
+  const Script = join(import.meta.dir, 'build-case.ts')
+  const run = async (args: string[]) => {
+    const proc = Bun.spawn(['bun', Script, ...args], {
+      stdout: 'pipe',
+      stderr: 'pipe',
+    })
+    const [out, code] = await Promise.all([
+      new Response(proc.stdout).text(),
+      proc.exited,
+    ])
+    return { out, code }
+  }
+  const cfg = (dir: string) => join(dir, 'display-case.config.ts')
+
+  test('case kind exits 0 + {ok:true} for a buildable component', async () => {
+    const dir = await repoTemp()
+    await writeFiles(dir, {
+      'display-case.config.ts': CONFIG,
+      'Good.case.tsx': GOOD,
+    })
+    const { out, code } = await run([
+      'case',
+      dir,
+      join(dir, 'Good.case.tsx'),
+      cfg(dir),
+      'good',
+      '1',
+    ])
+    expect(code).toBe(0)
+    expect(JSON.parse(out).ok).toBe(true)
+  })
+
+  test('case kind exits non-zero + {ok:false} when it cannot bundle', async () => {
+    const dir = await repoTemp()
+    await writeFiles(dir, {
+      'display-case.config.ts': CONFIG,
+      'Bad.case.tsx': BAD,
+    })
+    const { out, code } = await run([
+      'case',
+      dir,
+      join(dir, 'Bad.case.tsx'),
+      cfg(dir),
+      'bad',
+      '1',
+    ])
+    expect(code).not.toBe(0)
+    expect(JSON.parse(out).ok).toBe(false)
+  })
+
+  test('shell kind exits 0 + {ok:true}', async () => {
+    const dir = await repoTemp()
+    await writeFiles(dir, { 'display-case.config.ts': CONFIG })
+    const { out, code } = await run(['shell', dir, cfg(dir), '', '1'])
+    expect(code).toBe(0)
+    expect(JSON.parse(out).ok).toBe(true)
+  })
+
+  test('an unknown build kind exits 2', async () => {
+    const { code } = await run(['bogus'])
+    expect(code).toBe(2)
+  })
+})

@@ -1,8 +1,5 @@
-# scalable-serving Specification
+## MODIFIED Requirements
 
-## Purpose
-TBD - created by archiving change per-case-on-demand-bundling. Update Purpose after archive.
-## Requirements
 ### Requirement: Size-independent preparation
 
 Display Case SHALL prepare and deliver a showcase regardless of how many cases it
@@ -43,43 +40,6 @@ would crash the underlying bundler.
 - WHEN the showcase is run
 - THEN the tool process keeps running and begins serving
 - AND the tool does not terminate with a native crash before it serves
-
-### Requirement: On-demand case preparation
-
-The running showcase SHALL begin serving before it has prepared every case, and
-SHALL prepare a case's isolated rendering when that case is first requested
-rather than ahead of all requests. A case that has not yet been requested SHALL
-still be enumerable in the catalog and reachable by its stable address. Once a
-case has been prepared, the showcase SHALL serve it without re-preparing it
-until its inputs change. This SHALL NOT alter the delivered result: an on-demand
-prepared surface SHALL still be rendered before scripting, themed, and addressed
-exactly as if it had been prepared ahead of time.
-
-#### Scenario: Serving begins before every case is prepared
-
-- GIVEN a showcase with many cases
-- WHEN the showcase is run
-- THEN the browsing surface and its component catalog are served without first preparing every case
-
-#### Scenario: First request prepares the case
-
-- GIVEN a running showcase with a case that has not yet been requested
-- WHEN a viewer opens that case's stable address
-- THEN the case is prepared
-- AND its rendered content is delivered, themed for the requested theme, before scripting
-
-#### Scenario: An unrequested case is still enumerable
-
-- GIVEN a running showcase with a case that has never been requested
-- WHEN the machine-readable catalog or manifest is read
-- THEN that case appears in it
-- AND it is reachable at its stable address
-
-#### Scenario: A prepared case is reused until its inputs change
-
-- GIVEN a case that has already been prepared and served
-- WHEN it is requested again without any change to its source or dependencies
-- THEN it is served without being prepared again
 
 ### Requirement: Isolated, diagnosed preparation failure
 
@@ -126,4 +86,3 @@ the tool, or surfacing an undiagnosable native crash.
 - GIVEN a showcase containing one case that cannot be prepared and other valid cases
 - WHEN a viewer opens a valid case's stable address
 - THEN that case is prepared and rendered normally
-
