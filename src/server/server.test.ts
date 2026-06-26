@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { rm } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { makeTempDir, writeFiles } from '../testing/test-helpers'
+import { spawnBuildWorker } from './build-runner'
 import {
   classifyBuildResult,
   createCoalescingRunner,
@@ -268,6 +269,34 @@ describe('build-worker crash containment (integration)', () => {
       await rm(stub, { force: true })
     }
   }, 60_000)
+})
+
+// Hang containment: inject a worker that neither exits nor crashes (a never-
+// resolving top-level await). The bounded timeout must kill it and report a
+// contained per-surface failure — not a crash, and not an indefinite slot stall.
+describe('build-worker hang containment', () => {
+  const Repo = resolve(import.meta.dir, '..', '..')
+
+  test('a hung worker is killed and reported as a contained, non-crash failure', async () => {
+    const stub = join(Repo, '.tmp', 'hang-worker.ts')
+    await Bun.write(stub, 'await new Promise(() => {})\n') // never resolves
+    process.env.DISPLAY_CASE_BUILD_WORKER = stub
+    process.env.DISPLAY_CASE_BUILD_TIMEOUT = '400'
+    try {
+      const t0 = performance.now()
+      const r = await spawnBuildWorker(['case', '/x', '/x', '/x', 'x', '1'])
+      const elapsed = performance.now() - t0
+      expect(r.ok).toBe(false)
+      expect(r.crashed).toBe(false) // a hang is distinct from a signal crash
+      expect(r.error).toContain('hung')
+      // Killed promptly at the bound, not left to stall indefinitely.
+      expect(elapsed).toBeLessThan(5000)
+    } finally {
+      delete process.env.DISPLAY_CASE_BUILD_WORKER
+      delete process.env.DISPLAY_CASE_BUILD_TIMEOUT
+      await rm(stub, { force: true })
+    }
+  }, 15_000)
 })
 
 // Live reload: a watch rebuild must invalidate exactly the components whose
