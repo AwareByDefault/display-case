@@ -1,5 +1,14 @@
-import { describe, expect, test } from 'bun:test'
-import { labelFor, pageNameFor, repoSlug, rewriteLinks } from './generate'
+import { afterAll, describe, expect, test } from 'bun:test'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import {
+  buildRegistry,
+  labelFor,
+  pageNameFor,
+  repoSlug,
+  rewriteLinks,
+} from './generate'
 
 const registry = new Map<string, string>([
   ['docs/cli.md', 'CLI'],
@@ -51,6 +60,41 @@ describe('pageNameFor / labelFor', () => {
   })
   test('labelFor humanizes a page name', () => {
     expect(labelFor('Writing-Cases')).toBe('Writing Cases')
+  })
+})
+
+describe('buildRegistry', () => {
+  const dirs: string[] = []
+  afterAll(async () => {
+    await Promise.all(dirs.map((d) => rm(d, { recursive: true, force: true })))
+  })
+  const tree = async (files: Record<string, string>) => {
+    const root = await mkdtemp(join(tmpdir(), 'wiki-reg-'))
+    dirs.push(root)
+    // Bun.write creates parent directories as needed.
+    for (const [rel, body] of Object.entries(files)) {
+      await Bun.write(join(root, rel), body)
+    }
+    return root
+  }
+
+  test('throws when two docs derive the same wiki page name', async () => {
+    // docs/foo.md and contributing/foo.md both -> "Foo".
+    const root = await tree({
+      'docs/foo.md': '# a',
+      'contributing/foo.md': '# b',
+    })
+    await expect(buildRegistry(root)).rejects.toThrow(/page name collision/i)
+  })
+
+  test('does not flag the two README files (PAGE_OVERRIDES disambiguates)', async () => {
+    const root = await tree({
+      'docs/examples/README.md': '# ex',
+      'contributing/README.md': '# c',
+    })
+    const reg = await buildRegistry(root)
+    expect(reg.get('docs/examples/README.md')).toBe('Examples')
+    expect(reg.get('contributing/README.md')).toBe('Contributing')
   })
 })
 

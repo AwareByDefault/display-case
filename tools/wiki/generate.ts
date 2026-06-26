@@ -86,12 +86,24 @@ export async function buildRegistry(
   rootDir: string = REPO_ROOT,
 ): Promise<Map<string, string>> {
   const registry = new Map<string, string>()
+  const claimedBy = new Map<string, string>() // page name -> source path
   for (const { dir } of SECTIONS) {
     const glob = new Bun.Glob('**/*.md')
     for await (const rel of glob.scan({ cwd: join(rootDir, dir) })) {
       if (FIXTURE_SUFFIXES.some((s) => rel.endsWith(s))) continue
       const repoRel = posix.join(dir, rel.split('/').join(posix.sep))
-      registry.set(repoRel, pageNameFor(repoRel))
+      const page = pageNameFor(repoRel)
+      // A wiki is a flat namespace: two docs deriving the same page name would
+      // silently overwrite each other's output. Fail loud — add a PAGE_OVERRIDES
+      // entry to disambiguate.
+      const owner = claimedBy.get(page)
+      if (owner) {
+        throw new Error(
+          `Wiki page name collision: "${owner}" and "${repoRel}" both map to "${page}". Add a PAGE_OVERRIDES entry to disambiguate.`,
+        )
+      }
+      claimedBy.set(page, repoRel)
+      registry.set(repoRel, page)
     }
   }
   return registry
