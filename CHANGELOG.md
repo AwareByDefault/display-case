@@ -1,3 +1,9 @@
+## 1.4.5
+
+### Patch Changes
+
+- 6812040: chore(deps): bump pixelmatch from 6 to 7. The built-in visual-diff provider's optional dependency; the default-import API is unchanged.
+
 ## 1.4.4
 
 ### Patch Changes
