@@ -36,12 +36,12 @@ jobs:
       # App token so the baseline commit can push to `main` past the branch
       # ruleset (the App is a bypass actor; the built-in GITHUB_TOKEN is not).
       # persist-credentials defaults on, so `git push` below reuses this token.
-      - uses: actions/create-github-app-token@v2
+      - uses: actions/create-github-app-token@v3
         id: app-token
         with:
           app-id: ${{ secrets.RELEASE_APP_ID }}
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.inputs.ref }}
           token: ${{ steps.app-token.outputs.token }}

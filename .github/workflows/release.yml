@@ -38,12 +38,12 @@ jobs:
       # tags push directly to `main`, which the branch ruleset gates behind a PR;
       # the built-in GITHUB_TOKEN can't be a bypass actor, this App can.
       # App perms: Contents R/W (the Issues/PR perms are unused now but harmless).
-      - uses: actions/create-github-app-token@v2
+      - uses: actions/create-github-app-token@v3
         id: app-token
         with:
           app-id: ${{ secrets.RELEASE_APP_ID }}
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # Full history so changeset can resolve tags, and credentials persisted
           # so the version commit + tags push as the App.
