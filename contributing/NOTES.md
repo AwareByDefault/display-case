@@ -17,13 +17,16 @@ config.webServer`) — a flake unrelated to the change under test. (Same cold-sp
 cost called out in the per-component-build note below.)
 
 **Fix:** construct `Bun.serve` *first*, then build. The build is kicked off as a
-`ready` promise (`state` is `let state!: BuiltState`, assigned when it resolves);
-`/health` returns `ok` immediately, and **every other route `await ready`** before
-touching `state`, so nothing observable changes (cases still lazy, render still
+`ready` promise that assigns the `current: BuiltState | undefined` holder;
+`/health` returns `ok` immediately, and **every other route `await ready`** then
+reads the state through `getState()` — a loud accessor that throws if read before
+the build (no definite-assignment `!`; that would silence the very check this tool
+exists to catch). Nothing observable changes (cases still lazy, render still
 before scripts). `startDisplayCase` still `await ready`s before returning — so
-`check.ts` and the integration tests still get a fully-prepared server — but the
-socket is already open during the build. A catastrophic build throw (not a
-captured `state.shellError`) `server.stop(true)`s rather than leak a live server.
+`check.ts` and the integration tests still get a fully-prepared server, which is
+what makes those tests a real regression guard for the wiring — but the socket is
+already open during the build. A catastrophic build throw (not a captured
+`shellError`) `server.stop(true)`s rather than leak a live server.
 
 Measured: `/health` answers in ~70ms vs the built `/` at ~210ms (was: both gated
 on the full build). **Don't reintroduce an `await` of the build before
