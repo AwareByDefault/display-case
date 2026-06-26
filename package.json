@@ -76,6 +76,7 @@
     "openspec": "openspec",
     "check": "bun src/cli.ts check . --structure --tokens --ssr",
     "check:openspec-merge": "bun tools/openspec-merge-guard.ts",
+    "wiki:build": "bun tools/wiki/generate.ts",
     "baselines:record": "bun scripts/record-baselines.ts",
     "test": "bun test",
     "test:tools": "bun test ./tools",
