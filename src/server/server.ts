@@ -792,7 +792,7 @@ export async function startDisplayCase(
   const port = opts.port === 0 ? 0 : await firstFreePort(opts.port ?? 3100)
 
   // The initial build, kicked off here so it runs concurrently with the listen
-  // instead of blocking it (see the note at `state`). Created with no `await`
+  // instead of blocking it (see the note at `current`). Created with no `await`
   // between it and the `await ready` after `Bun.serve` below, so its rejection
   // always has a waiter — never a floating promise. Sequential inside: the
   // shell-bundle hash reads what the build just wrote.
@@ -1038,7 +1038,7 @@ export async function startDisplayCase(
   // The socket is open and `/health` answers now; wait for the initial build
   // before wiring the build-dependent machinery (the a11y start-up sweep, the
   // dependency watchers) and before returning a fully-prepared server. A
-  // captured build failure is kept in `state.shellError` and does not reject; a
+  // captured build failure is kept in `current.shellError` and does not reject; a
   // catastrophic throw does — close the socket rather than leak a live server.
   try {
     await ready
