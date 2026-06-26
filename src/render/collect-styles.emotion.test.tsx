@@ -82,6 +82,7 @@ describe('emotion style engine (real library)', () => {
       ssr: true,
       headStyles: result.headStyles,
       scriptSrc: '/r.js',
+      vendor: '', // not under test here; '' omits the importmap
     })
     // The real data-emotion tags land between the static block's close and </head>
     // — verbatim, not folded into the base <style> (so client adoption works).
