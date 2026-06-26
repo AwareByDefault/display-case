@@ -4,6 +4,37 @@ Non-obvious decisions, debugging notes, and architectural context for the Displa
 
 ---
 
+## 2026-06-26: The `ssr` check renders in-process, so it can hit dual-React — and it diagnoses it now
+
+The `ssr` check (`src/checks/ssr-check.ts`) renders every case **in-process** with
+`renderToString` from Display Case's *own* `react-dom/server`, and the wrapper tree
+(`render-node`) uses Display Case's *own* `react`. The cases import `react` relative
+to `pkgDir`. When those two installs differ — the classic
+`bunx @awarebydefault/display-case` run from a dir that doesn't depend on the tool,
+which pulls a second React into a temp prefix — `react-dom/server` arms one React's
+hook dispatcher and the cases read the *other* (null) one, so **every hook-using
+case throws** `resolveDispatcher() … useState`. Hook-free cases pass and mask it.
+This is the same hazard `pinReact` fixes for `Bun.build` bundles — but that's a
+*bundler* plugin, and the `ssr` path doesn't bundle, so it never runs there.
+
+`src/checks/react-identity.ts` detects it: it stamps a non-enumerable `Symbol` on
+the renderer's React and checks whether the React resolved from `pkgDir` carries
+the stamp — **runtime identity, not path** (symlinks / pnpm / ESM-CJS dual-loads
+make path comparison unreliable; realpath is only the fallback). Tri-state
+`sameInstance`: `true` → no fault; `false` → classify (`bunx-temp-install` /
+`version-conflict` / `duplicate-install`) and skip the sweep; `null` →
+**inconclusive, never a fault** (a hook-free showcase needs no React at all, so an
+unresolved consumer React must not be reported — this is why the existing temp-dir
+fixtures still pass). The runtime-symptom safety net (`faultFromSymptom`) only
+fires when the probe was inconclusive *and* ≥2 findings all match the dispatcher
+fingerprint (`isReactDispatcherError`) — real render-purity throws are sporadic and
+API-specific (`window is not defined`), so an all-identical dispatcher signature is
+structural. Why diagnose instead of *prevent* in-process: swapping `renderToString`
+to the consumer's `react-dom/server` would arm the consumer's React and break the
+*wrapper* (built from Display Case's statically-imported React) instead — true
+prevention needs the sweep re-run in a subprocess with resolution pinned, deferred
+as follow-up.
+
 ## 2026-06-26: The GitHub wiki is a generated mirror, never a source
 
 The GitHub wiki is an **auto-generated, human-browsable mirror** of `docs/` and
