@@ -3,9 +3,10 @@ name: Release
 # Publish-on-merge with Changesets. Every push to main runs the browser-free
 # gate, then — only if the merged changes carried any changesets — consumes them
 # with `changeset version` (bumps package.json + CHANGELOG.md), commits that back
-# to main, and `changeset publish`es to npm. A push that carries no changesets is
-# a clean no-op. The version comes from the changeset files a PR includes, not
-# from commit messages.
+# to main, `changeset publish`es to npm, and cuts a GitHub Release for the new
+# `v<version>` tag (notes = that version's CHANGELOG section). A push that carries
+# no changesets is a clean no-op. The version comes from the changeset files a PR
+# includes, not from commit messages.
 #
 # The version commit + tags push DIRECTLY to main, which the 'Protect main'
 # ruleset gates behind a PR. So this job pushes as the awarebydefault-release
@@ -123,3 +124,28 @@ jobs:
 
           git push origin HEAD:main
           git push origin --tags
+
+          # Cut a GitHub Release for the new tag, with that version's CHANGELOG.md
+          # section as the notes (`changeset publish` tags `v<version>` but never
+          # creates the Release). Idempotent: a re-run after a partial failure
+          # skips a Release that already exists, mirroring `changeset publish`.
+          new_version="$(bun --print "require('./package.json').version")"
+          new_tag="v${new_version}"
+          notes_file="$(mktemp)"
+          # Print the body between "## <version>" and the next H1/H2 header, then
+          # trim leading blank lines.
+          awk -v ver="${new_version}" '
+            $0 == "## " ver { flag=1; next }
+            /^#{1,2} / && flag { flag=0 }
+            flag { print }
+          ' CHANGELOG.md | sed "/./,\$!d" > "${notes_file}"
+          if gh release view "${new_tag}" >/dev/null 2>&1; then
+            echo "GitHub Release ${new_tag} already exists — skipping."
+          else
+            gh release create "${new_tag}" \
+              --title "${new_tag}" \
+              --notes-file "${notes_file}" \
+              --verify-tag \
+              --latest
+            echo "Created GitHub Release ${new_tag}."
+          fi
