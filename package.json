@@ -1,6 +1,6 @@
 {
   "name": "@awarebydefault/display-case",
-  "version": "1.4.5",
+  "version": "1.5.0",
   "description": "A Bun-native, AI-friendly component showcase — a lightweight alternative to Storybook.",
   "license": "MIT",
   "author": "Jake Uskoski <jake@awarebydefault.com>",
