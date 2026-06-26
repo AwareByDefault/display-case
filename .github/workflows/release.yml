@@ -129,7 +129,7 @@ jobs:
           # section as the notes (`changeset publish` tags `v<version>` but never
           # creates the Release). Idempotent: a re-run after a partial failure
           # skips a Release that already exists, mirroring `changeset publish`.
-          new_version="$(node -p "require('./package.json').version")"
+          new_version="$(bun --print "require('./package.json').version")"
           new_tag="v${new_version}"
           notes_file="$(mktemp)"
           # Print the body between "## <version>" and the next H1/H2 header, then
