@@ -1,0 +1,69 @@
+name: Wiki sync
+
+# Keep the GitHub wiki a faithful, auto-generated mirror of the in-repo docs.
+# The repo is the source of truth (it ships in the npm package and is what AI
+# agents read); the wiki is a human-browsable mirror that must never drift, so
+# it is regenerated and pushed here whenever the docs change. The wiki is never
+# hand-edited — any manual edit is overwritten on the next docs change.
+# Generator: tools/wiki/generate.ts. See contributing/NOTES.md.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "contributing/**"
+      - "tools/wiki/**"
+      - ".github/workflows/wiki-sync.yml"
+  workflow_dispatch:
+
+# GITHUB_TOKEN needs write to push to the repo's `*.wiki.git`.
+permissions:
+  contents: write
+
+concurrency:
+  group: wiki-sync
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      # No `bun install` — the generator uses only Bun/node built-ins.
+
+      - name: Generate wiki pages
+        run: bun tools/wiki/generate.ts .wiki-build
+
+      - name: Push to the wiki repo
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # The wiki is a separate git repo; it exists only after its first page
+          # has been created (we bootstrap that once, out of band).
+          if ! git clone "https://x-access-token:${GITHUB_TOKEN}@github.com/${REPO}.wiki.git" wiki 2>/dev/null; then
+            echo "::error::Wiki repo not found. Enable the wiki and create the first page once, then this job can sync it."
+            exit 1
+          fi
+
+          # Mirror: drop the previously-generated pages, copy the fresh set in.
+          # (Only top-level *.md — a wiki has no folders. Leaves .git intact.)
+          find wiki -maxdepth 1 -name '*.md' -delete
+          cp .wiki-build/*.md wiki/
+
+          cd wiki
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Wiki already up to date."
+          else
+            git commit -m "docs: sync wiki from ${GITHUB_SHA::7}"
+            git push
+            echo "Wiki updated."
+          fi

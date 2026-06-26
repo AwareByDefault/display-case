@@ -29,6 +29,9 @@ playwright-report/
 dist-showcase/
 dist/
 
+# Generated GitHub wiki mirror (`bun run wiki:build`); CI regenerates + pushes it.
+.wiki-build/
+
 # Claude
 .claude/settings.local.json
 # Linked git worktrees live here (EnterWorktree / `git worktree add`). They are

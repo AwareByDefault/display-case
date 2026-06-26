@@ -4,6 +4,32 @@ Non-obvious decisions, debugging notes, and architectural context for the Displa
 
 ---
 
+## 2026-06-26: The GitHub wiki is a generated mirror, never a source
+
+The GitHub wiki is an **auto-generated, human-browsable mirror** of `docs/` and
+`contributing/` — not a place docs live. The repo is the single source of truth:
+`docs/` ships in the npm tarball (see `package.json` `files`) and both trees are
+cloned with the repo, so they are what AI agents read whether they *use* or
+*develop* Display Case. A wiki is a separate `*.wiki.git` repo — not in the
+tarball, not cloned, not version-locked — so putting docs *only* there would hide
+them from exactly those agents. Hence: mirror, don't move.
+
+`tools/wiki/generate.ts` does the transform (flat page names — a wiki has no
+folders; intra-doc links → wiki page links with anchors preserved; code/non-doc
+links → absolute GitHub `blob`/`tree` URLs; a generated `Home`/`_Sidebar`/`_Footer`
+and a "canonical source" banner per page). `.github/workflows/wiki-sync.yml`
+regenerates and pushes on every push to `main` that touches the docs, so the wiki
+**cannot drift** and hand-edits are overwritten. Run `bun run wiki:build` to
+preview into `.wiki-build/` (gitignored).
+
+Two quirks worth knowing: (1) the generator resolves links relative to the source
+file *and* falls back to repo-root resolution when that misses — several
+`contributing/` docs author root-relative paths like `openspec/specs/` that would
+otherwise 404 (those source links are also wrong on github.com today; worth fixing
+upstream separately). (2) The wiki repo doesn't exist until its first page is
+created; it was bootstrapped once by pushing the generated pages, after which the
+workflow's `git clone …​.wiki.git` succeeds.
+
 ## 2026-06-26: Shared-vendor delivery generalized beyond React (`config.share`)
 
 The published build delivers React **once** (a shared vendor bundle + an importmap)
