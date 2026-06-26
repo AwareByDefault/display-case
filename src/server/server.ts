@@ -23,7 +23,11 @@ import type { PrimerHtmlResult } from '../render/ssr-primer'
 import type { CaseRenderer } from '../render/ssr-render'
 import { renderShellToHtml } from '../render/ssr-shell'
 import type { Theme } from '../ui/shell-core'
-import { killActiveBuildWorkers, spawnBuildWorker } from './build-runner'
+import {
+  buildTimeoutMs,
+  killActiveBuildWorkers,
+  spawnBuildWorker,
+} from './build-runner'
 
 // Re-exported so existing importers (and tests) resolve these from `./server`
 // unchanged after the spawn/classify primitives moved to `build-runner.ts`.
@@ -441,16 +445,37 @@ async function loadManifestFresh(pkgDir: string): Promise<Manifest> {
     stdout: 'pipe',
     stderr: 'pipe',
   })
-  const [out, err, code] = await Promise.all([
+  const collect = Promise.all([
     new Response(proc.stdout).text(),
     new Response(proc.stderr).text(),
     proc.exited,
   ])
-  if (err.trim()) process.stderr.write(err.endsWith('\n') ? err : `${err}\n`)
-  if (code !== 0) {
-    throw new Error(`manifest build subprocess exited with code ${code}`)
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<null>((res) => {
+    timer = setTimeout(() => res(null), buildTimeoutMs())
+  })
+  try {
+    // A `--print-manifest` child that hangs (a case module with a never-resolving
+    // top-level await) must not stall the rebuild — and at startup, the bind — for
+    // ever. Bound it: on timeout, kill and throw, so the hang becomes a contained,
+    // logged failure instead of an indefinite stall.
+    const done = await Promise.race([collect, timeout])
+    if (done === null) {
+      proc.kill()
+      throw new Error(
+        `manifest build subprocess hung (no result within ${buildTimeoutMs()}ms; killed)`,
+      )
+    }
+    const [out, err, code] = done
+    if (err.trim()) process.stderr.write(err.endsWith('\n') ? err : `${err}\n`)
+    if (code !== 0) {
+      throw new Error(`manifest build subprocess exited with code ${code}`)
+    }
+    return JSON.parse(out) as Manifest
+  } finally {
+    if (timer) clearTimeout(timer)
+    void collect.catch(() => {})
   }
-  return JSON.parse(out) as Manifest
 }
 
 /** Options that let a rebuild reuse the surfaces a given change can't have
