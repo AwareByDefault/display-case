@@ -6,6 +6,7 @@ const assets: DocAssets = {
   browser: '/assets/browser-abc123.js',
   render: { button: '/assets/render-case-button-def456.js' },
   primer: '/assets/primer-ghi789.js',
+  vendor: '/assets/vendor-react-xyz789.js',
 }
 
 const manifest: Manifest = {
@@ -92,6 +93,7 @@ describe('renderDoc', () => {
       markup: '<button>x</button>',
       ssr: true,
       scriptSrc: '/assets/render-case-button-def456.js',
+      vendor: '/assets/vendor-react-xyz789.js',
       ...over,
     })
 
@@ -133,9 +135,27 @@ describe('renderDoc', () => {
     const tag = '<style data-emotion="css 1ab2">.x{}</style>'
     const html = doc({ headStyles: tag })
     expect(html).toContain(tag)
-    // Placed after the base block closes, before the head closes — not folded
-    // into the static <style> (so emotion's data-emotion adoption markers survive).
-    expect(html).toContain(`</style>${tag}</head>`)
+    // Placed right after the base block closes — not folded into the static
+    // <style> (so emotion's data-emotion adoption markers survive). The importmap
+    // follows it before the head closes.
+    expect(html).toContain(`</style>${tag}`)
+  })
+
+  test('emits an importmap resolving React to the shared vendor bundle', () => {
+    const html = doc()
+    expect(html).toContain('<script type="importmap">')
+    expect(html).toContain('"react":"/assets/vendor-react-xyz789.js"')
+    expect(html).toContain(
+      '"react-dom/client":"/assets/vendor-react-xyz789.js"',
+    )
+    // Before the module script that imports those bare specifiers.
+    expect(html.indexOf('importmap')).toBeLessThan(
+      html.indexOf('type="module"'),
+    )
+  })
+
+  test('omits the importmap when no vendor bundle is supplied', () => {
+    expect(doc({ vendor: '' })).not.toContain('importmap')
   })
 })
 
@@ -180,6 +200,15 @@ describe('primerDoc', () => {
       headStyles: tag,
       assets,
     })
-    expect(html).toContain(`</style>${tag}</head>`)
+    expect(html).toContain(`</style>${tag}`)
+  })
+
+  test('emits the React importmap before the primer module script', () => {
+    const html = doc()
+    expect(html).toContain('<script type="importmap">')
+    expect(html).toContain('"react":"/assets/vendor-react-xyz789.js"')
+    expect(html.indexOf('importmap')).toBeLessThan(
+      html.indexOf('type="module"'),
+    )
   })
 })
