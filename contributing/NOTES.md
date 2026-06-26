@@ -1361,13 +1361,15 @@ guarantee.
 ## Per-rebuild gating: the chrome and the manifest are reused independently
 
 `rebuild()` (`src/server/server.ts`) no longer rebuilds everything on every save.
-It takes `{ changed, prev }` and reuses the surfaces a change can't have touched:
+It takes `{ changed, prev }` and reuses the surfaces a change can't have touched.
+The decision is the pure `planRebuild(changed, prevShellInputs, configPath,
+primerSrc)` (exported + unit-tested) → `{ needManifest, needShell }`:
 
 - **Manifest** is re-run (the `--print-manifest` subprocess, which re-imports the
   whole catalog and so scales with catalog size) only when a changed path is
   *manifest-relevant* — a `.case.tsx`/`.placard.md`, the config, or the primer
-  (`manifestRelevant`, exported + unit-tested). A plain component **implementation**
-  edit reuses `prev.manifest` and just invalidates that component's case bundle.
+  (`manifestRelevant`). A plain component **implementation** edit reuses
+  `prev.manifest` and just invalidates that component's case bundle.
 - **Chrome (shell)** is rebuilt only when a changed path intersects `prev.shellInputs`
   (the chrome's own graph — Display Case's UI, which a *consumer's* component edits
   never touch). `BuiltState` now carries `shellInputs` separately from `inputs`.
@@ -1382,11 +1384,14 @@ Two non-obvious invariants:
   same convention `staleCaseIds` uses. Reuse only happens with `prev` present *and*
   a non-empty changed set that misses the relevant inputs.
 
-`scheduleRebuild` also guards against **concurrent** rebuilds: the 150ms debounce
-only coalesces a burst that arrives *before* a rebuild starts. A change arriving
-*during* a (slow) rebuild sets a `rebuildDirty` flag so the in-flight pass loops
-once more — it never starts a second rebuild that would race on `state`,
-`ssrBuildSeq`, and the case cache.
+Concurrency is split in two: the 150ms debounce in `scheduleRebuild` coalesces a
+burst that arrives *before* a rebuild starts; the **concurrent** case — a change
+arriving *during* a (slow) rebuild — is owned by `createCoalescingRunner` (the
+generic, exported + unit-tested wrapper `runRebuild` is built from). A trigger
+received while a pass is in flight only flags the run dirty, so the in-flight
+loop repeats the pass exactly once more on completion — it never starts a second
+rebuild that would race on `state`, `ssrBuildSeq`, and the case cache. The
+starting trigger's label is used for the whole coalesced run.
 
 ## Seq-named SSR bundles are pruned, but their heap retention is intrinsic
 

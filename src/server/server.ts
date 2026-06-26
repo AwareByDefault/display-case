@@ -252,6 +252,82 @@ export function manifestRelevant(
   )
 }
 
+/** The independent surfaces a rebuild may reuse from the prior served state. */
+export interface RebuildPlan {
+  /** Re-run the (catalog-size-dependent) manifest subprocess. */
+  needManifest: boolean
+  /** Re-bundle the chrome (shell + primer). */
+  needShell: boolean
+}
+
+/**
+ * Decide which independent surfaces a change can have touched, so a rebuild can
+ * reuse the rest. No prior chrome graph (startup) or no specific changed paths ⇒
+ * rebuild everything, matching `staleCaseIds`' "empty changed ⇒ invalidate all"
+ * convention. Otherwise the manifest re-runs only for a manifest-relevant change
+ * (`manifestRelevant`), and the chrome rebuilds only when a changed path
+ * intersects the prior chrome graph (`prevShellInputs`) — a consumer's component
+ * edits never touch Display Case's own UI, so they reuse the chrome wholesale.
+ */
+export function planRebuild(
+  changed: readonly string[],
+  prevShellInputs: ReadonlySet<string> | null,
+  configPath: string,
+  primerSrc: string | null,
+): RebuildPlan {
+  if (!prevShellInputs || changed.length === 0) {
+    return { needManifest: true, needShell: true }
+  }
+  return {
+    needManifest: manifestRelevant(changed, configPath, primerSrc),
+    // Mirror `staleCaseIds`' direct membership test (no `resolve(p)`): the
+    // watcher's path strings already match the graph-recorder's by the same
+    // invariant case invalidation relies on. Don't normalize one side only.
+    needShell: changed.some((p) => prevShellInputs.has(p)),
+  }
+}
+
+/**
+ * Wrap an async `pass` so overlapping triggers can never run it concurrently. A
+ * rebuild is slow on a large catalog; a file change arriving *during* one must
+ * not start a second pass (they'd race on the served `state`, `ssrBuildSeq`, and
+ * the case cache). Instead a trigger received while a pass is in flight marks the
+ * run dirty, so the in-flight loop repeats `pass` exactly once more on completion
+ * — coalescing any number of mid-flight triggers into a single follow-up pass.
+ *
+ * The starting trigger's `arg` is used for every coalesced iteration of that run
+ * (a mid-flight trigger only sets the dirty flag); a throw is reported via
+ * `onError` and ends the run, leaving the runner idle so the next trigger starts
+ * fresh. The debounce that batches a burst *before* a pass starts stays with the
+ * caller — this only guards the *concurrent* case.
+ */
+export function createCoalescingRunner<A>(
+  pass: (arg: A) => Promise<void>,
+  onError: (err: unknown) => void,
+): (arg: A) => Promise<void> {
+  let inFlight = false
+  let dirty = false
+  return async function trigger(arg: A): Promise<void> {
+    if (inFlight) {
+      dirty = true
+      return
+    }
+    inFlight = true
+    try {
+      do {
+        dirty = false
+        await pass(arg)
+        // A trigger that landed mid-pass set `dirty` ⇒ loop once more so the
+        // result reflects every change, without ever running two passes at once.
+      } while (dirty)
+    } catch (err) {
+      onError(err)
+    } finally {
+      inFlight = false
+    }
+  }
+}
+
 /** Absolute path of the configured primer `.mdx`, or null if none/missing. */
 function primerFile(pkgDir: string, config: DisplayCaseConfig): string | null {
   if (!config.primer) return null
@@ -408,22 +484,15 @@ async function rebuild(
   const primerSrc = primerFile(pkgDir, config)
   const primerPath = primerSrc ? (config.primer as string) : null
 
-  // Decide which independent surfaces this change can have touched. No prior
-  // state or no specific changed paths ⇒ rebuild everything (matching
-  // `staleCaseIds`' own "empty changed ⇒ invalidate all" convention).
-  let needManifest: boolean
-  let needShell: boolean
-  if (!prev || changed.length === 0) {
-    needManifest = true
-    needShell = true
-  } else {
-    needManifest = manifestRelevant(changed, configPath, primerSrc)
-    // The chrome's graph is Display Case's own UI — a consumer's component edits
-    // never intersect it, so the chrome isn't rebuilt for them. Mirror
-    // `staleCaseIds`' direct membership test (watcher path strings match the
-    // graph-recorder's by the same invariant the case invalidation relies on).
-    needShell = changed.some((p) => prev.shellInputs.has(p))
-  }
+  // Decide which independent surfaces this change can have touched, reusing the
+  // rest from `prev` (see `planRebuild`). A Set is always truthy, so passing
+  // `prev?.shellInputs ?? null` preserves the "no prior state ⇒ rebuild all" arm.
+  const { needManifest, needShell } = planRebuild(
+    changed,
+    prev?.shellInputs ?? null,
+    configPath,
+    primerSrc,
+  )
 
   // Only a chrome build that includes the primer consumes a fresh SSR seq.
   const seq = needShell && primerPath ? ++ssrBuildSeq : 0
@@ -1303,62 +1372,47 @@ export async function startDisplayCase(
   // window so the rebuild invalidates only the components whose graph includes one.
   const pendingChanges = new Set<string>()
   let timer: ReturnType<typeof setTimeout> | null = null
-  // A rebuild is async and (on a large catalog) slow. The 150ms debounce only
-  // coalesces a burst that arrives *before* a rebuild starts; a change arriving
-  // *during* one must not kick off a second concurrent rebuild (they'd race on
-  // `state`, `ssrBuildSeq`, and the case cache). Instead, mark the in-flight pass
-  // dirty so it re-runs once on completion, draining `pendingChanges`.
-  let rebuildInFlight = false
-  let rebuildDirty = false
-  const runRebuild = async (label: string): Promise<void> => {
-    if (rebuildInFlight) {
-      rebuildDirty = true
-      return
-    }
-    rebuildInFlight = true
-    try {
-      do {
-        rebuildDirty = false
-        console.log(`↻ ${label}, rebuilding…`)
-        if (dev) {
-          vitrineCss = await readVitrineCss()
-          tokensCss = await readDesignTokens()
-        }
-        const changed = [...pendingChanges]
-        pendingChanges.clear()
-        // Reuse the surfaces this change can't have touched (the chrome and/or the
-        // manifest); only the affected case bundles are invalidated below.
-        current = await rebuild(pkgDir, config, configPath, {
-          changed,
-          prev: current,
-        })
-        browserOnly.clear()
-        // Invalidate only the components whose graph includes a changed file (and
-        // every failed entry, so a fix is retried) — not the whole cache — so an
-        // edit doesn't force every other component to rebuild on its next visit.
-        // No specific paths (a conservative fallback) drops everything.
-        for (const id of staleCaseIds(caseCache, changed)) caseCache.delete(id)
-        scanner?.invalidateAll()
-        // The module graph may have shifted (a new sibling import, or one
-        // dropped) — reconcile the dependency watchers against it.
-        await syncGraphWatchers()
-        if (reload) {
-          // Full-reload the tab when the chrome bundle changed; otherwise just
-          // refresh the rendered content (iframe + manifest), keeping nav state.
-          const nextHash = await shellBundleHash()
-          const kind = nextHash !== shellHash ? 'shell' : 'content'
-          shellHash = nextHash
-          triggerReload(kind)
-        }
-        // A change that landed mid-rebuild loops once more so the served state
-        // reflects every edit, without ever running two rebuilds at once.
-      } while (rebuildDirty)
-    } catch (err) {
-      console.error(err)
-    } finally {
-      rebuildInFlight = false
-    }
-  }
+  // A rebuild is async and (on a large catalog) slow. The 150ms debounce in
+  // `scheduleRebuild` only coalesces a burst that arrives *before* a rebuild
+  // starts; the *concurrent* case — a change arriving mid-rebuild — is handled by
+  // `createCoalescingRunner`, which loops the pass once more rather than starting
+  // a second rebuild that would race on `state`, `ssrBuildSeq`, and the case cache.
+  const runRebuild = createCoalescingRunner(
+    async (label: string) => {
+      console.log(`↻ ${label}, rebuilding…`)
+      if (dev) {
+        vitrineCss = await readVitrineCss()
+        tokensCss = await readDesignTokens()
+      }
+      const changed = [...pendingChanges]
+      pendingChanges.clear()
+      // Reuse the surfaces this change can't have touched (the chrome and/or the
+      // manifest); only the affected case bundles are invalidated below.
+      current = await rebuild(pkgDir, config, configPath, {
+        changed,
+        prev: current,
+      })
+      browserOnly.clear()
+      // Invalidate only the components whose graph includes a changed file (and
+      // every failed entry, so a fix is retried) — not the whole cache — so an
+      // edit doesn't force every other component to rebuild on its next visit.
+      // No specific paths (a conservative fallback) drops everything.
+      for (const id of staleCaseIds(caseCache, changed)) caseCache.delete(id)
+      scanner?.invalidateAll()
+      // The module graph may have shifted (a new sibling import, or one
+      // dropped) — reconcile the dependency watchers against it.
+      await syncGraphWatchers()
+      if (reload) {
+        // Full-reload the tab when the chrome bundle changed; otherwise just
+        // refresh the rendered content (iframe + manifest), keeping nav state.
+        const nextHash = await shellBundleHash()
+        const kind = nextHash !== shellHash ? 'shell' : 'content'
+        shellHash = nextHash
+        triggerReload(kind)
+      }
+    },
+    (err) => console.error(err),
+  )
   const scheduleRebuild = (label: string, paths: string[] = []) => {
     for (const p of paths) pendingChanges.add(p)
     if (timer) clearTimeout(timer)
