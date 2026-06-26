@@ -84,7 +84,10 @@ async function mapPool<T>(
       while (true) {
         const i = next++
         if (i >= items.length) return
-        await worker(items[i])
+        // i < items.length was just checked, so the item is always present.
+        const item = items[i]
+        if (item === undefined) continue
+        await worker(item)
       }
     },
   )
@@ -127,7 +130,7 @@ export function a11yDetailLines(v: A11yViolation): string[] {
         : ''
       return `      ↳ ${where}  ${c.foreground} on ${c.background} = ${c.ratio}:1 (need ${c.required}:1)${font}`
     }
-    const why = (d.failureSummary ?? '').split('\n')[0].trim()
+    const why = ((d.failureSummary ?? '').split('\n')[0] ?? '').trim()
     return `      ↳ ${where}${why ? `  ${why}` : ''}`
   })
   if (details.length > A11Y_DETAIL_CAP) {
@@ -378,7 +381,8 @@ export async function runChecks(
       sets.push(await changedScope(pkgDir, opts.changedRef, comps))
     }
     // Both flags present ⇒ a component must satisfy both (intersection).
-    scope = sets[0]
+    // The enclosing `if` guarantees at least one set was pushed; the default is inert.
+    scope = sets[0] ?? new Set<string>()
     for (const s of sets.slice(1)) {
       const next = new Set<string>()
       for (const id of scope) if (s.has(id)) next.add(id)

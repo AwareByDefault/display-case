@@ -17,8 +17,8 @@ export default defineCases(
       },
       render: (t) => (
         <Button
-          variant={t.variant as 'ghost' | 'primary' | 'accent' | 'subtle'}
-          size={t.size as 'sm' | 'md' | 'lg'}
+          variant={t.variant ?? 'ghost'}
+          size={t.size ?? 'md'}
           aria-pressed={t.pressed}
           disabled={t.disabled}>
           {t.label}

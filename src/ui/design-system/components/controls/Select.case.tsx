@@ -20,7 +20,7 @@ export default defineCases(
           aria-label="Field type"
           options={['text', 'number', 'boolean']}
           defaultValue={t.value}
-          size={t.size as 'sm' | 'md'}
+          size={t.size ?? 'md'}
           disabled={t.disabled}
         />
       ),

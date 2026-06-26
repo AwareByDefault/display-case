@@ -84,7 +84,7 @@ suite('publish: containerized deploy path', () => {
     containerId = run.stdout.toString().trim()
 
     const portOut = await $`docker port ${containerId} 3000`.nothrow().quiet()
-    const mapped = portOut.stdout.toString().trim().split('\n')[0] // 127.0.0.1:49xxx
+    const mapped = portOut.stdout.toString().trim().split('\n')[0]! // 127.0.0.1:49xxx
     const hostPort = mapped.split(':').pop()
     expect(hostPort).toBeTruthy()
     const baseUrl = `http://127.0.0.1:${hostPort}`

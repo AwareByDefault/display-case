@@ -41,9 +41,9 @@ describe('checkTokens', () => {
     })
     const { violations } = await checkTokens(dir)
     expect(violations).toHaveLength(1)
-    expect(violations[0].token).toBe('--mystery')
-    expect(violations[0].hadFallback).toBe(false)
-    expect(violations[0].file.endsWith('button.css')).toBe(true)
+    expect(violations[0]!.token).toBe('--mystery')
+    expect(violations[0]!.hadFallback).toBe(false)
+    expect(violations[0]!.file.endsWith('button.css')).toBe(true)
   })
 
   test('reports the 1-based line and column of the token', async () => {
@@ -54,9 +54,9 @@ describe('checkTokens', () => {
     })
     const { violations } = await checkTokens(dir)
     expect(violations).toHaveLength(1)
-    expect(violations[0].line).toBe(2)
+    expect(violations[0]!.line).toBe(2)
     // `b{fill:` is 7 chars, `var(` opens at col 8, `--missing` begins at col 12.
-    expect(violations[0].column).toBe(12)
+    expect(violations[0]!.column).toBe(12)
   })
 
   test('a fallback value does not excuse an undefined token', async () => {
@@ -67,8 +67,8 @@ describe('checkTokens', () => {
     })
     const { violations } = await checkTokens(dir)
     expect(violations).toHaveLength(1)
-    expect(violations[0].token).toBe('--ghost')
-    expect(violations[0].hadFallback).toBe(true)
+    expect(violations[0]!.token).toBe('--ghost')
+    expect(violations[0]!.hadFallback).toBe(true)
   })
 
   test('an allow-listed token name is treated as defined', async () => {

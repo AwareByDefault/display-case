@@ -61,13 +61,14 @@ export default defineCases(
           '3': three,
           '5': five,
         }
-        const options = byCount[t.count] ?? five
+        const options = byCount[t.count ?? '5'] ?? five
         return (
           <Demo
             key={`pg-${t.count}`}
             label="Size"
             options={options}
-            initial={options[0].id}
+            // Each option set is a fixed, non-empty array, so slot 0 is present.
+            initial={options[0]!.id}
           />
         )
       },

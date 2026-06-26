@@ -72,7 +72,8 @@ function collectDefs(file: ScannedFile, into: Set<string>): void {
   const re = file.isCss ? CSS_DEF_RE : JS_DEF_RE
   re.lastIndex = 0
   for (let m = re.exec(file.clean); m; m = re.exec(file.clean)) {
-    into.add(m[1])
+    // Both def regexes capture the token name in group 1, always present; '' is inert.
+    into.add(m[1] ?? '')
   }
 }
 
@@ -85,7 +86,8 @@ function collectRefs(
   cleanLines.forEach((line, idx) => {
     REF_RE.lastIndex = 0
     for (let m = REF_RE.exec(line); m; m = REF_RE.exec(line)) {
-      const token = m[1]
+      // REF_RE captures the token name in group 1, always present on a match.
+      const token = m[1] ?? ''
       if (defined.has(token)) continue
       // Escape may sit on the reference line or the line directly above it.
       const raw = file.rawLines[idx] ?? ''
@@ -94,7 +96,7 @@ function collectRefs(
       out.push({
         file: file.path,
         line: idx + 1,
-        column: m.index + m[0].indexOf(token) + 1,
+        column: m.index + (m[0] ?? '').indexOf(token) + 1,
         token,
         hadFallback: m[2] === ',',
       })

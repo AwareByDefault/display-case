@@ -21,7 +21,7 @@ export default defineCases(
           prefix={t.prefix || undefined}
           suffix={t.suffix || undefined}
           type={t.type}
-          size={t.size as 'sm' | 'md'}
+          size={t.size ?? 'md'}
           disabled={t.disabled}
           wrapperStyle={{ width: '14rem' }}
         />

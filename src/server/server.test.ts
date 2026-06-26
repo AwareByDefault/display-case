@@ -4,8 +4,11 @@ import { join, resolve } from 'node:path'
 import { makeTempDir, writeFiles } from '../testing/test-helpers'
 import {
   classifyBuildResult,
+  createCoalescingRunner,
   getManifest,
   type Invalidatable,
+  manifestRelevant,
+  planRebuild,
   shellErrorHtml,
   slugify,
   staleCaseIds,
@@ -64,7 +67,7 @@ describe('getManifest', () => {
     // atom sorts before flow
     expect(m.components.map((c) => c.name)).toEqual(['Button', 'Sign In'])
 
-    const button = m.components[0]
+    const button = m.components[0]!
     expect(button.id).toBe('button')
     expect(button.level).toBe('atom')
     expect(button.isFlow).toBe(false)
@@ -80,12 +83,12 @@ describe('getManifest', () => {
     const def = button.cases.find((c) => c.id === 'default')
     expect(def?.tweaks).toBeNull()
 
-    const flow = m.components[1]
+    const flow = m.components[1]!
     expect(flow.isFlow).toBe(true)
     expect(flow.placardDoc).toBeNull()
-    expect(flow.cases[0].transitions).toEqual(['check-email'])
+    expect(flow.cases[0]!.transitions).toEqual(['check-email'])
     // A flow is a surface → its cases route under the /e/ (Exhibits) prefix.
-    expect(flow.cases[0].browseUrl.startsWith('/e/sign-in/')).toBe(true)
+    expect(flow.cases[0]!.browseUrl.startsWith('/e/sign-in/')).toBe(true)
   })
 
   test('offers the primer mode when a configured .mdx exists', async () => {
@@ -154,8 +157,8 @@ describe('per-component on-demand bundling (integration)', () => {
 
       // A case builds on first request to its address and references that one
       // component's bundle — which is then served.
-      const comp = manifest.components[0]
-      const cs = comp.cases[0]
+      const comp = manifest.components[0]!
+      const cs = comp.cases[0]!
       const doc = await (await fetch(`${base}${cs.renderUrl}`)).text()
       expect(doc).toContain(`/dist/render-case-${comp.id}.js`)
       expect(doc).toContain('data-ssr="1"')
@@ -168,9 +171,9 @@ describe('per-component on-demand bundling (integration)', () => {
       expect((await fetch(`${base}/render/__no-such-component__/x`)).ok).toBe(
         true,
       )
-      const other = manifest.components[1]
+      const other = manifest.components[1]!
       const otherDoc = await (
-        await fetch(`${base}${other.cases[0].renderUrl}`)
+        await fetch(`${base}${other.cases[0]!.renderUrl}`)
       ).text()
       expect(otherDoc).toContain(`/dist/render-case-${other.id}.js`)
     } finally {
@@ -305,5 +308,213 @@ describe('staleCaseIds (graph-aware invalidation)', () => {
 
   test('no changed paths is a conservative fallback — invalidate everything', () => {
     expect(staleCaseIds(cache(), [])).toEqual(new Set(['a', 'b']))
+  })
+})
+
+// Whether a change can alter the manifest (catalog shape) — and so needs the
+// catalog-size-dependent manifest subprocess re-run — vs. a component
+// implementation edit that reuses the prior manifest. (Drives the per-rebuild
+// manifest gating; the watcher that feeds it real paths isn't deterministic
+// enough to assert on under `bun test`.)
+describe('manifestRelevant (manifest-rebuild gating)', () => {
+  const cfg = '/p/display-case.config.ts'
+  const primer = '/p/src/primer.mdx'
+
+  test('a .case file change is manifest-relevant', () => {
+    expect(manifestRelevant(['/p/src/Button.case.tsx'], cfg, primer)).toBe(true)
+  })
+
+  test('a .placard.md change is manifest-relevant', () => {
+    expect(manifestRelevant(['/p/src/Button.placard.md'], cfg, primer)).toBe(
+      true,
+    )
+  })
+
+  test('the config file is manifest-relevant', () => {
+    expect(manifestRelevant([cfg], cfg, primer)).toBe(true)
+  })
+
+  test('the primer file is manifest-relevant (its presence drives a mode)', () => {
+    expect(manifestRelevant([primer], cfg, primer)).toBe(true)
+  })
+
+  test('a plain component implementation edit is NOT manifest-relevant', () => {
+    expect(manifestRelevant(['/p/src/Button.tsx'], cfg, primer)).toBe(false)
+    expect(manifestRelevant(['/p/src/util.ts'], cfg, null)).toBe(false)
+  })
+
+  test('with no primer, only case/placard/config matter', () => {
+    expect(manifestRelevant(['/p/src/primer.mdx'], cfg, null)).toBe(false)
+    expect(manifestRelevant(['/p/src/A.case.tsx'], cfg, null)).toBe(true)
+  })
+})
+
+// Which independent surfaces a rebuild reuses from the prior state: the chrome
+// (rebuilt only when a changed path is in its own graph) and the manifest
+// (re-run only for a manifest-relevant change). Drives `rebuild`'s gating.
+describe('planRebuild (surface-reuse gating)', () => {
+  const cfg = '/p/display-case.config.ts'
+  const primer = '/p/src/primer.mdx'
+  // Display Case's own UI graph — a consumer's component edits never touch it.
+  const shell = new Set(['/p/src/ui/Button.tsx', '/p/src/ui/shell.tsx'])
+
+  test('no prior chrome graph ⇒ full rebuild (startup)', () => {
+    expect(planRebuild(['/p/src/x.tsx'], null, cfg, primer)).toEqual({
+      needManifest: true,
+      needShell: true,
+    })
+  })
+
+  test('an empty changed set ⇒ full rebuild (conservative fallback)', () => {
+    expect(planRebuild([], shell, cfg, primer)).toEqual({
+      needManifest: true,
+      needShell: true,
+    })
+  })
+
+  test('a consumer implementation edit reuses both chrome and manifest', () => {
+    // Not in the chrome graph, not manifest-relevant ⇒ only its case bundle is
+    // invalidated (elsewhere); the chrome and manifest are reused wholesale.
+    expect(planRebuild(['/p/src/Widget.tsx'], shell, cfg, primer)).toEqual({
+      needManifest: false,
+      needShell: false,
+    })
+  })
+
+  test('a .case edit re-runs the manifest but reuses the chrome', () => {
+    expect(planRebuild(['/p/src/Widget.case.tsx'], shell, cfg, primer)).toEqual(
+      {
+        needManifest: true,
+        needShell: false,
+      },
+    )
+  })
+
+  test('a chrome-graph edit rebuilds the chrome but reuses the manifest', () => {
+    expect(planRebuild(['/p/src/ui/Button.tsx'], shell, cfg, primer)).toEqual({
+      needManifest: false,
+      needShell: true,
+    })
+  })
+
+  test('a chrome file that is also a case rebuilds both', () => {
+    const sh = new Set(['/p/src/ui/Thing.case.tsx'])
+    expect(planRebuild(['/p/src/ui/Thing.case.tsx'], sh, cfg, primer)).toEqual({
+      needManifest: true,
+      needShell: true,
+    })
+  })
+})
+
+// A deferred whose `promise` parks a coalescer pass until the test calls
+// `resolve`, so concurrency is driven deterministically (no timers/sleeps).
+function deferred(): { promise: Promise<void>; resolve: () => void } {
+  let resolve!: () => void
+  const promise = new Promise<void>((r) => {
+    resolve = r
+  })
+  return { promise, resolve }
+}
+// Drain the microtask queue: a 0ms macrotask runs only after every currently
+// queued microtask, so the coalescer's await-chain has fully advanced.
+const flush = () => new Promise<void>((r) => setTimeout(r, 0))
+
+// The concurrent-rebuild guard: overlapping triggers must never run the pass
+// twice at once; a trigger arriving mid-pass coalesces into exactly one
+// follow-up pass. (The watcher/debounce that feeds it isn't deterministic enough
+// to assert on under `bun test`, so the state machine is tested in isolation.)
+describe('createCoalescingRunner (concurrent-rebuild coalescing)', () => {
+  test('runs the pass once per trigger when calls do not overlap', async () => {
+    let runs = 0
+    const trigger = createCoalescingRunner(
+      async () => {
+        runs++
+      },
+      () => {},
+    )
+    await trigger(undefined)
+    await trigger(undefined)
+    expect(runs).toBe(2)
+  })
+
+  test('coalesces mid-pass triggers into one follow-up, never overlapping', async () => {
+    const gates: Array<ReturnType<typeof deferred>> = []
+    let active = 0
+    let maxActive = 0
+    let runs = 0
+    const trigger = createCoalescingRunner(
+      async () => {
+        active++
+        maxActive = Math.max(maxActive, active)
+        runs++
+        const gate = deferred()
+        gates.push(gate)
+        await gate.promise
+        active--
+      },
+      () => {},
+    )
+
+    const first = trigger(undefined) // starts pass 1, parks on gates[0]
+    expect(runs).toBe(1)
+
+    // Three triggers while pass 1 is in flight — each returns at once (just
+    // flags the run dirty), starting no second concurrent pass.
+    await trigger(undefined)
+    await trigger(undefined)
+    await trigger(undefined)
+    expect(runs).toBe(1)
+
+    gates[0]?.resolve() // finish pass 1 ⇒ dirty ⇒ exactly one follow-up pass
+    await flush()
+    expect(runs).toBe(2)
+
+    gates[1]?.resolve() // finish the follow-up; nothing flagged it dirty again
+    await first
+    expect(runs).toBe(2)
+    expect(maxActive).toBe(1) // the pass never ran concurrently with itself
+  })
+
+  test('uses the starting trigger arg for every coalesced pass', async () => {
+    const seen: string[] = []
+    const gates: Array<ReturnType<typeof deferred>> = []
+    const trigger = createCoalescingRunner(
+      async (label: string) => {
+        seen.push(label)
+        const gate = deferred()
+        gates.push(gate)
+        await gate.promise
+      },
+      () => {},
+    )
+
+    const first = trigger('first') // starts the run, parks
+    await trigger('second') // mid-flight ⇒ only flags dirty, arg dropped
+    gates[0]?.resolve()
+    await flush()
+    gates[1]?.resolve()
+    await first
+    expect(seen).toEqual(['first', 'first'])
+  })
+
+  test('reports a thrown pass via onError and stays usable', async () => {
+    let runs = 0
+    const errors: unknown[] = []
+    const trigger = createCoalescingRunner(
+      async () => {
+        runs++
+        if (runs === 1) throw new Error('boom')
+      },
+      (err) => errors.push(err),
+    )
+
+    await trigger(undefined)
+    expect(runs).toBe(1)
+    expect(errors).toHaveLength(1)
+
+    // The throw reset `inFlight` in `finally`, so the runner still accepts work.
+    await trigger(undefined)
+    expect(runs).toBe(2)
+    expect(errors).toHaveLength(1)
   })
 })

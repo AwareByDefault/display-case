@@ -146,8 +146,8 @@ describe('checkStructure cross-package resolution', () => {
     })
     const f = await findings(app, 'no-downward-dependency')
     expect(f).toHaveLength(1)
-    expect(f[0].severity).toBe('error')
-    expect(f[0].message).toContain('organism')
+    expect(f[0]!.severity).toBe('error')
+    expect(f[0]!.message).toContain('organism')
   })
 
   test('an unfollowable workspace-showcase import warns, not errors', async () => {
@@ -159,7 +159,7 @@ describe('checkStructure cross-package resolution', () => {
     })
     const f = await findings(app, 'composes-lower-level')
     expect(f).toHaveLength(1)
-    expect(f[0].severity).toBe('warn')
-    expect(f[0].message).toContain('could not be resolved')
+    expect(f[0]!.severity).toBe('warn')
+    expect(f[0]!.message).toContain('could not be resolved')
   })
 })

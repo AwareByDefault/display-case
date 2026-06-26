@@ -353,7 +353,7 @@ export function createA11yScanner(opts: A11yScannerOptions): A11yScanner {
       }
       inFlight.add(key)
       queue.push({ componentId, caseId, theme, key })
-      void pump()
+      void pump().catch(() => {})
       return { status: 'pending' }
     },
     async populateAtStartup(variants, mode) {
@@ -393,7 +393,7 @@ export function createA11yScanner(opts: A11yScannerOptions): A11yScanner {
         inFlight.add(job.key)
         queue.push(job)
       }
-      void pump()
+      void pump().catch(() => {})
     },
     invalidateAll() {
       // In-flight jobs finish; nothing else to drop — the on-disk hashes decide

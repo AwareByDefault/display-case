@@ -1267,6 +1267,7 @@ export function useShell(seed: ShellSeed): ShellViewModel | { manifest: null } {
     fetch(`/doc/${component.id}`)
       .then((r) => (r.ok ? r.text() : null))
       .then(setDocText)
+      .catch(() => setDocText(null)) // a failed doc fetch clears the panel, not an unhandled rejection
   }, [component?.id])
 
   // Request the viewed variant's a11y result whenever the selection or theme

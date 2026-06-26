@@ -186,9 +186,10 @@ export function PrimerRoot({
     // At (or near) the bottom the last section can't scroll to the top, so the
     // "topmost past the line" rule would never reach it — pin it active there.
     const atBottom = root.scrollTop + root.clientHeight >= root.scrollHeight - 4
-    let active = els[0].id
+    // The `!els.length` guard above ensures els is non-empty, so first/last exist.
+    let active = els[0]?.id ?? ''
     if (atBottom) {
-      active = els[els.length - 1].id
+      active = els[els.length - 1]?.id ?? active
     } else {
       const top = root.getBoundingClientRect().top
       for (const el of els) {

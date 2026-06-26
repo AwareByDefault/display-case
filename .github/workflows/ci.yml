@@ -87,6 +87,21 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run check
 
+  # Dependency vulnerability gate. Blocks on high/critical advisories only
+  # (`--audit-level=high`) so a moderate/low advisory in a transitive dep can't
+  # wedge unrelated PRs; Dependabot (.github/dependabot.yml) handles the routine
+  # bumps. Uses the same Bun setup as the other jobs.
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      - run: bun audit --audit-level=high
+
   test:
     name: Unit tests
     runs-on: ubuntu-latest

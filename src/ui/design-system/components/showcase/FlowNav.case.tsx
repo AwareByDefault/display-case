@@ -18,7 +18,11 @@ export default defineCases(
         ),
       },
       render: (t) => (
-        <FlowNav steps={steps} activeId={t.active} onSelect={() => {}} />
+        <FlowNav
+          steps={steps}
+          activeId={t.active ?? 'check-email'}
+          onSelect={() => {}}
+        />
       ),
     },
     Start: () => (

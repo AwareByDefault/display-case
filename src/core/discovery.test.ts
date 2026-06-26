@@ -96,8 +96,8 @@ describe('loadModules', () => {
     const { modules, errors } = await loadModules([file])
     expect(errors).toEqual([])
     expect(modules).toHaveLength(1)
-    expect(modules[0].module.component).toBe('Button')
-    expect(modules[0].file).toBe(file)
+    expect(modules[0]!.module.component).toBe('Button')
+    expect(modules[0]!.file).toBe(file)
   })
 
   test('records a file with no default export as an error', async () => {
@@ -106,8 +106,8 @@ describe('loadModules', () => {
     const { modules, errors } = await loadModules([file])
     expect(modules).toEqual([])
     expect(errors).toHaveLength(1)
-    expect(errors[0].file).toBe(file)
-    expect(errors[0].error).toMatch(/no valid default export/)
+    expect(errors[0]!.file).toBe(file)
+    expect(errors[0]!.error).toMatch(/no valid default export/)
   })
 
   test('records a default export whose component is not a string', async () => {
@@ -130,7 +130,7 @@ describe('loadModules', () => {
     ])
     expect(modules.map((m) => m.module.component)).toEqual(['Good'])
     expect(errors).toHaveLength(1)
-    expect(errors[0].error).toMatch(/boom/)
+    expect(errors[0]!.error).toMatch(/boom/)
   })
 })
 

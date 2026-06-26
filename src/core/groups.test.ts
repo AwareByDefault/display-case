@@ -163,7 +163,7 @@ describe('buildGroupTree', () => {
       'About',
     ])
     const app = tree.find((g) => g.label === 'App')
-    expect(app?.children[0].children[0].path).toEqual([
+    expect(app!.children[0]!.children[0]!.path).toEqual([
       'App',
       'Settings',
       'Billing',

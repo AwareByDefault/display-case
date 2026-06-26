@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs'
+import { readdir, rm } from 'node:fs/promises'
 import { createServer } from 'node:net'
-import { join, relative, resolve } from 'node:path'
+import { join, relative, resolve, sep } from 'node:path'
 import {
   type A11yScanner,
   type A11yScanStatus,
@@ -22,7 +23,7 @@ import type { PrimerHtmlResult } from '../render/ssr-primer'
 import type { CaseRenderer } from '../render/ssr-render'
 import { renderShellToHtml } from '../render/ssr-shell'
 import type { Theme } from '../ui/shell-core'
-import { spawnBuildWorker } from './build-runner'
+import { killActiveBuildWorkers, spawnBuildWorker } from './build-runner'
 
 // Re-exported so existing importers (and tests) resolve these from `./server`
 // unchanged after the spawn/classify primitives moved to `build-runner.ts`.
@@ -122,6 +123,11 @@ interface BuiltState {
    *  actual module graph, transitive workspace-sibling source included. The dev
    *  watcher follows this so editing a source-resolved dependency rebuilds. */
   inputs: Set<string>
+  /** The chrome (shell + primer) bundle's own module graph, kept apart from the
+   *  per-case inputs that accumulate into `inputs`. A rebuild whose changed files
+   *  don't intersect this set reuses the prior chrome instead of rebuilding it —
+   *  a consumer's component edits never touch Display Case's own UI graph. */
+  shellInputs: Set<string>
   /** Set when the chrome (shell) bundle failed or crashed the bundler. The server
    *  still binds and serves a diagnostic instead of the browse UI, rather than the
    *  tool terminating with a bare native panic. */
@@ -137,6 +143,189 @@ let ssrBuildSeq = 0
 
 function relPath(p: string): string {
   return relative(REPO_ROOT, p)
+}
+
+/**
+ * Delete every file in `dir` matching `re` whose captured seq group is not
+ * `keepSeq`. The seq-named SSR bundles + codegen entries (see `codegenCaseSsrEntry`
+ * and the `ssr-*-<seq>` build naming) otherwise accumulate for the life of the
+ * server — every rebuild writes a new one and the old ones are never reclaimed,
+ * leaking both disk and (via the parent's resolved-path `import()` cache) heap.
+ * Pruning the superseded seqs after each build bounds the disk growth. A missing
+ * dir or a failed unlink is ignored — pruning is best-effort cache hygiene.
+ */
+async function pruneSeqIn(
+  dir: string,
+  re: RegExp,
+  keepSeq: number,
+): Promise<void> {
+  let names: string[]
+  try {
+    names = await readdir(dir)
+  } catch {
+    return // dir not created yet — nothing to prune
+  }
+  await Promise.all(
+    names.map(async (name) => {
+      const m = re.exec(name)
+      if (m && Number(m[1]) !== keepSeq) {
+        await rm(join(dir, name), { force: true }).catch(() => {})
+      }
+    }),
+  )
+}
+
+/** Escape a catalog slug for safe inclusion in a `RegExp` (slugs are normally
+ *  `[a-z0-9-]`, but never assume — a stray metachar must not widen the match). */
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+/** Drop a component's superseded SSR bundle (`ssr/`) and codegen entry (cache
+ *  root) seqs, keeping only `keepSeq`. The slug is anchored + escaped so e.g.
+ *  pruning `button` never matches `button-group`. */
+async function pruneCaseSsrSeq(
+  pkgDir: string,
+  componentId: string,
+  keepSeq: number,
+): Promise<void> {
+  const dir = cacheDir(pkgDir)
+  const esc = escapeRegExp(componentId)
+  await Promise.all([
+    pruneSeqIn(
+      join(dir, 'ssr'),
+      new RegExp(`^ssr-case-${esc}-(\\d+)\\.js(\\.map)?$`),
+      keepSeq,
+    ),
+    pruneSeqIn(dir, new RegExp(`^ssr-case-${esc}-(\\d+)\\.tsx$`), keepSeq),
+  ])
+}
+
+/** Drop superseded primer SSR bundle seqs, keeping only `keepSeq`. */
+async function prunePrimerSsrSeq(
+  pkgDir: string,
+  keepSeq: number,
+): Promise<void> {
+  await pruneSeqIn(
+    join(cacheDir(pkgDir), 'ssr'),
+    /^ssr-primer-entry-(\d+)\.js(\.map)?$/,
+    keepSeq,
+  )
+}
+
+/**
+ * Clear the on-disk SSR cache before the first build of a session. `ssrBuildSeq`
+ * resets to 0 on restart, so a prior session's higher-seq bundles/entries would
+ * otherwise linger forever (nothing imports them, and the per-build prune only
+ * touches the current component's seqs). Nothing has been imported yet, so wiping
+ * is safe; the worker recreates `ssr/` on its next build.
+ */
+async function sweepStaleSsr(pkgDir: string): Promise<void> {
+  const dir = cacheDir(pkgDir)
+  await rm(join(dir, 'ssr'), { recursive: true, force: true }).catch(() => {})
+  // The codegen entries live at the cache root (not under ssr/); sweep those too.
+  await pruneSeqIn(dir, /^ssr-case-.+-(\d+)\.tsx$/, -1).catch(() => {})
+}
+
+/**
+ * Whether a change to one of `changed` can alter the **manifest** (the catalog's
+ * shape: which components/cases exist, their names/levels/tweak schemas, the
+ * present modes) — as opposed to a component *implementation* edit, which changes
+ * only that component's rendered bundle and leaves the manifest identical. Only a
+ * manifest-relevant change needs the (catalog-size-dependent) manifest subprocess
+ * re-run; an implementation edit reuses the prior manifest and just rebuilds the
+ * affected case bundle on its next request.
+ */
+export function manifestRelevant(
+  changed: readonly string[],
+  configPath: string,
+  primerAbs: string | null,
+): boolean {
+  const config = resolve(configPath)
+  const primer = primerAbs ? resolve(primerAbs) : null
+  return changed.some(
+    (p) =>
+      /\.case\.tsx?$/.test(p) ||
+      /\.placard\.md$/.test(p) ||
+      resolve(p) === config ||
+      (primer !== null && resolve(p) === primer),
+  )
+}
+
+/** The independent surfaces a rebuild may reuse from the prior served state. */
+export interface RebuildPlan {
+  /** Re-run the (catalog-size-dependent) manifest subprocess. */
+  needManifest: boolean
+  /** Re-bundle the chrome (shell + primer). */
+  needShell: boolean
+}
+
+/**
+ * Decide which independent surfaces a change can have touched, so a rebuild can
+ * reuse the rest. No prior chrome graph (startup) or no specific changed paths ⇒
+ * rebuild everything, matching `staleCaseIds`' "empty changed ⇒ invalidate all"
+ * convention. Otherwise the manifest re-runs only for a manifest-relevant change
+ * (`manifestRelevant`), and the chrome rebuilds only when a changed path
+ * intersects the prior chrome graph (`prevShellInputs`) — a consumer's component
+ * edits never touch Display Case's own UI, so they reuse the chrome wholesale.
+ */
+export function planRebuild(
+  changed: readonly string[],
+  prevShellInputs: ReadonlySet<string> | null,
+  configPath: string,
+  primerSrc: string | null,
+): RebuildPlan {
+  if (!prevShellInputs || changed.length === 0) {
+    return { needManifest: true, needShell: true }
+  }
+  return {
+    needManifest: manifestRelevant(changed, configPath, primerSrc),
+    // Mirror `staleCaseIds`' direct membership test (no `resolve(p)`): the
+    // watcher's path strings already match the graph-recorder's by the same
+    // invariant case invalidation relies on. Don't normalize one side only.
+    needShell: changed.some((p) => prevShellInputs.has(p)),
+  }
+}
+
+/**
+ * Wrap an async `pass` so overlapping triggers can never run it concurrently. A
+ * rebuild is slow on a large catalog; a file change arriving *during* one must
+ * not start a second pass (they'd race on the served `state`, `ssrBuildSeq`, and
+ * the case cache). Instead a trigger received while a pass is in flight marks the
+ * run dirty, so the in-flight loop repeats `pass` exactly once more on completion
+ * — coalescing any number of mid-flight triggers into a single follow-up pass.
+ *
+ * The starting trigger's `arg` is used for every coalesced iteration of that run
+ * (a mid-flight trigger only sets the dirty flag); a throw is reported via
+ * `onError` and ends the run, leaving the runner idle so the next trigger starts
+ * fresh. The debounce that batches a burst *before* a pass starts stays with the
+ * caller — this only guards the *concurrent* case.
+ */
+export function createCoalescingRunner<A>(
+  pass: (arg: A) => Promise<void>,
+  onError: (err: unknown) => void,
+): (arg: A) => Promise<void> {
+  let inFlight = false
+  let dirty = false
+  return async function trigger(arg: A): Promise<void> {
+    if (inFlight) {
+      dirty = true
+      return
+    }
+    inFlight = true
+    try {
+      do {
+        dirty = false
+        await pass(arg)
+        // A trigger that landed mid-pass set `dirty` ⇒ loop once more so the
+        // result reflects every change, without ever running two passes at once.
+      } while (dirty)
+    } catch (err) {
+      onError(err)
+    } finally {
+      inFlight = false
+    }
+  }
 }
 
 /** Absolute path of the configured primer `.mdx`, or null if none/missing. */
@@ -264,65 +453,122 @@ async function loadManifestFresh(pkgDir: string): Promise<Manifest> {
   return JSON.parse(out) as Manifest
 }
 
-/** Discover, codegen, bundle, and assemble the served state. */
+/** Options that let a rebuild reuse the surfaces a given change can't have
+ *  touched. Absent (startup, or a conservative fallback) ⇒ a full rebuild. */
+interface RebuildOpts {
+  /** Absolute paths changed since the last rebuild (empty ⇒ full rebuild). */
+  changed?: string[]
+  /** The previously-served state, reused for unaffected surfaces. */
+  prev?: BuiltState
+}
+
+/**
+ * Discover, codegen, bundle, and assemble the served state — rebuilding only the
+ * surfaces a change can have touched. The chrome (shell) and the manifest are
+ * independent and gated separately: a component *implementation* edit reuses both
+ * (only its case bundle is invalidated, on demand); a `.case`/`.placard`/config
+ * change re-runs the manifest subprocess; a change inside Display Case's own UI
+ * graph rebuilds the chrome. The needed steps — plus the consumer global-CSS read
+ * — run concurrently (their cost is the max of the steps, not the sum). Bundling
+ * still happens only in worker children (the crash-containment precondition).
+ */
 async function rebuild(
   pkgDir: string,
   config: DisplayCaseConfig,
   configPath: string,
+  opts: RebuildOpts = {},
 ): Promise<BuiltState> {
-  // Collect the real module graph the shell + primer build reads (reported by the
-  // worker) so the dev watcher can follow source-resolved workspace deps. The
-  // per-component case bundles are built on demand (see `ensureCase`); their
-  // inputs are appended to this set as each component is first served.
-  const inputs = new Set<string>()
+  const changed = opts.changed ?? []
+  const prev = opts.prev
   const ssrOutDir = join(cacheDir(pkgDir), 'ssr')
-
-  // Build the browse chrome (+ optional primer) in the worker child — NOT here.
-  // The chrome carries no case modules, so its graph is small and catalog-size-
-  // independent; running it in a short-lived child is what keeps Bun's bundler
-  // heap out of this long-lived process entirely (the precondition for the crash).
   const primerSrc = primerFile(pkgDir, config)
   const primerPath = primerSrc ? (config.primer as string) : null
-  const seq = ++ssrBuildSeq
-  const result = await trace('shell build (worker)', () =>
-    spawnBuild(['shell', pkgDir, configPath, primerPath ?? '', String(seq)]),
-  )
-  if (TRACE) console.log(`  ⏱ shell graph: ${result.inputs.length} module(s)`)
 
-  let renderPrimer: (() => PrimerHtmlResult) | null = null
+  // Decide which independent surfaces this change can have touched, reusing the
+  // rest from `prev` (see `planRebuild`). A Set is always truthy, so passing
+  // `prev?.shellInputs ?? null` preserves the "no prior state ⇒ rebuild all" arm.
+  const { needManifest, needShell } = planRebuild(
+    changed,
+    prev?.shellInputs ?? null,
+    configPath,
+    primerSrc,
+  )
+
+  // Only a chrome build that includes the primer consumes a fresh SSR seq.
+  const seq = needShell && primerPath ? ++ssrBuildSeq : 0
+  const [shellOutcome, manifest, globalCss] = await Promise.all([
+    needShell
+      ? trace('shell build (worker)', () =>
+          spawnBuild([
+            'shell',
+            pkgDir,
+            configPath,
+            primerPath ?? '',
+            String(seq),
+          ]),
+        )
+      : Promise.resolve(null),
+    needManifest
+      ? trace('manifest (subprocess)', () => loadManifestFresh(pkgDir))
+      : // Not manifest-relevant ⇒ prev is present (needManifest is true whenever
+        // prev is absent), so reuse the prior catalog unchanged.
+        Promise.resolve((prev as BuiltState).manifest),
+    readGlobalCss(pkgDir, config),
+  ])
+
+  let shellInputs: Set<string>
+  let renderPrimer: (() => PrimerHtmlResult) | null
   let shellError: string | undefined
-  if (!result.ok) {
+  if (!needShell) {
+    // Reuse the prior chrome wholesale — its on-disk bundle is still current.
+    const p = prev as BuiltState
+    shellInputs = p.shellInputs
+    renderPrimer = p.renderPrimer
+    shellError = p.shellError
+  } else if (shellOutcome && !shellOutcome.ok) {
     // The chrome bundle failed or crashed the bundler. Don't take the tool down —
     // record it; the server serves a diagnostic instead of the browse UI.
-    shellError = result.error ?? 'shell bundle failed'
+    shellInputs = new Set()
+    renderPrimer = null
+    shellError = shellOutcome.error ?? 'shell bundle failed'
     console.error(
-      `  ✗ chrome ${result.crashed ? 'crashed the bundler' : 'failed to build'}: ${shellError}`,
+      `  ✗ chrome ${shellOutcome.crashed ? 'crashed the bundler' : 'failed to build'}: ${shellError}`,
     )
   } else {
-    for (const f of result.inputs) inputs.add(f)
-    // The primer's SSR bundle is on disk (the worker wrote it); importing it is
-    // evaluation, not bundling — safe in this process.
+    shellInputs = new Set(shellOutcome?.inputs ?? [])
+    if (TRACE) console.log(`  ⏱ shell graph: ${shellInputs.size} module(s)`)
+    shellError = undefined
+    renderPrimer = null
     if (primerPath) {
+      // The primer's SSR bundle is on disk (the worker wrote it); importing it is
+      // evaluation, not bundling — safe in this process.
       const ssrPrimerModule = (await import(
         join(ssrOutDir, `ssr-primer-entry-${seq}.js`)
       )) as { renderPrimerToHtml: () => PrimerHtmlResult }
       renderPrimer = ssrPrimerModule.renderPrimerToHtml
+      await prunePrimerSsrSeq(pkgDir, seq) // drop superseded primer bundles
     }
   }
 
-  // The manifest comes from its own fresh subprocess (independent of the build).
-  const manifest = await trace('manifest (subprocess)', () =>
-    loadManifestFresh(pkgDir),
-  )
   const placardById = new Map<string, string>()
   for (const c of manifest.components) {
     if (c.placardDoc) placardById.set(c.id, resolve(REPO_ROOT, c.placardDoc))
   }
-  const globalCss = await readGlobalCss(pkgDir, config)
+  // The watcher's base graph is the chrome's; per-component inputs re-accumulate
+  // as each case is (re)built on demand (see `buildCase`).
+  const inputs = new Set(shellInputs)
   console.log(
     `  ${manifest.components.length} component(s), ${manifest.components.reduce((n, c) => n + c.cases.length, 0)} case(s)`,
   )
-  return { manifest, placardById, globalCss, renderPrimer, inputs, shellError }
+  return {
+    manifest,
+    placardById,
+    globalCss,
+    renderPrimer,
+    inputs,
+    shellInputs,
+    shellError,
+  }
 }
 
 /**
@@ -713,6 +959,9 @@ export async function startDisplayCase(
         `ssr-case-${componentId}-${seq}.js`,
       )
       const mod = (await import(ssrPath)) as { renderCaseToHtml: CaseRenderer }
+      // Reclaim this component's superseded SSR bundle/codegen seqs now that the
+      // current one is imported — they accumulate on disk on every rebuild.
+      await pruneCaseSsrSeq(pkgDir, componentId, seq)
       return {
         ok: true,
         renderCase: mod.renderCaseToHtml,
@@ -797,6 +1046,9 @@ export async function startDisplayCase(
   // always has a waiter — never a floating promise. Sequential inside: the
   // shell-bundle hash reads what the build just wrote.
   const ready = (async () => {
+    // Wipe a prior session's stale seq-named SSR bundles before the first build —
+    // `ssrBuildSeq` resets to 0 on restart, so they'd otherwise linger forever.
+    await sweepStaleSsr(pkgDir)
     current = await rebuild(pkgDir, config, configPath)
     shellHash = await shellBundleHash()
   })()
@@ -866,7 +1118,13 @@ export async function startDisplayCase(
       }
 
       if (path.startsWith('/dist/')) {
-        const file = Bun.file(join(outdir, path.slice('/dist/'.length)))
+        const abs = resolve(outdir, path.slice('/dist/'.length))
+        // Defense-in-depth: never serve outside the dist dir even if a crafted
+        // path slips a `..` past `URL` normalization.
+        if (abs !== outdir && !abs.startsWith(outdir + sep)) {
+          return new Response('not found', { status: 404 })
+        }
+        const file = Bun.file(abs)
         return (await file.exists())
           ? new Response(file)
           : new Response('not found', { status: 404 })
@@ -1033,6 +1291,16 @@ export async function startDisplayCase(
         },
       )
     },
+    // Bun already isolates a handler throw into a 500 rather than crashing the
+    // server; this makes that response controlled — a sanitized body (never a
+    // stack) and a server-side log — instead of Bun's default error page.
+    error(err) {
+      console.error('[display-case] request handler error:', err)
+      return new Response('Internal Server Error', {
+        status: 500,
+        headers: { 'content-type': 'text/plain; charset=utf-8' },
+      })
+    },
   })
 
   // The socket is open and `/health` answers now; wait for the initial build
@@ -1092,7 +1360,7 @@ export async function startDisplayCase(
           })),
         ),
       )
-      void scanner.populateAtStartup(variants, startupMode)
+      void scanner.populateAtStartup(variants, startupMode).catch(() => {})
     }
   }
 
@@ -1104,41 +1372,51 @@ export async function startDisplayCase(
   // window so the rebuild invalidates only the components whose graph includes one.
   const pendingChanges = new Set<string>()
   let timer: ReturnType<typeof setTimeout> | null = null
+  // A rebuild is async and (on a large catalog) slow. The 150ms debounce in
+  // `scheduleRebuild` only coalesces a burst that arrives *before* a rebuild
+  // starts; the *concurrent* case — a change arriving mid-rebuild — is handled by
+  // `createCoalescingRunner`, which loops the pass once more rather than starting
+  // a second rebuild that would race on `state`, `ssrBuildSeq`, and the case cache.
+  const runRebuild = createCoalescingRunner(
+    async (label: string) => {
+      console.log(`↻ ${label}, rebuilding…`)
+      if (dev) {
+        vitrineCss = await readVitrineCss()
+        tokensCss = await readDesignTokens()
+      }
+      const changed = [...pendingChanges]
+      pendingChanges.clear()
+      // Reuse the surfaces this change can't have touched (the chrome and/or the
+      // manifest); only the affected case bundles are invalidated below.
+      current = await rebuild(pkgDir, config, configPath, {
+        changed,
+        prev: current,
+      })
+      browserOnly.clear()
+      // Invalidate only the components whose graph includes a changed file (and
+      // every failed entry, so a fix is retried) — not the whole cache — so an
+      // edit doesn't force every other component to rebuild on its next visit.
+      // No specific paths (a conservative fallback) drops everything.
+      for (const id of staleCaseIds(caseCache, changed)) caseCache.delete(id)
+      scanner?.invalidateAll()
+      // The module graph may have shifted (a new sibling import, or one
+      // dropped) — reconcile the dependency watchers against it.
+      await syncGraphWatchers()
+      if (reload) {
+        // Full-reload the tab when the chrome bundle changed; otherwise just
+        // refresh the rendered content (iframe + manifest), keeping nav state.
+        const nextHash = await shellBundleHash()
+        const kind = nextHash !== shellHash ? 'shell' : 'content'
+        shellHash = nextHash
+        triggerReload(kind)
+      }
+    },
+    (err) => console.error(err),
+  )
   const scheduleRebuild = (label: string, paths: string[] = []) => {
     for (const p of paths) pendingChanges.add(p)
     if (timer) clearTimeout(timer)
-    timer = setTimeout(async () => {
-      try {
-        console.log(`↻ ${label}, rebuilding…`)
-        if (dev) {
-          vitrineCss = await readVitrineCss()
-          tokensCss = await readDesignTokens()
-        }
-        const changed = [...pendingChanges]
-        pendingChanges.clear()
-        current = await rebuild(pkgDir, config, configPath)
-        browserOnly.clear()
-        // Invalidate only the components whose graph includes a changed file (and
-        // every failed entry, so a fix is retried) — not the whole cache — so an
-        // edit doesn't force every other component to rebuild on its next visit.
-        // No specific paths (a conservative fallback) drops everything.
-        for (const id of staleCaseIds(caseCache, changed)) caseCache.delete(id)
-        scanner?.invalidateAll()
-        // The module graph may have shifted (a new sibling import, or one
-        // dropped) — reconcile the dependency watchers against it.
-        await syncGraphWatchers()
-        if (reload) {
-          // Full-reload the tab when the chrome bundle changed; otherwise just
-          // refresh the rendered content (iframe + manifest), keeping nav state.
-          const nextHash = await shellBundleHash()
-          const kind = nextHash !== shellHash ? 'shell' : 'content'
-          shellHash = nextHash
-          triggerReload(kind)
-        }
-      } catch (err) {
-        console.error(err)
-      }
-    }, 150)
+    timer = setTimeout(() => void runRebuild(label), 150)
   }
 
   // Watch the consumer package's source. Any app-relevant source change rebuilds
@@ -1163,37 +1441,44 @@ export async function startDisplayCase(
       : { subscribe: undefined }
   const watched = /\.(tsx?|css|mdx)$|\.placard\.md$/
   const ignore = ['node_modules', '.git', '.display-case', 'dist']
+  // Top-level watcher subscriptions, captured so shutdown can unsubscribe them
+  // (the native @parcel/watcher subscriptions are not reclaimed on process exit).
+  const topSubs: Array<{ unsubscribe(): Promise<void> }> = []
   if (subscribe && watchSrc) {
-    await subscribe(
-      srcDir,
-      (err, events) => {
-        if (err) return
-        const hits = events.filter((e) => watched.test(e.path))
-        if (hits.length)
-          scheduleRebuild(
-            'change detected',
-            hits.map((e) => e.path),
-          )
-      },
-      { ignore },
+    topSubs.push(
+      await subscribe(
+        srcDir,
+        (err, events) => {
+          if (err) return
+          const hits = events.filter((e) => watched.test(e.path))
+          if (hits.length)
+            scheduleRebuild(
+              'change detected',
+              hits.map((e) => e.path),
+            )
+        },
+        { ignore },
+      ),
     )
   }
 
   // Dev, showcasing a *different* package: also watch Display Case's own UI
   // source so editing the chrome hot-reloads even when `pkgDir` is elsewhere.
   if (subscribe && watchHere) {
-    await subscribe(
-      HERE,
-      (err, events) => {
-        if (err) return
-        const hits = events.filter((e) => /\.(tsx?|css)$/.test(e.path))
-        if (hits.length)
-          scheduleRebuild(
-            'app source changed',
-            hits.map((e) => e.path),
-          )
-      },
-      { ignore },
+    topSubs.push(
+      await subscribe(
+        HERE,
+        (err, events) => {
+          if (err) return
+          const hits = events.filter((e) => /\.(tsx?|css)$/.test(e.path))
+          if (hits.length)
+            scheduleRebuild(
+              'app source changed',
+              hits.map((e) => e.path),
+            )
+        },
+        { ignore },
+      ),
     )
   }
 
@@ -1247,6 +1532,32 @@ export async function startDisplayCase(
   // Initialize the dependency watchers from the first build's graph, then keep
   // them reconciled after every rebuild (the call in scheduleRebuild).
   await syncGraphWatchers()
+
+  // Graceful teardown for the *interactive* server (the non-interactive check
+  // harness owns its own lifecycle in check.ts). Without this, a Ctrl-C leaks the
+  // persistent a11y browser (Chromium), the native file-watcher subscriptions,
+  // and any in-flight build-worker children. Registered once and idempotent.
+  let disposed = false
+  const dispose = async (): Promise<void> => {
+    if (disposed) return
+    disposed = true
+    if (timer) clearTimeout(timer)
+    if (scanner) await scanner.close().catch(() => {})
+    await Promise.all(
+      [...topSubs, ...graphWatchers.values()].map((s) =>
+        s.unsubscribe().catch(() => {}),
+      ),
+    )
+    killActiveBuildWorkers()
+    server.stop(true)
+  }
+  if (interactive) {
+    const onSignal = () => {
+      void dispose().finally(() => process.exit(0))
+    }
+    process.once('SIGINT', onSignal)
+    process.once('SIGTERM', onSignal)
+  }
 
   return server
 }

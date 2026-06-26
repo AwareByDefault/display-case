@@ -49,6 +49,14 @@
   },
   "files": [
     "src",
+    "!src/**/*.test.ts",
+    "!src/**/*.test.tsx",
+    "!src/**/*.test-d.ts",
+    "!src/testing",
+    "!src/**/*.case.tsx",
+    "!src/**/*.placard.md",
+    "!src/**/shell-fixtures.tsx",
+    "!src/**/__fixtures__",
     "skills",
     "docs",
     "display-case.prompt.md",
@@ -83,7 +91,17 @@
   },
   "peerDependencies": {
     "react": "^19",
-    "react-dom": "^19"
+    "react-dom": "^19",
+    "@types/react": "^19",
+    "@types/react-dom": "^19"
+  },
+  "peerDependenciesMeta": {
+    "@types/react": {
+      "optional": true
+    },
+    "@types/react-dom": {
+      "optional": true
+    }
   },
   "dependencies": {
     "@parcel/watcher": "^2.5.6",

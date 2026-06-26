@@ -68,7 +68,7 @@ export default defineCases(
       // Re-seed when the options or starting value change; size/disabled flow in
       // as props (no remount, so an in-stage pick survives toggling them).
       render: (t) => {
-        const options = (t.options as string)
+        const options = (t.options ?? '')
           .split(',')
           .map((s) => s.trim())
           .filter(Boolean)
@@ -76,8 +76,8 @@ export default defineCases(
           <Demo
             key={`${t.options}|${t.value}`}
             options={options}
-            initial={t.value as string}
-            size={t.size as 'sm' | 'md'}
+            initial={t.value ?? 'Cherry'}
+            size={t.size ?? 'md'}
             disabled={t.disabled}
           />
         )
