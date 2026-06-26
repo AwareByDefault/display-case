@@ -28,6 +28,18 @@ const BUILD_CONCURRENCY = (() => {
   if (Number.isFinite(env) && env >= 1) return Math.floor(env)
   return Math.max(1, Math.min(4, cpus().length - 1))
 })()
+// Upper bound on how long a single build worker (or the manifest subprocess) may
+// run before it's treated as hung and killed. The crash path handles a worker that
+// dies on a signal; this handles one that neither exits nor crashes — a top-level
+// `await` that never resolves, a plugin that spins — which would otherwise leak its
+// concurrency slot forever and silently wedge all further preparation. Generous by
+// default so a legitimately large bundle on a cold, contended CI runner isn't
+// killed mid-build; override via env (read per call so tests can shorten it).
+export const buildTimeoutMs = (): number => {
+  const env = Number(process.env.DISPLAY_CASE_BUILD_TIMEOUT)
+  return Number.isFinite(env) && env >= 1 ? Math.floor(env) : 120_000
+}
+
 let buildActive = 0
 const buildWaiters: Array<() => void> = []
 export async function withBuildSlot<T>(fn: () => Promise<T>): Promise<T> {
@@ -140,17 +152,37 @@ export async function spawnBuildWorker(args: string[]): Promise<BuildOutcome> {
       stderr: 'pipe',
     })
     activeWorkers.add(proc)
+    const collect = Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+      proc.exited,
+    ])
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const timeout = new Promise<null>((res) => {
+      timer = setTimeout(() => res(null), buildTimeoutMs())
+    })
     try {
-      const [out, errText, code] = await Promise.all([
-        new Response(proc.stdout).text(),
-        new Response(proc.stderr).text(),
-        proc.exited,
-      ])
+      // Race the worker against the timeout. A worker that hangs is killed and
+      // reported as a contained per-surface failure (not a crash, not a stall) —
+      // the same guarantee the signal path gives, for the third failure mode.
+      const done = await Promise.race([collect, timeout])
+      if (done === null) {
+        proc.kill() // unblocks `collect`; its result is now irrelevant
+        return {
+          ok: false,
+          inputs: [],
+          error: `the bundler hung (no result within ${buildTimeoutMs()}ms; killed)`,
+          crashed: false,
+        }
+      }
+      const [out, errText, code] = done
       if (errText.trim()) {
         process.stderr.write(errText.endsWith('\n') ? errText : `${errText}\n`)
       }
       return classifyBuildResult(out, code, proc.signalCode)
     } finally {
+      if (timer) clearTimeout(timer)
+      void collect.catch(() => {}) // swallow the post-kill resolution/rejection
       activeWorkers.delete(proc)
     }
   })

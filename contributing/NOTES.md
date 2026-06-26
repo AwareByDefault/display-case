@@ -61,6 +61,22 @@ that surface — a per-case crash serves the chrome-free diagnostic; a shell cra
 startup sets `state.shellError` and the server serves `shellErrorHtml` rather than
 the tool dying with a bare panic.
 
+**Hang containment (the third failure mode):** the crash path above handles a
+worker that *dies*; a worker that neither completes nor crashes — a never-resolving
+top-level `await`, a spinning plugin — would otherwise hold its `withBuildSlot`
+slot forever, silently wedging *all* further preparation (the server still answers
+`/health`, so it looks alive). `spawnBuild` races each worker against
+`buildTimeoutMs()` (`DISPLAY_CASE_BUILD_TIMEOUT`, default **120 s** — generous on
+purpose, so a legitimately large bundle on a cold, contended runner isn't killed
+mid-build; it catches *indefinite* stalls, not a latency budget). On expiry it
+`proc.kill()`s and returns a contained per-surface failure with **`crashed: false`**
+(a hang is *not* a signal crash — keep them distinct), which releases the slot via
+`withBuildSlot`'s `finally`. `loadManifestFresh` carries the same bound: it kills
+the `--print-manifest` child and *throws*, so a hung manifest becomes a logged
+failure (or a loud startup-bind failure) instead of an indefinite stall. This is
+the `scalable-serving` "isolated, diagnosed preparation failure" requirement's
+third mode — logical build error · bundler crash · hang.
+
 **Two CI-contention guards** (the earlier per-case subprocess was reverted because
 it timed CI's a11y e2e):
 1. **Bounded concurrency** — `withBuildSlot` caps concurrent worker spawns
