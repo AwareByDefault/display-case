@@ -32,6 +32,7 @@ The CLI looks for `display-case.config.ts` then `display-case.config.tsx` in the
 | `globalStyles` | `string[]` | no | none | CSS entrypoints (relative to the package) injected into previews. |
 | `decorator` | `ComponentType<{ children, level?, sourcePath?, area? }>` | no | none | Wrapper rendered around every case; also receives the active case's `level`, `sourcePath`, and `area` so it can wrap page/flow cases in app chrome. |
 | `styleEngines` | `StyleEngine[]` | no | none | Engines that collect render-time (CSS-in-JS) styling — emotion/MUI, styled-components — during the server render and deliver it before scripting. Pair with `decorator`. See [`styleEngines`](#styleengines) and [Style engines](style-engines.md). |
+| `share` | `string[]` | no | none | Runtime libraries to deliver **once** across a published showcase, beyond React (always shared). A library shared by several components is built into one cacheable vendor bundle every surface resolves to, instead of inlined into each per-component bundle. Affects only `display-case publish`. See [`share`](#share). |
 | `baselineDir` | `string` | no | `.display-case/baselines` | Where visual-regression baselines are stored. |
 | `tokens` | `{ allow?: string[] }` | no | none | Design-token conformance options for `--tokens`. `allow` lists custom-property names the package may reference but does not itself define (e.g. host-app-provided tokens). See [Testing](testing.md#token-conformance). |
 | `providers` | `{ driver?, diff? }` | no | built-in | Override the visual-regression backend. When unset, the built-in Playwright/axe driver and pixelmatch/pngjs diff are loaded lazily. See [`providers`](#providers). |
@@ -247,6 +248,44 @@ interface StyleCollector {
 entirely and the documents are byte-identical to their engine-free form. The full
 recipe — emotion/MUI flagship, styled-components, and when to use `globalStyles`
 instead — is in [Style engines](style-engines.md).
+
+### `share`
+
+A [published showcase](../README.md) builds **each component into its own isolated
+browser bundle** (so no single bundler pass ever has to hold the whole catalog — the
+design that keeps a large showcase buildable). React is always delivered **once** as a
+shared, content-hashed vendor bundle that every surface references via an
+[importmap](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/script/type/importmap),
+not copied into each bundle. `share` extends that same treatment to any other runtime
+library:
+
+```ts
+share: ['markdown-to-jsx', '@emotion/react', '@emotion/styled', '@acme/design-tokens']
+```
+
+Reach for it when several components import the same library and you don't want each
+per-component bundle to carry its own copy. Two reasons:
+
+- **Size** — a library shared by N components is downloaded once site-wide instead of
+  N times (each copy otherwise cached separately, never reused).
+- **Correctness** — a library that keeps internal state and must exist as a *single
+  instance* (a CSS-in-JS engine's style cache/context) behaves correctly only when
+  every surface resolves to one copy. Declaring it `share` guarantees that, the same
+  way React is always collapsed to one copy.
+
+Notes:
+
+- List the **package** (`'markdown-to-jsx'`), an explicit **subpath**
+  (`'@acme/icons/solid'`), or a **monorepo workspace package** (`'@acme/design-tokens'`)
+  — a package defined in your repo is shared on the client just like a published one. A
+  deep import you don't list stays inlined (still correct, just not shared).
+- Assumes **one installed version** per shared package across the showcase (true for
+  peer dependencies by definition). Don't share a library you intentionally run at two
+  major versions.
+- Affects **only `display-case publish`**, never the dev server. With nothing declared,
+  React is still shared and the output is what you'd get without `share` at all.
+- Not sure what to list? `display-case publish` prints any library it inlined into
+  more than one component as a candidate — add the ones worth sharing.
 
 ### `baselineDir`
 

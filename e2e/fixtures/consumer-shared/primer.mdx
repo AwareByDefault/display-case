@@ -1,0 +1,6 @@
+# Shared Consumer Primer
+
+Prose rendered through `markdown-to-jsx`, whose own internals import a subpath
+(`markdown-to-jsx/entities`). The primer bundles the renderer via an absolute path,
+so that subpath must **inline** here rather than leak past the importmap as a bare
+specifier — the regression this fixture guards.

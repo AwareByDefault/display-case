@@ -23,29 +23,24 @@ export interface DocAssets {
   browser: string
   render: Record<string, string>
   primer: string
-  /** The shared React bundle every browser entry imports via the importmap. */
-  vendor: string
+  /** Resolves each externalized bare specifier (the shared runtime libraries) to
+   *  its one content-hashed vendor bundle — the `<script type="importmap">` body's
+   *  `imports`. Empty when nothing is shared (e.g. the dev preview). */
+  importmap: Record<string, string>
 }
 
 /**
- * The importmap that resolves the bare React specifiers — left external in the
- * chrome and per-component bundles — to the one shared `vendor` bundle, so the
- * browser downloads React once across the whole showcase instead of a copy per
- * bundle. Emitted in `<head>`, before any module script. Empty when no vendor URL
- * (older builds), so the documents stay valid. Works under a plain static host
- * too (it's just markup).
+ * The importmap that resolves every bare specifier left external in the chrome and
+ * per-component bundles — the shared runtime libraries (React always, plus any the
+ * author declared to `share`) — to its one shared vendor bundle, so the browser
+ * downloads each shared library once across the whole showcase instead of a copy
+ * per bundle. Emitted in `<head>`, before any module script. Empty when nothing is
+ * shared (no vendor bundles, e.g. the dev preview), so the documents stay valid.
+ * Works under a plain static host too (it's just markup).
  */
-function importMap(vendor: string): string {
-  if (!vendor) return ''
-  const map = {
-    imports: {
-      react: vendor,
-      'react-dom': vendor,
-      'react-dom/client': vendor,
-      'react/jsx-runtime': vendor,
-    },
-  }
-  return `<script type="importmap">${JSON.stringify(map)}</script>`
+function importMap(imports: Record<string, string>): string {
+  if (!imports || Object.keys(imports).length === 0) return ''
+  return `<script type="importmap">${JSON.stringify({ imports })}</script>`
 }
 
 /** The browse shell document: pre-rendered chrome + inlined seed, hydrated by the
@@ -68,7 +63,7 @@ export function shellDoc(opts: {
     theme: opts.theme,
     a11y: opts.a11y,
   })
-  return `<!doctype html><html lang="en" data-theme="${opts.theme}"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>${opts.title}</title>${FONT_LINKS}<style>${opts.tokensCss}\n${opts.globalCss}\n${reset}\n${opts.vitrineCss}</style>${importMap(opts.assets.vendor)}</head><body><div id="root" data-ssr="${opts.ssr ? '1' : '0'}">${opts.markup}</div><script>window.__dcSeed=${seed}</script><script type="module" src="${opts.assets.browser}"></script></body></html>`
+  return `<!doctype html><html lang="en" data-theme="${opts.theme}"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>${opts.title}</title>${FONT_LINKS}<style>${opts.tokensCss}\n${opts.globalCss}\n${reset}\n${opts.vitrineCss}</style>${importMap(opts.assets.importmap)}</head><body><div id="root" data-ssr="${opts.ssr ? '1' : '0'}">${opts.markup}</div><script>window.__dcSeed=${seed}</script><script type="module" src="${opts.assets.browser}"></script></body></html>`
 }
 
 /** The isolated case render document. `scriptSrc` is this component's own bundle
@@ -84,8 +79,8 @@ export function renderDoc(opts: {
   /** Style-engine output, placed after the static <style> block. `''` when none. */
   headStyles?: string
   scriptSrc: string
-  /** The shared React vendor bundle URL (for the importmap). */
-  vendor: string
+  /** Shared-runtime importmap (specifier → vendor bundle URL); `{}` omits it. */
+  importmap: Record<string, string>
 }): string {
   const exhibitCenter =
     'body[data-decorated] #root>*{justify-content:center;align-content:center}'
@@ -96,7 +91,7 @@ export function renderDoc(opts: {
   // The Vitrine stylesheet follows globalCss so a dogfooded design-system case
   // paints before scripts; for a non-dogfooding consumer these are inert chrome
   // rules in a dev-time-only preview document (see server.ts renderHtml).
-  return `<!doctype html><html lang="en" data-theme="${opts.theme}" data-theme-pref="${opts.theme}"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Display Case render</title><style>html,body{margin:0}body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-sans, ui-sans-serif, system-ui, sans-serif)}${exhibitCenter}${opts.globalCss}\n${opts.vitrineCss}</style>${opts.headStyles ?? ''}${importMap(opts.vendor)}</head><body${bodyAttrs}><main id="root"${rootAttrs}>${opts.markup}</main><script type="module" src="${opts.scriptSrc}"></script></body></html>`
+  return `<!doctype html><html lang="en" data-theme="${opts.theme}" data-theme-pref="${opts.theme}"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Display Case render</title><style>html,body{margin:0}body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-sans, ui-sans-serif, system-ui, sans-serif)}${exhibitCenter}${opts.globalCss}\n${opts.vitrineCss}</style>${opts.headStyles ?? ''}${importMap(opts.importmap)}</head><body${bodyAttrs}><main id="root"${rootAttrs}>${opts.markup}</main><script type="module" src="${opts.scriptSrc}"></script></body></html>`
 }
 
 /** The primer reading-page document. */
@@ -112,5 +107,5 @@ export function primerDoc(opts: {
   assets: DocAssets
 }): string {
   const reset = 'html,body{margin:0;height:100%;background:var(--dc-bg)}'
-  return `<!doctype html><html lang="en" data-theme="${opts.theme}" data-theme-pref="${opts.theme}"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Primer</title>${FONT_LINKS}<style>${opts.tokensCss}\n${opts.globalCss}\n${reset}\n${opts.vitrineCss}</style>${opts.headStyles ?? ''}${importMap(opts.assets.vendor)}</head><body><main id="root" data-ssr="${opts.ssr ? '1' : '0'}">${opts.markup}</main><script type="module" src="${opts.assets.primer}"></script></body></html>`
+  return `<!doctype html><html lang="en" data-theme="${opts.theme}" data-theme-pref="${opts.theme}"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Primer</title>${FONT_LINKS}<style>${opts.tokensCss}\n${opts.globalCss}\n${reset}\n${opts.vitrineCss}</style>${opts.headStyles ?? ''}${importMap(opts.assets.importmap)}</head><body><main id="root" data-ssr="${opts.ssr ? '1' : '0'}">${opts.markup}</main><script type="module" src="${opts.assets.primer}"></script></body></html>`
 }

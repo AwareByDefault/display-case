@@ -23,6 +23,12 @@ export default defineConfig({
     // Record/refresh baselines with `bun run baselines:record` (also in-container).
     defaultPhases: { visual: false },
   },
+  // Dogfood `share`: the placard/markdown panels render with `markdown-to-jsx`,
+  // which several components pull into their browser bundles — `publish`'s duplicate
+  // report flags it inlined across 6 of them. Sharing delivers it once as a cacheable
+  // vendor bundle every surface resolves to via the importmap, instead of a copy per
+  // per-component bundle. Affects only the published build, not `bun run display-case`.
+  share: ['markdown-to-jsx'],
   // The Primer "wall text": a long-form reading page with embedded live
   // specimens, authored in MDX and dogfooding the design system's own components.
   primer: './src/ui/design-system/primer.mdx',

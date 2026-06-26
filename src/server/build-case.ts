@@ -1,4 +1,5 @@
 import { join, resolve } from 'node:path'
+import type { BunPlugin } from 'bun'
 import {
   cacheDir,
   codegenCaseRenderEntry,
@@ -9,6 +10,35 @@ import {
 import { graphRecorder } from '../core/graph-recorder'
 import { mdxPlugin } from '../core/mdx-plugin'
 import { pinReact } from '../core/pin-react'
+
+/**
+ * Externalize ONLY the exact specifiers given — not their subpaths. Bun's built-in
+ * `external` option matches a package by prefix, so `external: ['markdown-to-jsx']`
+ * would also externalize an internal `markdown-to-jsx/entities` import, leaving a
+ * bare specifier the document's importmap (which maps only the declared specifiers)
+ * can't resolve in the browser. The shared-runtime build maps each declared
+ * specifier to its own vendor bundle, so a browser surface must externalize exactly
+ * those and **inline** any undeclared subpath (the publish spec's render-correct
+ * fallback). SSR keeps Bun's prefix `external` — there, a bare subpath resolves from
+ * the deployed `node_modules` at runtime, so prefix matching is correct.
+ */
+function externalExact(specs: string[]): BunPlugin {
+  return {
+    name: 'display-case-external-exact',
+    setup(build) {
+      if (specs.length === 0) return
+      const filter = new RegExp(
+        `^(${specs
+          .map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+          .join('|')})$`,
+      )
+      build.onResolve({ filter }, (args) => ({
+        path: args.path,
+        external: true,
+      }))
+    },
+  }
+}
 
 /**
  * The **build worker**: every `Bun.build` Display Case runs for the dev server
@@ -296,8 +326,18 @@ export interface PublishBuildRequest {
   naming: { entry: string; chunk: string; asset?: string }
   define: Record<string, string>
   external?: string[]
+  /** Match `external` by EXACT specifier (a browser surface, so an undeclared subpath
+   *  inlines instead of leaking past the importmap) rather than Bun's package-prefix
+   *  matching (SSR, where a subpath resolves at runtime). See `externalExact`. */
+  externalExact?: boolean
   /** Chrome/render bundles pin the consumer React; SSR keeps React external. */
   pinReact: boolean
+  /** Split shared code into chunks across entrypoints. Used ONLY for the bounded
+   *  shared-vendor build (a handful of entries), where it dedups code common to
+   *  the shared specifiers (e.g. the reconciler under `react-dom` and
+   *  `react-dom/client`) into one chunk — the one place splitting is safe, since
+   *  the catalog is never built as one graph. Off everywhere else. */
+  splitting?: boolean
 }
 
 export interface PublishBuildResult {
@@ -321,15 +361,21 @@ export async function buildPublishBundle(
   try {
     const plugins = [graphRecorder(inputs), mdxPlugin()]
     if (req.pinReact) plugins.push(pinReact(req.pkgDir))
+    // Exact-match externalization is a resolve plugin (not Bun's prefix `external`),
+    // so an undeclared subpath stays inlined rather than leaking past the importmap.
+    if (req.externalExact && req.external?.length) {
+      plugins.push(externalExact(req.external))
+    }
     const result = await Bun.build({
       entrypoints: req.entrypoints,
       outdir: req.outdir,
       target: req.target,
       minify: req.minify,
       sourcemap: 'none',
+      splitting: req.splitting ?? false,
       plugins,
       define: req.define,
-      external: req.external,
+      external: req.externalExact ? undefined : req.external,
       naming: req.naming,
     })
     if (!result.success) {

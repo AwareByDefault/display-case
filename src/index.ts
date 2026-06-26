@@ -623,6 +623,20 @@ export interface DisplayCaseConfig {
    */
   styleEngines?: StyleEngine[]
   /**
+   * Runtime libraries to deliver **once** across a published showcase, beyond the
+   * React rendering runtime (which is always shared). Each per-component browser
+   * bundle is built in isolation (crash-containment), so a library these bundles
+   * share would otherwise inline a copy into every one; listing it here builds it
+   * into a single content-hashed vendor bundle every surface resolves to via an
+   * importmap. List the package (`'markdown-to-jsx'`), a subpath (`'@acme/icons/solid'`),
+   * or a monorepo workspace package (`'@acme/design-tokens'`); a deep import not
+   * listed stays inlined. Sharing a library also collapses it to a single instance,
+   * which a stateful library (a CSS-in-JS engine's cache/context) needs to behave
+   * correctly. Assumes one installed version per shared package. Affects only the
+   * published build (`display-case publish`), never the dev server.
+   */
+  share?: string[]
+  /**
    * Where visual-regression baselines are stored, relative to the consumer
    * package. Defaults to the gitignored cache at `.display-case/baselines`.
    * Point at a committed directory to opt into shared / CI-gating baselines.
