@@ -130,7 +130,7 @@ jobs:
       - run: bun run e2e
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-report
           path: |
@@ -161,7 +161,7 @@ jobs:
           DISPLAY_CASE_BASE_REF: ${{ github.event.pull_request.base.sha || 'origin/main' }}
       - name: Upload a11y report
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: a11y-report
           path: .display-case/a11y/last-check.json
@@ -197,7 +197,7 @@ jobs:
           DISPLAY_CASE_BASE_REF: ${{ github.event.pull_request.base.sha || 'origin/main' }}
       - name: Upload visual diffs
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: visual-diffs
           path: test/visual-baselines/**/*.diff.png
