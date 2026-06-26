@@ -58,7 +58,7 @@ jobs:
       # part of the pipeline; drop it once `bun publish` gains provenance + OIDC
       # (oven-sh/bun#30522 and #24855, both open). No `registry-url` — it would
       # write an .npmrc that shadows NPM_TOKEN / OIDC.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 24
       - run: npm install -g npm@latest
