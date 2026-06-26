@@ -148,6 +148,7 @@ function documentFor(loaded: Loaded, path: string, url: URL): string {
       headStyles,
       // This component's own bundle (the catalog is split per component).
       scriptSrc: assets.render[rs.componentId] ?? '',
+      vendor: assets.vendor,
     })
   }
 
