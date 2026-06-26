@@ -11,7 +11,7 @@ export default defineCases(
           '/render/button/playground?theme=light&t.variant=accent',
         ),
       },
-      render: (t) => <RenderAddress method={t.method} url={t.url} />,
+      render: (t) => <RenderAddress method={t.method} url={t.url ?? ''} />,
     },
     Default: () => (
       <RenderAddress url="/render/button/playground?theme=light&t.variant=accent" />

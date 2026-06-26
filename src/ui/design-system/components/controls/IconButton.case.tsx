@@ -16,9 +16,9 @@ export default defineCases(
       render: (t) => (
         <IconButton
           glyph={t.glyph}
-          label={t.label}
-          size={t.size as 'sm' | 'md' | 'lg'}
-          variant={t.variant as 'outline' | 'bare'}
+          label={t.label ?? 'Close'}
+          size={t.size ?? 'md'}
+          variant={t.variant ?? 'outline'}
           active={t.active}
           disabled={t.disabled}
         />

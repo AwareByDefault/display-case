@@ -11,7 +11,7 @@ export default defineCases(
   'StatusList',
   {
     Statuses: () => <StatusList items={hues} />,
-    Single: () => <StatusList items={[hues[0]]} />,
+    Single: () => <StatusList items={[hues[0]!]} />,
   },
   { level: 'molecule' },
 )

@@ -15,7 +15,7 @@ export default defineCases(
       },
       render: (t) => (
         <Chip
-          variant={t.variant as 'default' | 'accent' | 'solid'}
+          variant={t.variant ?? 'default'}
           current={t.current}
           index={t.withIndex ? t.index : undefined}
           onClick={t.clickable ? () => {} : undefined}>

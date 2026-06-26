@@ -11,9 +11,7 @@ export default defineCases(
         as: tweak.choice(['div', 'span', 'p'], 'div'),
       },
       render: (t) => (
-        <Eyebrow
-          tone={t.tone as 'muted' | 'accent' | 'strong'}
-          as={t.as as 'div' | 'span' | 'p'}>
+        <Eyebrow tone={t.tone ?? 'muted'} as={t.as ?? 'div'}>
           {t.label}
         </Eyebrow>
       ),

@@ -76,7 +76,7 @@ describe('checkStructure', () => {
     })
     const f = only(await run(dir), 'case-placard-coverage')
     expect(f).toHaveLength(1)
-    expect(f[0].message).toContain('*.placard.md')
+    expect(f[0]!.message).toContain('*.placard.md')
   })
 
   test('coverage: flags a component missing its case', async () => {
@@ -87,7 +87,7 @@ describe('checkStructure', () => {
     })
     const f = only(await run(dir), 'case-placard-coverage')
     expect(f).toHaveLength(1)
-    expect(f[0].message).toContain('*.case.tsx')
+    expect(f[0]!.message).toContain('*.case.tsx')
   })
 
   test('coverage: passes when case and prompt both present', async () => {
@@ -203,7 +203,7 @@ describe('checkStructure', () => {
     })
     const f = only(await run(dir), 'config-paths-exist')
     expect(f).toHaveLength(1)
-    expect(f[0].message).toContain('not a directory')
+    expect(f[0]!.message).toContain('not a directory')
   })
 
   test('config-paths: a not-yet-created baselineDir is fine', async () => {
@@ -260,7 +260,7 @@ describe('checkStructure', () => {
     })
     const f = only(await run(dir), 'primer-present-and-used')
     expect(f).toHaveLength(1)
-    expect(f[0].message).toContain('no primer')
+    expect(f[0]!.message).toContain('no primer')
   })
 
   test('primer: flags a primer with no Display specimen', async () => {
@@ -273,7 +273,7 @@ describe('checkStructure', () => {
     })
     const f = only(await run(dir), 'primer-present-and-used')
     expect(f).toHaveLength(1)
-    expect(f[0].message).toContain('<Display>')
+    expect(f[0]!.message).toContain('<Display>')
   })
 
   test('primer: passes with prose and a Display specimen', async () => {
@@ -426,7 +426,7 @@ describe('checkStructure', () => {
     })
     const f = only(await run(dir), 'interactive-cases-keyed')
     expect(f).toHaveLength(1)
-    expect(f[0].message).toContain('<Demo>')
+    expect(f[0]!.message).toContain('<Demo>')
   })
 
   test('interactive-keyed: passes when every usage carries a key', async () => {
@@ -591,8 +591,8 @@ describe('checkStructure', () => {
     })
     const f = only(await run(dir), 'level-fit')
     expect(f).toHaveLength(1)
-    expect(f[0].severity).toBe('warn')
-    expect(f[0].message).toContain('promoting')
+    expect(f[0]!.severity).toBe('warn')
+    expect(f[0]!.message).toContain('promoting')
   })
 
   test('level-fit: off by default', async () => {
@@ -617,7 +617,7 @@ describe('checkStructure', () => {
     })
     const f = only(await run(dir), 'composes-lower-level')
     expect(f).toHaveLength(1)
-    expect(f[0].severity).toBe('warn')
+    expect(f[0]!.severity).toBe('warn')
   })
 
   test('severity: a per-rule override flips warn to error', async () => {
@@ -626,7 +626,7 @@ describe('checkStructure', () => {
       'Mol.tsx': `export const Mol = () => null\n`,
       'Mol.case.tsx': caseFile(`defineCases('Mol', {}, { level: 'molecule' })`),
     })
-    expect(only(await run(dir), 'composes-lower-level')[0].severity).toBe(
+    expect(only(await run(dir), 'composes-lower-level')[0]!.severity).toBe(
       'error',
     )
   })
@@ -638,7 +638,7 @@ describe('checkStructure', () => {
       'Mol.case.tsx': caseFile(`defineCases('Mol', {}, { level: 'molecule' })`),
     })
     const f = only(await run(dir, { strict: true }), 'composes-lower-level')
-    expect(f[0].severity).toBe('error')
+    expect(f[0]!.severity).toBe('error')
   })
 
   test('a disabled rule contributes no findings', async () => {
@@ -664,8 +664,8 @@ describe('checkStructure', () => {
     })
     const f = only(await run(dir), 'nav-groups-resolve')
     expect(f).toHaveLength(1)
-    expect(f[0].message).toContain('Nope')
-    expect(f[0].severity).toBe('warn')
+    expect(f[0]!.message).toContain('Nope')
+    expect(f[0]!.severity).toBe('warn')
   })
 
   test('nav-groups-resolve stays silent when every group ref resolves', async () => {

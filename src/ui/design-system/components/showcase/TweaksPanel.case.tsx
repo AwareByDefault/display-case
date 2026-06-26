@@ -39,7 +39,7 @@ export default defineCases(
         const panel = (
           <TweaksPanel
             title={t.title || undefined}
-            mode={t.mode as 'docked' | 'floating'}
+            mode={t.mode ?? 'docked'}
             url={t.url || undefined}
             items={items}
             onToggleMode={() => {}}

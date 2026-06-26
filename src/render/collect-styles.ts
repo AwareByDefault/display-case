@@ -23,7 +23,10 @@ export function renderWithStyles(
   let wrapped = tree
   // Apply from last to first so the first engine ends up outermost.
   for (let i = collectors.length - 1; i >= 0; i--) {
-    wrapped = collectors[i].wrap(wrapped)
+    // i ranges over collectors' own indices, so the collector is always present.
+    const collector = collectors[i]
+    if (!collector) continue
+    wrapped = collector.wrap(wrapped)
   }
   const html = renderToString(wrapped)
   const headStyles = collectors

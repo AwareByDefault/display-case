@@ -45,10 +45,10 @@ describe('checkSsr', () => {
     })
     const { findings } = await checkSsr(dir)
     expect(findings).toHaveLength(1)
-    expect(findings[0].component).toBe('Widget')
-    expect(findings[0].case).toBe('Win')
-    expect(findings[0].error).toMatch(/window/)
-    expect(findings[0].file).toMatch(/Widget\.case\.tsx$/)
+    expect(findings[0]!.component).toBe('Widget')
+    expect(findings[0]!.case).toBe('Win')
+    expect(findings[0]!.error).toMatch(/window/)
+    expect(findings[0]!.file).toMatch(/Widget\.case\.tsx$/)
   })
 
   // The complementary property — a browser API used in an *effect* or *handler*

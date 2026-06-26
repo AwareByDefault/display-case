@@ -98,7 +98,8 @@ function resolveInstructionsFile(
   const found = target.instructionsFiles.find((f) =>
     existsSync(join(repoRoot, f)),
   )
-  return join(repoRoot, found ?? target.instructionsFiles[0])
+  // Every AgentTarget declares at least one instructions file; '' is inert.
+  return join(repoRoot, found ?? target.instructionsFiles[0] ?? '')
 }
 
 function launchEntry(repoRoot: string, pkgDir: string) {
@@ -235,7 +236,9 @@ export async function runInit(
     })
   }
   config.configurations = configs
-  if (!opts.dryRun && items[items.length - 1].action !== 'skipped') {
+  // The branch above always pushes exactly one item, so the last one exists.
+  const lastItem = items[items.length - 1]
+  if (!opts.dryRun && lastItem && lastItem.action !== 'skipped') {
     await mkdir(dirname(launchPath), { recursive: true })
     await Bun.write(launchPath, `${JSON.stringify(config, null, 2)}\n`)
   }

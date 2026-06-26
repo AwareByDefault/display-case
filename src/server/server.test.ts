@@ -6,6 +6,7 @@ import {
   classifyBuildResult,
   getManifest,
   type Invalidatable,
+  manifestRelevant,
   shellErrorHtml,
   slugify,
   staleCaseIds,
@@ -64,7 +65,7 @@ describe('getManifest', () => {
     // atom sorts before flow
     expect(m.components.map((c) => c.name)).toEqual(['Button', 'Sign In'])
 
-    const button = m.components[0]
+    const button = m.components[0]!
     expect(button.id).toBe('button')
     expect(button.level).toBe('atom')
     expect(button.isFlow).toBe(false)
@@ -80,12 +81,12 @@ describe('getManifest', () => {
     const def = button.cases.find((c) => c.id === 'default')
     expect(def?.tweaks).toBeNull()
 
-    const flow = m.components[1]
+    const flow = m.components[1]!
     expect(flow.isFlow).toBe(true)
     expect(flow.placardDoc).toBeNull()
-    expect(flow.cases[0].transitions).toEqual(['check-email'])
+    expect(flow.cases[0]!.transitions).toEqual(['check-email'])
     // A flow is a surface → its cases route under the /e/ (Exhibits) prefix.
-    expect(flow.cases[0].browseUrl.startsWith('/e/sign-in/')).toBe(true)
+    expect(flow.cases[0]!.browseUrl.startsWith('/e/sign-in/')).toBe(true)
   })
 
   test('offers the primer mode when a configured .mdx exists', async () => {
@@ -154,8 +155,8 @@ describe('per-component on-demand bundling (integration)', () => {
 
       // A case builds on first request to its address and references that one
       // component's bundle — which is then served.
-      const comp = manifest.components[0]
-      const cs = comp.cases[0]
+      const comp = manifest.components[0]!
+      const cs = comp.cases[0]!
       const doc = await (await fetch(`${base}${cs.renderUrl}`)).text()
       expect(doc).toContain(`/dist/render-case-${comp.id}.js`)
       expect(doc).toContain('data-ssr="1"')
@@ -168,9 +169,9 @@ describe('per-component on-demand bundling (integration)', () => {
       expect((await fetch(`${base}/render/__no-such-component__/x`)).ok).toBe(
         true,
       )
-      const other = manifest.components[1]
+      const other = manifest.components[1]!
       const otherDoc = await (
-        await fetch(`${base}${other.cases[0].renderUrl}`)
+        await fetch(`${base}${other.cases[0]!.renderUrl}`)
       ).text()
       expect(otherDoc).toContain(`/dist/render-case-${other.id}.js`)
     } finally {
@@ -305,5 +306,43 @@ describe('staleCaseIds (graph-aware invalidation)', () => {
 
   test('no changed paths is a conservative fallback — invalidate everything', () => {
     expect(staleCaseIds(cache(), [])).toEqual(new Set(['a', 'b']))
+  })
+})
+
+// Whether a change can alter the manifest (catalog shape) — and so needs the
+// catalog-size-dependent manifest subprocess re-run — vs. a component
+// implementation edit that reuses the prior manifest. (Drives the per-rebuild
+// manifest gating; the watcher that feeds it real paths isn't deterministic
+// enough to assert on under `bun test`.)
+describe('manifestRelevant (manifest-rebuild gating)', () => {
+  const cfg = '/p/display-case.config.ts'
+  const primer = '/p/src/primer.mdx'
+
+  test('a .case file change is manifest-relevant', () => {
+    expect(manifestRelevant(['/p/src/Button.case.tsx'], cfg, primer)).toBe(true)
+  })
+
+  test('a .placard.md change is manifest-relevant', () => {
+    expect(manifestRelevant(['/p/src/Button.placard.md'], cfg, primer)).toBe(
+      true,
+    )
+  })
+
+  test('the config file is manifest-relevant', () => {
+    expect(manifestRelevant([cfg], cfg, primer)).toBe(true)
+  })
+
+  test('the primer file is manifest-relevant (its presence drives a mode)', () => {
+    expect(manifestRelevant([primer], cfg, primer)).toBe(true)
+  })
+
+  test('a plain component implementation edit is NOT manifest-relevant', () => {
+    expect(manifestRelevant(['/p/src/Button.tsx'], cfg, primer)).toBe(false)
+    expect(manifestRelevant(['/p/src/util.ts'], cfg, null)).toBe(false)
+  })
+
+  test('with no primer, only case/placard/config matter', () => {
+    expect(manifestRelevant(['/p/src/primer.mdx'], cfg, null)).toBe(false)
+    expect(manifestRelevant(['/p/src/A.case.tsx'], cfg, null)).toBe(true)
   })
 })

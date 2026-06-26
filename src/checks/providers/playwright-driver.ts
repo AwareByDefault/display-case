@@ -61,6 +61,10 @@ function nodeDetail(node: {
 
 const VIEWPORT = { width: 1024, height: 768 }
 const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']
+// A bounded navigation timeout, well under Playwright's 30s default, so a
+// never-idle page (an animating/polling component that never reaches
+// `networkidle`) fails fast instead of stalling the serial scan queue.
+const NAV_TIMEOUT_MS = 15_000
 
 export async function createPlaywrightDriver(): Promise<RenderDriver> {
   const browser = await chromium.launch()
@@ -72,8 +76,19 @@ export async function createPlaywrightDriver(): Promise<RenderDriver> {
   return {
     async open(url: string, _ctx: CaseContext): Promise<RenderedPage> {
       const page = await context.newPage()
-      await page.goto(url, { waitUntil: 'networkidle' })
-      await page.evaluate(() => document.fonts.ready)
+      try {
+        await page.goto(url, {
+          waitUntil: 'networkidle',
+          timeout: NAV_TIMEOUT_MS,
+        })
+        await page.evaluate(() => document.fonts.ready)
+      } catch (err) {
+        // Navigation/eval failed (e.g. the page never reached networkidle) —
+        // close the freshly-created page so it doesn't leak a tab in the
+        // reused browser, then rethrow the original error.
+        await page.close().catch(() => {})
+        throw err
+      }
       return {
         async screenshot() {
           return page.screenshot()

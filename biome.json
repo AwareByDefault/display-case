@@ -34,6 +34,9 @@
     "enabled": true,
     "rules": {
       "preset": "recommended",
+      "nursery": {
+        "noFloatingPromises": "error"
+      },
       "suspicious": {
         "noExplicitAny": "off"
       },
@@ -125,7 +128,23 @@
       "linter": {
         "rules": {
           "style": {
-            "noDefaultExport": "off"
+            "noDefaultExport": "off",
+            "noNonNullAssertion": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "**/*.test-d.ts",
+        "**/shell-fixtures.tsx"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noNonNullAssertion": "off"
           }
         }
       }

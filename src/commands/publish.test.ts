@@ -171,14 +171,14 @@ describe('publish: the served build is a functional showcase', () => {
   })
 
   test('the isolated /render endpoint serves a chrome-free, pre-scripting document', async () => {
-    const c = manifest.components[0]
-    const cs = c.cases[0]
+    const c = manifest.components[0]!
+    const cs = c.cases[0]!
     const r = await fetch(`${baseUrl}/render/${c.id}/${cs.id}`)
     expect(r.status).toBe(200)
     const html = await r.text()
     expect(html).toContain('data-ssr="1"')
     // References this component's own bundle (the catalog is split per component).
-    expect(html).toContain(descriptor.assets.render[c.id])
+    expect(html).toContain(descriptor.assets.render[c.id]!)
     // Chrome-free: the shell's title chrome is absent from the isolated doc.
     expect(html).not.toContain('Plain Consumer')
   })
@@ -210,8 +210,8 @@ describe('publish: the static export needs no running server', () => {
   })
 
   test('writes a complete per-case render document', async () => {
-    const c = manifest.components[0]
-    const cs = c.cases[0]
+    const c = manifest.components[0]!
+    const cs = c.cases[0]!
     const file = join(out, 'render', c.id, cs.id, 'index.html')
     expect(await Bun.file(file).exists()).toBe(true)
     expect(await Bun.file(file).text()).toContain('data-ssr="1"')

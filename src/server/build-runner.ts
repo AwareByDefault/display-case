@@ -113,6 +113,19 @@ export function classifyBuildResult(
   }
 }
 
+// In-flight build-worker children, tracked so a dev-server shutdown can kill them
+// rather than orphaning live `bun` bundler children. Each is removed as it exits.
+const activeWorkers = new Set<ReturnType<typeof Bun.spawn>>()
+
+/**
+ * Kill every in-flight build worker. Called on dev-server teardown (SIGINT/SIGTERM)
+ * so a Ctrl-C doesn't leave orphaned bundler children behind.
+ */
+export function killActiveBuildWorkers(): void {
+  for (const proc of activeWorkers) proc.kill()
+  activeWorkers.clear()
+}
+
 /**
  * Spawn the build worker for one build and await it. NEVER calls `Bun.build` in
  * this process. A worker that dies on a signal (a Bun bundler segfault) is
@@ -126,14 +139,19 @@ export async function spawnBuildWorker(args: string[]): Promise<BuildOutcome> {
       stdout: 'pipe',
       stderr: 'pipe',
     })
-    const [out, errText, code] = await Promise.all([
-      new Response(proc.stdout).text(),
-      new Response(proc.stderr).text(),
-      proc.exited,
-    ])
-    if (errText.trim()) {
-      process.stderr.write(errText.endsWith('\n') ? errText : `${errText}\n`)
+    activeWorkers.add(proc)
+    try {
+      const [out, errText, code] = await Promise.all([
+        new Response(proc.stdout).text(),
+        new Response(proc.stderr).text(),
+        proc.exited,
+      ])
+      if (errText.trim()) {
+        process.stderr.write(errText.endsWith('\n') ? errText : `${errText}\n`)
+      }
+      return classifyBuildResult(out, code, proc.signalCode)
+    } finally {
+      activeWorkers.delete(proc)
     }
-    return classifyBuildResult(out, code, proc.signalCode)
   })
 }

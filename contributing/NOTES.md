@@ -1329,3 +1329,65 @@ names from other design systems into a case.
 
 Treat the token check as the fast pre-filter and the both-themes a11y run as the
 guarantee.
+
+## Per-rebuild gating: the chrome and the manifest are reused independently
+
+`rebuild()` (`src/server/server.ts`) no longer rebuilds everything on every save.
+It takes `{ changed, prev }` and reuses the surfaces a change can't have touched:
+
+- **Manifest** is re-run (the `--print-manifest` subprocess, which re-imports the
+  whole catalog and so scales with catalog size) only when a changed path is
+  *manifest-relevant* — a `.case.tsx`/`.placard.md`, the config, or the primer
+  (`manifestRelevant`, exported + unit-tested). A plain component **implementation**
+  edit reuses `prev.manifest` and just invalidates that component's case bundle.
+- **Chrome (shell)** is rebuilt only when a changed path intersects `prev.shellInputs`
+  (the chrome's own graph — Display Case's UI, which a *consumer's* component edits
+  never touch). `BuiltState` now carries `shellInputs` separately from `inputs`.
+
+Two non-obvious invariants:
+
+- The shell-skip test uses **direct `prev.shellInputs.has(p)`** (no `resolve(p)`),
+  mirroring `staleCaseIds` — the watcher's path strings already match the
+  graph-recorder's by the same invariant case invalidation relies on. Don't
+  "normalize" one side without the other or the membership check silently misses.
+- Empty `changed` (startup, or a conservative fallback) ⇒ rebuild everything, the
+  same convention `staleCaseIds` uses. Reuse only happens with `prev` present *and*
+  a non-empty changed set that misses the relevant inputs.
+
+`scheduleRebuild` also guards against **concurrent** rebuilds: the 150ms debounce
+only coalesces a burst that arrives *before* a rebuild starts. A change arriving
+*during* a (slow) rebuild sets a `rebuildDirty` flag so the in-flight pass loops
+once more — it never starts a second rebuild that would race on `state`,
+`ssrBuildSeq`, and the case cache.
+
+## Seq-named SSR bundles are pruned, but their heap retention is intrinsic
+
+Each rebuild writes a fresh `ssr-case-<id>-<seq>.js` / `ssr-primer-entry-<seq>.js`
+(+ a `.tsx` codegen entry) because Bun caches `import()` by resolved path. These
+are now pruned: `buildCase` drops a component's prior seqs after importing the
+current one (`pruneCaseSsrSeq`), `rebuild` prunes the primer's (`prunePrimerSsrSeq`),
+and `sweepStaleSsr` wipes the `ssr/` dir at startup (seq resets to 0 on restart, so
+a prior session's higher-seq files would otherwise linger forever). Pruning is
+best-effort (a missing dir / failed unlink is ignored).
+
+Caveat the pruning does **not** fix: each imported seq module stays resident in the
+long-lived process's module cache for the session — deleting the *file* doesn't
+reclaim the already-loaded *module*. That heap growth is intrinsic to the seq
+design; a very long editing session slowly accumulates RSS. Bounding it would
+require a different SSR-freshness mechanism (not file naming) — out of scope here.
+
+## `noUncheckedIndexedAccess` + `noNonNullAssertion` are deliberately scoped
+
+`tsconfig` enables `noUncheckedIndexedAccess` (every index access is `T | undefined`).
+Biome's `noNonNullAssertion` stays `"error"` for **production** source — fix index
+access there with real guards or inert nullish defaults (`m[1] ?? ''` for a regex
+group that always participates), never `!`. Test, `.case.tsx`, and `shell-fixtures`
+files have a biome **override** turning `noNonNullAssertion` off: they build their
+own data, so `arr[0]!` after constructing the array documents intent without a
+dead-code guard. (`?.x!` — optional-chain-then-assert — is still forbidden
+everywhere by `noNonNullAssertedOptionalChain`; use `x!.y` in those files instead.)
+
+In the worker entry (`build-case.ts`), `badArgs` is a **`function` declaration**, not
+a `const` arrow: TypeScript's control-flow analysis only treats the former's
+`never` return as diverging, which is what lets each `else { badArgs() }` satisfy
+`result`'s definite assignment under the stricter flag.

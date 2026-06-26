@@ -359,7 +359,10 @@ export async function buildPublishBundle(
 // abnormally with no stdout — the parent treats either as a per-surface failure.
 if (import.meta.main) {
   const [kind, ...rest] = process.argv.slice(2)
-  const badArgs = (): never => {
+  // A `function` declaration (not a `const` arrow) so TypeScript's control-flow
+  // analysis treats its `never` return as diverging — that's what lets each
+  // branch's `else { badArgs() }` satisfy `result`'s definite assignment.
+  function badArgs(): never {
     process.stderr.write(`build-case: bad args for kind '${kind}'\n`)
     process.exit(2)
   }
@@ -371,32 +374,44 @@ if (import.meta.main) {
     }
   }
   let result: BuildCaseResult | PublishBuildResult
+  // Each branch does its work *inside* the truthy-narrowed `if`, so the parsed
+  // argv slots (each `string | undefined` under noUncheckedIndexedAccess) are
+  // already narrowed to `string` — no non-null assertions in the worker entry.
   if (kind === 'publish') {
     // <descriptorJson> — a JSON-encoded PublishBuildRequest.
     const [descriptor] = rest
-    if (!descriptor) badArgs()
-    result = await buildPublishBundle(parsePublishRequest(descriptor))
+    if (descriptor) {
+      result = await buildPublishBundle(parsePublishRequest(descriptor))
+    } else {
+      badArgs()
+    }
   } else if (kind === 'case') {
     // <pkgDir> <file> <configPath> <componentId> <seq>
     const [pkgDir, file, configPath, componentId, seqStr] = rest
-    if (!pkgDir || !file || !configPath || !componentId || !seqStr) badArgs()
-    result = await buildCaseBundles({
-      pkgDir,
-      file,
-      configPath,
-      componentId,
-      seq: Number(seqStr),
-    })
+    if (pkgDir && file && configPath && componentId && seqStr) {
+      result = await buildCaseBundles({
+        pkgDir,
+        file,
+        configPath,
+        componentId,
+        seq: Number(seqStr),
+      })
+    } else {
+      badArgs()
+    }
   } else if (kind === 'shell') {
-    // <pkgDir> <configPath> <primerPath|""> <seq>
+    // <pkgDir> <configPath> <primerPath|""> <seq> — primerPath may be empty.
     const [pkgDir, configPath, primerPath, seqStr] = rest
-    if (!pkgDir || !configPath || primerPath === undefined || !seqStr) badArgs()
-    result = await buildShellBundles({
-      pkgDir,
-      configPath,
-      primerPath: primerPath || null,
-      seq: Number(seqStr),
-    })
+    if (pkgDir && configPath && primerPath !== undefined && seqStr) {
+      result = await buildShellBundles({
+        pkgDir,
+        configPath,
+        primerPath: primerPath || null,
+        seq: Number(seqStr),
+      })
+    } else {
+      badArgs()
+    }
   } else {
     process.stderr.write(`build-case: unknown build kind '${kind}'\n`)
     process.exit(2)

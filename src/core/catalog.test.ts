@@ -41,16 +41,16 @@ describe('buildCatalog', () => {
       defineCases('Icon Button', { 'With Label': () => null }),
     ])
     expect(cat).toHaveLength(1)
-    expect(cat[0].id).toBe('icon-button')
-    expect(cat[0].name).toBe('Icon Button')
-    expect(cat[0].cases[0].id).toBe('with-label')
-    expect(cat[0].cases[0].name).toBe('With Label')
+    expect(cat[0]!.id).toBe('icon-button')
+    expect(cat[0]!.name).toBe('Icon Button')
+    expect(cat[0]!.cases[0]!.id).toBe('with-label')
+    expect(cat[0]!.cases[0]!.name).toBe('With Label')
   })
 
   test('a simple (function) case carries null tweaks and no transitions', () => {
     const cat = buildCatalog([defineCases('Button', { Default: () => null })])
-    expect(cat[0].cases[0].tweaks).toBeNull()
-    expect(cat[0].cases[0].transitions).toEqual([])
+    expect(cat[0]!.cases[0]!.tweaks).toBeNull()
+    expect(cat[0]!.cases[0]!.transitions).toEqual([])
   })
 
   test('a tweaked case exposes its declared tweak schema', () => {
@@ -58,7 +58,7 @@ describe('buildCatalog', () => {
     const cat = buildCatalog([
       defineCases('Button', { Custom: { tweaks, render: () => null } }),
     ])
-    expect(cat[0].cases[0].tweaks).toEqual(tweaks)
+    expect(cat[0]!.cases[0]!.tweaks).toEqual(tweaks)
   })
 
   test('orders components by hierarchy level, then by name', () => {
@@ -87,7 +87,7 @@ describe('buildCatalog', () => {
         Second: () => null,
       }),
     ])
-    expect(cat[0].cases.map((c) => c.name)).toEqual([
+    expect(cat[0]!.cases.map((c) => c.name)).toEqual([
       'Third',
       'First',
       'Second',
@@ -106,10 +106,10 @@ describe('buildCatalog', () => {
         },
       }),
     ])
-    expect(cat[0].isFlow).toBe(true)
-    expect(cat[0].level).toBe('flow')
-    expect(cat[0].cases[0].transitions).toEqual(['check-email'])
-    expect(cat[0].cases[1].transitions).toEqual([])
+    expect(cat[0]!.isFlow).toBe(true)
+    expect(cat[0]!.level).toBe('flow')
+    expect(cat[0]!.cases[0]!.transitions).toEqual(['check-email'])
+    expect(cat[0]!.cases[1]!.transitions).toEqual([])
   })
 
   test('sorts flows after every classified level (flow is the last level)', () => {

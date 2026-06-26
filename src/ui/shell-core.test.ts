@@ -237,7 +237,7 @@ describe('buildUrl', () => {
   test('round-trips through parseRoute', () => {
     const url = buildUrl('button', 'primary', { size: 'lg', on: '1' }, true)
     const [path, search] = url.split('?')
-    const r = parseRoute(path, `?${search}`)
+    const r = parseRoute(path!, `?${search}`)
     expect(r.componentId).toBe('button')
     expect(r.caseId).toBe('primary')
     expect(r.tweaks).toEqual({ size: 'lg', on: '1' })
@@ -328,8 +328,8 @@ describe('groupByLevel', () => {
   test('files a null level under the unclassified group', () => {
     const groups = groupByLevel([comp({ id: 'x', level: null })])
     expect(groups).toHaveLength(1)
-    expect(groups[0].key).toBe('unclassified')
-    expect(groups[0].components).toHaveLength(1)
+    expect(groups[0]!.key).toBe('unclassified')
+    expect(groups[0]!.components).toHaveLength(1)
   })
 })
 
@@ -398,8 +398,8 @@ describe('buildExhibitView', () => {
     // Only surfaces appear; the kit (button) is excluded.
     expect(view.ungrouped.map((c) => c.id)).toEqual(['welcome'])
     expect(view.tree).toHaveLength(1)
-    expect(view.tree[0].label).toBe('Marketing')
-    expect(view.tree[0].components.map((c) => c.id)).toEqual(['pricing'])
+    expect(view.tree[0]!.label).toBe('Marketing')
+    expect(view.tree[0]!.components.map((c) => c.id)).toEqual(['pricing'])
   })
 })
 
@@ -420,10 +420,10 @@ describe('groupPrimerSections', () => {
       section({ id: 'scale' }),
     ])
     expect(groups).toHaveLength(2)
-    expect(groups[0].heading?.id).toBe('colors')
-    expect(groups[0].items.map((i) => i.id)).toEqual(['ramp', 'swatches'])
-    expect(groups[1].heading?.id).toBe('type')
-    expect(groups[1].items.map((i) => i.id)).toEqual(['scale'])
+    expect(groups[0]!.heading?.id).toBe('colors')
+    expect(groups[0]!.items.map((i) => i.id)).toEqual(['ramp', 'swatches'])
+    expect(groups[1]!.heading?.id).toBe('type')
+    expect(groups[1]!.items.map((i) => i.id)).toEqual(['scale'])
   })
 
   test('puts displays before the first heading into a leading headless group', () => {
@@ -431,8 +431,8 @@ describe('groupPrimerSections', () => {
       section({ id: 'wordmark' }),
       section({ id: 'intro', kind: 'heading', title: 'Intro' }),
     ])
-    expect(groups[0].heading).toBeNull()
-    expect(groups[0].items.map((i) => i.id)).toEqual(['wordmark'])
-    expect(groups[1].heading?.id).toBe('intro')
+    expect(groups[0]!.heading).toBeNull()
+    expect(groups[0]!.items.map((i) => i.id)).toEqual(['wordmark'])
+    expect(groups[1]!.heading?.id).toBe('intro')
   })
 })

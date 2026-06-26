@@ -69,7 +69,9 @@ function findMatch(opts: NormOption[], buffer: string, from: number): number {
   const startK = buffer.length === 1 ? 1 : 0
   for (let k = startK; k <= n; k++) {
     const i = (from + k) % n
-    if (!opts[i].disabled && opts[i].text.startsWith(buffer)) return i
+    // i is taken mod n (> 0 here), so opts[i] is always in bounds.
+    const o = opts[i]
+    if (o && !o.disabled && o.text.startsWith(buffer)) return i
   }
   return -1
 }
@@ -82,7 +84,11 @@ function firstEnabled(opts: NormOption[]): number {
 
 /** Last selectable index, or `opts.length - 1` if none. */
 function lastEnabled(opts: NormOption[]): number {
-  for (let i = opts.length - 1; i >= 0; i--) if (!opts[i].disabled) return i
+  // i ranges over opts' own indices, so opts[i] is in bounds.
+  for (let i = opts.length - 1; i >= 0; i--) {
+    const o = opts[i]
+    if (o && !o.disabled) return i
+  }
   return opts.length - 1
 }
 
@@ -90,7 +96,9 @@ function lastEnabled(opts: NormOption[]): number {
  *  there is none, so a header can never become the active row. */
 function moveEnabled(opts: NormOption[], from: number, dir: 1 | -1): number {
   for (let i = from + dir; i >= 0 && i < opts.length; i += dir) {
-    if (!opts[i].disabled) return i
+    // The loop condition keeps i within [0, opts.length).
+    const o = opts[i]
+    if (o && !o.disabled) return i
   }
   return from
 }

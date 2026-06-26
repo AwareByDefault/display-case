@@ -293,7 +293,7 @@ export async function publish(
         entrypoints: [ssrPrimerEntry],
         outdir: join(out, 'server'),
         target: 'bun',
-        minify: false,
+        minify: true,
         naming: { entry: '[name].[ext]', chunk: '[name]-[hash].[ext]' },
         define: defines,
         external: ssrExternal,
@@ -318,7 +318,7 @@ export async function publish(
             entrypoints: [entry],
             outdir: join(out, 'server'),
             target: 'bun',
-            minify: false,
+            minify: true,
             // Fixed name (no hash) so `prod-server` resolves it by component id.
             naming: {
               entry: `ssr-case-${c.id}.[ext]`,

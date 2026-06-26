@@ -99,7 +99,7 @@ async function seedCache(
 ): Promise<void> {
   const dir = join(cacheDir(h.pkgDir), 'a11y')
   await mkdir(dir, { recursive: true })
-  const abs = h.caseAbs[componentId]
+  const abs = h.caseAbs[componentId]!
   const st = statSync(abs)
   const entry = {
     toolVersion: TOOL_VERSION,
@@ -178,8 +178,8 @@ test('cached mode emits reusable cached results and runs no scans', async () => 
     'cached',
   )
   expect(results).toHaveLength(1)
-  expect(results[0].id).toBe('foo/default/light')
-  expect(results[0].status).toEqual({ status: 'ok', violations: [VIOLATION] })
+  expect(results[0]!.id).toBe('foo/default/light')
+  expect(results[0]!.status).toEqual({ status: 'ok', violations: [VIOLATION] })
   expect(opens).toEqual([]) // never launched the driver
   await scanner.close()
 })

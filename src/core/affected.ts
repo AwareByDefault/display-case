@@ -44,7 +44,8 @@ function specifiers(source: string, isCss: boolean): string[] {
   const out: string[] = []
   const collect = (re: RegExp) => {
     re.lastIndex = 0
-    for (let m = re.exec(source); m; m = re.exec(source)) out.push(m[1])
+    // Every specifier regex captures the path in group 1, always present; '' is inert.
+    for (let m = re.exec(source); m; m = re.exec(source)) out.push(m[1] ?? '')
   }
   if (isCss) {
     collect(CSS_IMPORT)
@@ -70,10 +71,13 @@ async function resolveSpecifier(
 ): Promise<string | null> {
   if (!spec.startsWith('.') && !spec.startsWith('/')) return null
   const base = isAbsolute(spec) ? spec : resolve(dirname(fromFile), spec)
-  for (const cand of candidates(base)) {
-    if (await Bun.file(cand).exists()) return cand
-  }
-  return null
+  // Probe every candidate concurrently, but keep resolution *priority*: pick
+  // the first candidate (in `candidates`' order) that exists.
+  const cands = [...candidates(base)]
+  const exists = await Promise.all(cands.map((c) => Bun.file(c).exists()))
+  const i = exists.findIndex(Boolean)
+  // i indexes `exists`, which is 1:1 with `cands`, so cands[i] exists when i !== -1.
+  return i === -1 ? null : (cands[i] ?? null)
 }
 
 /**
@@ -107,8 +111,16 @@ export async function importClosure(entries: string[]): Promise<Set<string>> {
 export async function componentClosures(
   components: { id: string; caseFile: string }[],
 ): Promise<Map<string, Set<string>>> {
+  // Per-component closures are independent and pure — walk them concurrently,
+  // then assemble the map in the original component order.
+  const closures = await Promise.all(
+    components.map((c) => importClosure([c.caseFile])),
+  )
   const map = new Map<string, Set<string>>()
-  for (const c of components) map.set(c.id, await importClosure([c.caseFile]))
+  // closures is Promise.all over components.map, so it is 1:1 with components.
+  components.forEach((c, i) => {
+    map.set(c.id, closures[i] ?? new Set<string>())
+  })
   return map
 }
 

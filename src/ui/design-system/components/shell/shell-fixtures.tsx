@@ -205,7 +205,8 @@ const richCaseComponent: ManifestComponent = mkComponent({
 
 /** Selection override that puts the rich "Case template" exhibit on the stage. */
 export function caseTemplateSelection(): Partial<ShellViewModel> {
-  const activeCase = richCaseComponent.cases[0]
+  // richCaseComponent is constructed with exactly one case, so [0] is present.
+  const activeCase = richCaseComponent.cases[0]!
   const sel = {
     componentId: richCaseComponent.id,
     caseId: activeCase.id,
@@ -504,7 +505,7 @@ export function makeModel(
     selectComponent: noop,
     select: noop,
     primerGroups: groupPrimerSections(MOCK_PRIMER_SECTIONS),
-    primerActive: MOCK_PRIMER_SECTIONS[0].id,
+    primerActive: MOCK_PRIMER_SECTIONS[0]!.id,
     // Accordion: one TOC group open at a time, tracking the active section
     // (see useShell — the scrollspy effect that drives primerExpanded).
     primerExpanded: new Set(['heading-foundations']),

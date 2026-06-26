@@ -1,5 +1,5 @@
 import { mkdir } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve, sep } from 'node:path'
 import type { BuildDescriptor } from '../commands/publish'
 import type { Manifest } from '../core/manifest'
 import { primerDoc, renderDoc, shellDoc } from '../render/documents'
@@ -192,9 +192,14 @@ export async function startProdServer(
       if (path === '/health') return new Response('ok')
 
       if (path.startsWith('/assets/')) {
-        const file = Bun.file(
-          join(buildDir, 'assets', path.slice('/assets/'.length)),
-        )
+        const assetsDir = join(buildDir, 'assets')
+        const abs = resolve(assetsDir, path.slice('/assets/'.length))
+        // Defense-in-depth: never serve outside the assets dir even if a crafted
+        // path slips a `..` past `URL` normalization.
+        if (abs !== assetsDir && !abs.startsWith(assetsDir + sep)) {
+          return new Response('not found', { status: 404 })
+        }
+        const file = Bun.file(abs)
         if (!(await file.exists())) {
           return new Response('not found', { status: 404 })
         }

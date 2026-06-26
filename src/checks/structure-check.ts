@@ -457,10 +457,12 @@ function ruleUniqueSlugs(
     }
   }
   for (const [slug, entries] of byComponentSlug) {
-    if (entries.length > 1) {
+    const [first] = entries
+    // length > 1 guarantees a first entry; the `first` check only narrows the type.
+    if (first && entries.length > 1) {
       out.push({
         rule: 'unique-slugs',
-        file: entries[0].file,
+        file: first.file,
         message: `components collide on slug "${slug}": ${entries.map((e) => e.name).join(', ')}`,
       })
     }
@@ -514,7 +516,8 @@ function statefulLocalComponents(text: string): Set<string> {
   const defs: { name: string; index: number }[] = []
   const defRe = /(?:function\s+([A-Z]\w*)|const\s+([A-Z]\w*)\s*=)/g
   for (let m = defRe.exec(text); m; m = defRe.exec(text)) {
-    defs.push({ name: m[1] ?? m[2], index: m.index })
+    // defRe's two alternatives are mutually exclusive; one always fills, so '' is inert.
+    defs.push({ name: m[1] ?? m[2] ?? '', index: m.index })
   }
   // Attribute each `useState`/`useReducer` to the closest preceding definition —
   // that component holds the state. (A pure helper in the same file is ignored.)
@@ -632,8 +635,9 @@ function parseImports(code: string): ParsedImport[] {
   IMPORT_RE.lastIndex = 0
   for (let m = IMPORT_RE.exec(code); m; m = IMPORT_RE.exec(code)) {
     const typeOnly = Boolean(m[1])
-    const clause = m[2]
-    const source = m[3]
+    // IMPORT_RE groups 2 (clause) and 3 (source) always participate; '' is inert.
+    const clause = m[2] ?? ''
+    const source = m[3] ?? ''
     // When the scanner ran, trust it: keep only statements it confirmed are real
     // runtime imports (this drops type-only, commented, and string-literal
     // matches). When it threw, `real` is null and every regex match is kept.
@@ -641,11 +645,10 @@ function parseImports(code: string): ParsedImport[] {
     const names: string[] = []
     const braced = clause.match(/\{([^}]*)\}/)
     if (braced) {
-      for (const part of braced[1].split(',')) {
-        const name = part
-          .trim()
-          .split(/\s+as\s+/)[0]
-          .trim()
+      // The regex's single capture group always participates when braced matches.
+      for (const part of (braced[1] ?? '').split(',')) {
+        // split() always yields at least one segment.
+        const name = (part.trim().split(/\s+as\s+/)[0] ?? '').trim()
         if (name && name !== 'type') names.push(name)
       }
     }
@@ -713,7 +716,8 @@ async function followReexport(
   }
   REEXPORT_RE.lastIndex = 0
   for (let m = REEXPORT_RE.exec(text); m; m = REEXPORT_RE.exec(text)) {
-    const exported = m[1].split(',').map((p) =>
+    // REEXPORT_RE groups 1 (names) and 2 (source) always participate; '' is inert.
+    const exported = (m[1] ?? '').split(',').map((p) =>
       p
         .trim()
         .split(/\s+as\s+/)
@@ -721,7 +725,9 @@ async function followReexport(
         ?.trim(),
     )
     if (!exported.includes(name)) continue
-    for (const cand of candidatePaths(resolve(dirname(entryFile), m[2]))) {
+    for (const cand of candidatePaths(
+      resolve(dirname(entryFile), m[2] ?? ''),
+    )) {
       if (await Bun.file(cand).exists()) return cand
     }
   }

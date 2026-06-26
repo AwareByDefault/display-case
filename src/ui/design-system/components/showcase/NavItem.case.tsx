@@ -20,7 +20,7 @@ export default defineCases(
       render: (t) => (
         <Sidebar style={{ width: '15rem' }}>
           <NavItem
-            kind={t.kind as 'component' | 'case'}
+            kind={t.kind ?? 'component'}
             label={t.label}
             count={t.withCount ? t.count : undefined}
             alert={t.alert}
