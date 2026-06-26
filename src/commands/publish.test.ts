@@ -58,6 +58,25 @@ describe('publish: artifacts', () => {
     expect(assets.some((f) => /^render-entry-.+\.js$/.test(f))).toBe(false)
   })
 
+  test('React is shipped once as a shared vendor bundle, not inlined per component', async () => {
+    const assets = await readdir(join(out, 'assets'))
+    // Exactly one shared, content-hashed vendor bundle…
+    const vendors = assets.filter((f) => /^vendor-react-.+\.js$/.test(f))
+    expect(vendors.length).toBe(1)
+    expect(descriptor.assets.vendor).toMatch(/^\/assets\/vendor-react-.+\.js$/)
+    // …and it carries React's runtime (the reconciler entry point lives here).
+    const vendorText = await Bun.file(join(out, 'assets', vendors[0]!)).text()
+    expect(vendorText).toContain('createRoot')
+    // Regression guard against re-inlining: a per-component render bundle imports
+    // React as external bare specifiers (resolved by the importmap) rather than
+    // bundling its own copy — so dropping the externalization would fail here.
+    const renderFile = assets.find((f) => /^render-case-.+-.+\.js$/.test(f))
+    const renderText = await Bun.file(
+      join(out, 'assets', renderFile as string),
+    ).text()
+    expect(renderText).toMatch(/from\s*"react/)
+  })
+
   test('descriptor: production, a11y disabled, base-prefixed assets', () => {
     expect(descriptor.title).toBe('Plain Consumer')
     expect(descriptor.a11y).toBe(false)
@@ -183,6 +202,18 @@ describe('publish: the served build is a functional showcase', () => {
     expect(html).not.toContain('Plain Consumer')
   })
 
+  test('the shell and render documents carry the React importmap to the vendor bundle', async () => {
+    const c = manifest.components[0]!
+    const mapping = `"react":"${descriptor.assets.vendor}"`
+    for (const path of ['/', `/render/${c.id}/${c.cases[0]!.id}`]) {
+      const html = await (await fetch(`${baseUrl}${path}`)).text()
+      // The importmap resolves the externalized bare specifiers to the one shared
+      // bundle; without it the externalized bundles can't find React in the browser.
+      expect(html).toContain('<script type="importmap">')
+      expect(html).toContain(mapping)
+    }
+  })
+
   test('hashed assets are served with immutable caching', async () => {
     const r = await fetch(`${baseUrl}${descriptor.assets.browser}`)
     expect(r.status).toBe(200)
@@ -207,6 +238,9 @@ describe('publish: the static export needs no running server', () => {
     expect(html).toContain('<!doctype html>')
     expect(html).toContain('Plain Consumer')
     expect(html).toContain(descriptor.assets.browser)
+    // The importmap is plain markup, so React still resolves with no server.
+    expect(html).toContain('<script type="importmap">')
+    expect(html).toContain(`"react":"${descriptor.assets.vendor}"`)
   })
 
   test('writes a complete per-case render document', async () => {

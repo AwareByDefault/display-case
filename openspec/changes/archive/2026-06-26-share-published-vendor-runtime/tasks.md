@@ -19,3 +19,4 @@
 - [x] 4.2 Real publish of this repo's showcase: per-component bundle ~191 KB → ~6 KB; total assets ~7.2 MB → ~1.2 MB; vendor ~190 KB carries the reconciler; no React fingerprint inside per-component bundles.
 - [x] 4.3 Headless browser load of the published shell + several render pages: each hydrates with zero console/page errors (React resolves via the importmap). Static export contains the importmap.
 - [x] 4.4 `bun run typecheck`, `bun run lint`, `bun test`, `bun run e2e` pass.
+- [x] 4.5 `publish.test.ts` (the publish harness) asserts the artifact contract automatically — exactly one content-hashed `vendor-react-*.js` carrying the runtime, a per-component bundle importing React as an external bare specifier (re-inlining guard), and the importmap referencing the vendor bundle in the served shell, the `/render` doc, and the static export — so a dropped importmap or re-inlined React is caught in CI, not only by the manual checks in 4.2/4.3.
