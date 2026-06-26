@@ -289,7 +289,7 @@ and reverted here.** Spawning `bun build-case.ts` per component (so a native
 segfault would be a child exit, not a dead server) worked locally but timed out
 the a11y `re-scan` e2e at 45s on a contended 2-core runner — a cold `bun` spawn
 per build is pathologically slow there. **Superseded:** the 2026-06-25 "ALL
-bundling runs in fresh child processes" entry below moved *all* bundling back to
+bundling runs in fresh child processes" entry above moved *all* bundling back to
 workers after paying that cost down (bounded concurrency + a `pageLoaded`
 stage-iframe gate), so the "builds run in-process" detail no longer holds.
 Surviving lesson: a per-request subprocess spawn is a real cost on constrained
