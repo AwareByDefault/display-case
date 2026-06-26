@@ -145,6 +145,8 @@ The browse chrome has its **own** design system — *The Vitrine* — under `src
 
 **6.4** **The authoring API stays environment-neutral** (see §2.3): `src/index.ts` imports no DOM, no server, no Node/Bun runtime globals — only `react` types.
 
+**6.5** **Never run `Bun.build` in the long-lived process.** Bundler heap state accumulating in a long-lived process is a crash precondition — Bun's bundler can segfault as the aggregate module graph grows. So the dev server *and* `publish` run **every** `Bun.build` in a fresh child worker (`src/server/build-case.ts`, spawned per build via `src/server/build-runner.ts`) whose heap dies with the process; the parent only orchestrates — it spawns the worker, reads the on-disk bundles + the recorded module graph, then `import()`s the SSR bundle (evaluation is safe; only *bundling* the combined graph crashes). The worker also buys crash/hang containment: a child that dies on a signal, yields no `{ok:true}`, or exceeds `buildTimeoutMs()` is a contained, attributed per-surface failure, not a dead tool. Keep each `Bun.build` scoped to **one** component's graph (never the whole catalog) — the bound is what removes the crash precondition. Verify the invariant with `grep -nE 'await Bun\.build|Bun\.build\(\{' src/server/server.ts src/commands/publish.ts` → **zero**. (Full history: [NOTES.md](NOTES.md).)
+
 ---
 
 ## 7. Error handling
