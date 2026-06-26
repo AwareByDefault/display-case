@@ -608,7 +608,14 @@ export async function startDisplayCase(
   // behaviors (watch, SSE, on-demand a11y) — it does its own one-shot scan.
   const interactive = opts.port !== 0
   const { config, configPath } = await resolveConfig(pkgDir)
-  let state = await rebuild(pkgDir, config, configPath)
+  // The initial build runs in cold `bun` subprocesses (the shell worker + the
+  // manifest); don't block the listen on it. If the port stayed closed until
+  // they finished, several servers booting at once on a constrained CI runner
+  // could blow Playwright's `webServer` readiness budget. Instead the server
+  // starts listening first — so `/health` is reachable immediately — and every
+  // other route awaits the `ready` promise built below. `startDisplayCase` still
+  // awaits `ready` before returning, so callers get a fully-prepared server.
+  let state!: BuiltState
   // `let` so dev mode can re-read them when the chrome's CSS/tokens change.
   let vitrineCss = await readVitrineCss()
   let tokensCss = await readDesignTokens()
@@ -747,7 +754,7 @@ export async function startDisplayCase(
       ? Bun.hash(await f.arrayBuffer()).toString(16)
       : ''
   }
-  let shellHash = await shellBundleHash()
+  let shellHash = ''
   const triggerReload = (kind: 'shell' | 'content') =>
     broadcast(encoder.encode(`event: reload\ndata: ${kind}\n\n`))
 
@@ -772,6 +779,16 @@ export async function startDisplayCase(
   // other port is preferred-not-mandatory, so two worktrees never collide.
   const port = opts.port === 0 ? 0 : await firstFreePort(opts.port ?? 3100)
 
+  // The initial build, kicked off here so it runs concurrently with the listen
+  // instead of blocking it (see the note at `state`). Created with no `await`
+  // between it and the `await ready` after `Bun.serve` below, so its rejection
+  // always has a waiter — never a floating promise. Sequential inside: the
+  // shell-bundle hash reads what the build just wrote.
+  const ready = (async () => {
+    state = await rebuild(pkgDir, config, configPath)
+    shellHash = await shellBundleHash()
+  })()
+
   const server = Bun.serve({
     port,
     // The `/__livereload` SSE stream is long-lived; the default 10s idle timeout
@@ -782,7 +799,12 @@ export async function startDisplayCase(
       const url = new URL(req.url)
       const path = url.pathname
 
+      // The one liveness signal that must answer before the initial build
+      // finishes — it's what makes the server reachable while the cold build
+      // subprocesses run. Every route below needs the prepared state, so it
+      // waits for the build to complete here.
       if (path === '/health') return new Response('ok')
+      await ready
 
       if (interactive && path === '/__livereload') {
         let self: ReadableStreamDefaultController | null = null
@@ -999,6 +1021,18 @@ export async function startDisplayCase(
       )
     },
   })
+
+  // The socket is open and `/health` answers now; wait for the initial build
+  // before wiring the build-dependent machinery (the a11y start-up sweep, the
+  // dependency watchers) and before returning a fully-prepared server. A
+  // captured build failure is kept in `state.shellError` and does not reject; a
+  // catastrophic throw does — close the socket rather than leak a live server.
+  try {
+    await ready
+  } catch (err) {
+    server.stop(true)
+    throw err
+  }
 
   // Build the on-demand scanner now that the server has a URL to scan against.
   if (interactive && config.a11y?.enabled) {

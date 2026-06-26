@@ -4,6 +4,31 @@ Non-obvious decisions, debugging notes, and architectural context for the Displa
 
 ---
 
+## 2026-06-26: The server listens before the initial build — `/health` precedes preparation
+
+`startDisplayCase` (`src/server/server.ts`) used to `await rebuild(...)` **before**
+constructing `Bun.serve`, so the port stayed closed for the whole startup build —
+which spawns two cold `bun` children (the `shell` worker + the manifest
+subprocess). The e2e suite launches **four** servers at once
+(`playwright.config.ts`), each waited on at `/health` with a 60s `webServer`
+budget; on a contended 2-core CI runner those ~8 simultaneous cold spawns
+occasionally blew the budget (`Error: Timed out waiting 60000ms from
+config.webServer`) — a flake unrelated to the change under test. (Same cold-spawn
+cost called out in the per-component-build note below.)
+
+**Fix:** construct `Bun.serve` *first*, then build. The build is kicked off as a
+`ready` promise (`state` is `let state!: BuiltState`, assigned when it resolves);
+`/health` returns `ok` immediately, and **every other route `await ready`** before
+touching `state`, so nothing observable changes (cases still lazy, render still
+before scripts). `startDisplayCase` still `await ready`s before returning — so
+`check.ts` and the integration tests still get a fully-prepared server — but the
+socket is already open during the build. A catastrophic build throw (not a
+captured `state.shellError`) `server.stop(true)`s rather than leak a live server.
+
+Measured: `/health` answers in ~70ms vs the built `/` at ~210ms (was: both gated
+on the full build). **Don't reintroduce an `await` of the build before
+`Bun.serve`** — readiness must stay decoupled from the cold build subprocesses.
+
 ## 2026-06-25: ALL bundling runs in fresh child processes — never in the dev server
 
 **Supersedes the "in-process build" decision below.** 1.3.0 moved *case* bundling
