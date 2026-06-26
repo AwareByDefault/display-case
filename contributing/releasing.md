@@ -52,11 +52,16 @@ file(s) a PR includes. Commit/merge style therefore has no effect on the release
    only if the merged changes carried any changesets — runs `changeset version`
    (bumps `package.json`, prepends `CHANGELOG.md`, deletes the consumed
    changesets), commits that back to `main` as `chore(release): version packages
-   [skip ci]`, and `changeset publish`es to npm. A push carrying no changesets is
-   a clean no-op. Multiple changesets in one release collapse to the highest
-   level, and each description becomes its own changelog line.
+   [skip ci]`, `changeset publish`es to npm, and cuts a **GitHub Release** for the
+   new `v<version>` tag (notes = that version's `CHANGELOG.md` section). A push
+   carrying no changesets is a clean no-op. Multiple changesets in one release
+   collapse to the highest level, and each description becomes its own changelog
+   line.
 
 The version commit is tagged `[skip ci]` so it doesn't retrigger the workflow.
+`changeset publish` creates the `v<version>` git tag; the GitHub Release is cut
+separately (`gh release create`) because `changeset publish` never makes one. The
+Release step is idempotent — a re-run skips a Release that already exists.
 
 ## Branch protection: the release pushes as a GitHub App
 
