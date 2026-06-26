@@ -39,6 +39,20 @@ const FIXTURE = resolve(
   '..',
   'e2e/fixtures/consumer-plain',
 )
+/** Two components importing `markdown-to-jsx`, which the config declares `share`. */
+const SHARED_FIXTURE = resolve(
+  import.meta.dir,
+  '..',
+  '..',
+  'e2e/fixtures/consumer-shared',
+)
+/** The same two importers WITHOUT `share`, so the library inlines into both. */
+const DUP_FIXTURE = resolve(
+  import.meta.dir,
+  '..',
+  '..',
+  'e2e/fixtures/consumer-dup',
+)
 
 describe('publish: artifacts', () => {
   let out: string
@@ -58,15 +72,29 @@ describe('publish: artifacts', () => {
     expect(assets.some((f) => /^render-entry-.+\.js$/.test(f))).toBe(false)
   })
 
-  test('React is shipped once as a shared vendor bundle, not inlined per component', async () => {
+  test('React is shipped once as shared vendor bundles, not inlined per component', async () => {
     const assets = await readdir(join(out, 'assets'))
-    // Exactly one shared, content-hashed vendor bundle…
-    const vendors = assets.filter((f) => /^vendor-react-.+\.js$/.test(f))
-    expect(vendors.length).toBe(1)
-    expect(descriptor.assets.vendor).toMatch(/^\/assets\/vendor-react-.+\.js$/)
-    // …and it carries React's runtime (the reconciler entry point lives here).
-    const vendorText = await Bun.file(join(out, 'assets', vendors[0]!)).text()
-    expect(vendorText).toContain('createRoot')
+    // One content-hashed vendor entry per shared specifier (React's four by default),
+    // built in one `splitting` pass so the reconciler dedupes into a shared chunk.
+    const vendors = assets.filter((f) => /^vendor-.+\.js$/.test(f))
+    expect(vendors.length).toBeGreaterThanOrEqual(4)
+    // The importmap maps every externalized React specifier to a vendor bundle URL.
+    for (const spec of [
+      'react',
+      'react-dom',
+      'react-dom/client',
+      'react/jsx-runtime',
+    ]) {
+      expect(descriptor.assets.importmap[spec]).toMatch(
+        /^\/assets\/vendor-.+\.js$/,
+      )
+    }
+    // React's runtime lands in the vendor bundles (the reconciler's `createRoot` is
+    // re-exported by the react-dom/client entry; its impl lives in the shared chunk).
+    const vendorTexts = await Promise.all(
+      vendors.map((f) => Bun.file(join(out, 'assets', f)).text()),
+    )
+    expect(vendorTexts.some((t) => t.includes('createRoot'))).toBe(true)
     // Regression guard against re-inlining: a per-component render bundle imports
     // React as external bare specifiers (resolved by the importmap) rather than
     // bundling its own copy — so dropping the externalization would fail here.
@@ -204,7 +232,7 @@ describe('publish: the served build is a functional showcase', () => {
 
   test('the shell and render documents carry the React importmap to the vendor bundle', async () => {
     const c = manifest.components[0]!
-    const mapping = `"react":"${descriptor.assets.vendor}"`
+    const mapping = `"react":"${descriptor.assets.importmap.react}"`
     for (const path of ['/', `/render/${c.id}/${c.cases[0]!.id}`]) {
       const html = await (await fetch(`${baseUrl}${path}`)).text()
       // The importmap resolves the externalized bare specifiers to the one shared
@@ -240,7 +268,7 @@ describe('publish: the static export needs no running server', () => {
     expect(html).toContain(descriptor.assets.browser)
     // The importmap is plain markup, so React still resolves with no server.
     expect(html).toContain('<script type="importmap">')
-    expect(html).toContain(`"react":"${descriptor.assets.vendor}"`)
+    expect(html).toContain(`"react":"${descriptor.assets.importmap.react}"`)
   })
 
   test('writes a complete per-case render document', async () => {
@@ -272,4 +300,101 @@ describe('publish: build-worker crash containment', () => {
       await rm(out, { recursive: true, force: true })
     }
   }, 30_000)
+})
+
+// Phase 2: a non-React library declared in `config.share` is delivered once, exactly
+// like React — generalizing the vendor + importmap mechanism beyond the rendering
+// runtime. Proves the introspection codegen and the externalization work for an
+// arbitrary (CJS-shaped) library, and that a published shared library is added to the
+// deployed package.json so its SSR renderers resolve it at runtime.
+describe('publish: author-declared shared libraries', () => {
+  let out: string
+  let descriptor: BuildDescriptor
+  let logs: string[]
+
+  beforeAll(async () => {
+    out = await makeTempDir()
+    logs = []
+    const realLog = console.log
+    console.log = (...args: unknown[]) => {
+      logs.push(args.join(' '))
+    }
+    try {
+      ;({ descriptor } = await publish(SHARED_FIXTURE, { out }))
+    } finally {
+      console.log = realLog
+    }
+  })
+  afterAll(() => rm(out, { recursive: true, force: true }))
+
+  test('a declared library is shipped once and externalized from each component', async () => {
+    const assets = await readdir(join(out, 'assets'))
+    // A content-hashed vendor bundle for the declared library exists…
+    expect(assets.some((f) => /^vendor-markdown-to-jsx-.+\.js$/.test(f))).toBe(
+      true,
+    )
+    // …and the importmap resolves the bare specifier to it.
+    expect(descriptor.assets.importmap['markdown-to-jsx']).toMatch(
+      /^\/assets\/vendor-markdown-to-jsx-.+\.js$/,
+    )
+    // Each per-component bundle imports it as an external bare specifier (the
+    // re-inlining guard) rather than bundling its own copy.
+    const renderFiles = assets.filter((f) => /^render-case-.+-.+\.js$/.test(f))
+    expect(renderFiles.length).toBeGreaterThanOrEqual(2)
+    for (const f of renderFiles) {
+      const t = await Bun.file(join(out, 'assets', f)).text()
+      expect(t).toMatch(/from\s*"markdown-to-jsx"/)
+    }
+  })
+
+  test('the published package.json lists the declared (published) library', async () => {
+    const pkg = (await Bun.file(join(out, 'package.json')).json()) as {
+      dependencies: Record<string, string>
+    }
+    expect(pkg.dependencies['markdown-to-jsx']).toBeDefined()
+  })
+
+  test('an undeclared subpath of a shared library inlines, not leak past the importmap', async () => {
+    // The primer bundles `markdown-to-jsx` via an absolute path (the mdx plugin); its
+    // internals import the `markdown-to-jsx/entities` subpath. Only the bare
+    // `markdown-to-jsx` is shared/importmapped, so the subpath MUST be inlined — Bun's
+    // prefix `external` would instead leave it a bare specifier the browser can't
+    // resolve (caught as a real hydration error in a headless load). Exact-match
+    // externalization keeps the subpath inlined. Guard every browser bundle.
+    const assets = await readdir(join(out, 'assets'))
+    const browserBundles = assets.filter(
+      (f) => f.endsWith('.js') && !f.startsWith('vendor-'),
+    )
+    for (const f of browserBundles) {
+      const t = await Bun.file(join(out, 'assets', f)).text()
+      expect(t).not.toMatch(/from\s*"markdown-to-jsx\/entities"/)
+    }
+  })
+
+  test('a shared library is excluded from the duplicate report', () => {
+    // It is external (never an input), so the advisory never flags it.
+    expect(logs.join('\n')).not.toContain('markdown-to-jsx —')
+  })
+})
+
+// Phase 3: the advisory report names a library inlined across more than one component
+// (a candidate for `share`), without changing the output or failing the build.
+describe('publish: duplicate-runtime reporting', () => {
+  test('reports a library inlined into more than one component', async () => {
+    const out = await makeTempDir()
+    const logs: string[] = []
+    const realLog = console.log
+    console.log = (...args: unknown[]) => {
+      logs.push(args.join(' '))
+    }
+    try {
+      await publish(DUP_FIXTURE, { out })
+    } finally {
+      console.log = realLog
+      await rm(out, { recursive: true, force: true })
+    }
+    const report = logs.join('\n')
+    expect(report).toContain('add to `share` to deliver once')
+    expect(report).toMatch(/markdown-to-jsx — in 2 components/)
+  })
 })

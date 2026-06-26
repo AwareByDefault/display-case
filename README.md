@@ -287,6 +287,8 @@ display-case publish <pkgDir> [--out=<dir>] [--base=<path>] [--static]
 
 Every surface — the browse shell (`/` and `/c/<component>/<case>` deep links), each isolated `/render/<component>/<case>`, and the primer — is **server-rendered before scripts run** and hydrates on the client, so the build reads (and screenshots, and crawls) without executing JS. The build is production-grade by default: minified, **content-hashed** assets (cached `immutable`), HTML served `no-cache`, **no** development machinery (no file watching, no live-reload stream, no on-demand a11y, no dev endpoints), and reproducible output.
 
+The catalog is split into one isolated bundle per component (so building a large showcase never holds the whole graph at once). React is delivered **once** as a shared, cacheable vendor bundle every surface references via an [importmap](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/script/type/importmap) rather than copied into each bundle; [`share`](docs/configuration.md#share) extends that to any other runtime library several components use (a style engine, `markdown-to-jsx`, a monorepo workspace package). `publish` reports libraries inlined across more than one component as candidates.
+
 Two forms:
 
 - **Served (default)** — a thin production server (`server.ts`) plus the hashed asset bundle, a frozen manifest, a `package.json`, and a `Dockerfile` (with a `/health` check). Run it with `bun server.ts`, or build the Dockerfile and deploy it like any other service (one Dockerfile per service). It renders documents on request, so address-encoded themes/tweaks (`?theme=dark`, `?t.x=…`) are server-rendered at full fidelity. `--base=/showcase` hosts it under a subpath.

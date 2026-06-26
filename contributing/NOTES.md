@@ -4,6 +4,59 @@ Non-obvious decisions, debugging notes, and architectural context for the Displa
 
 ---
 
+## 2026-06-26: Shared-vendor delivery generalized beyond React (`config.share`)
+
+The published build delivers React **once** (a shared vendor bundle + an importmap)
+instead of inlining ~150 KB into every per-component bundle. That was React-only, in
+three hand-maintained lists. This change generalizes it so an author can `share` *any*
+runtime library (a style engine, `markdown-to-jsx`, a monorepo workspace package). Key
+decisions, all in `src/commands/publish.ts`:
+
+- **One source of truth.** A `SharedLib[]` descriptor (`resolveSharedLibs`) — React
+  always, plus `config.share` — is the *only* list. The browser `external` set, the
+  vendor entrypoints, and the importmap map are all *derived* from it, so the three
+  can never drift (the old failure mode the reviewer flagged on the React PR).
+- **Splitting is safe on the bounded vendor set, never the catalog.** The catalog is
+  still one isolated `Bun.build` per component (the crash-containment precondition —
+  no pass holds the whole graph), which is exactly why `splitting` can't dedup across
+  it. But the shared set is a *handful* of entries, so the vendor build runs **one
+  `Bun.build` with `splitting: true`** over one generated entry per specifier. Splitting
+  then dedups cross-specifier internals (the React reconciler under both `react-dom`
+  and `react-dom/client`) into a shared chunk. This is the one place splitting is
+  allowed, and the only place it's needed.
+- **Output→specifier mapping.** Each vendor entry is named `vendor-<sanitized-spec>`;
+  Bun appends `-<hash>.js` and the content hash never contains `-`, so the specifier is
+  recovered from an output basename by stripping the final `-<hash>.ext`
+  (`specifierForOutput`) — unambiguous even though `vendor-react` is a prefix of
+  `vendor-react-dom`. Split *chunks* share the `vendor-react-*` name shape but are
+  `kind: 'chunk'`, filtered out before mapping.
+- **The introspection codegen generalizes unchanged.** `import * as ns` +
+  `export const x = ns.x` per installed export (+ `export default` when present) is
+  still required (a CJS module under `export *` yields runtime copies, not the static
+  bindings the importmap needs). Per-*specifier* entries removed the old cross-module
+  name-collision handling — each specifier is its own module now. Reserved-word / non-
+  identifier export names are skipped (they can't be `const` bindings); none occur in
+  React or markdown-to-jsx.
+- **Sharing is the general form of `pinReact`.** External + importmap means every
+  surface resolves a shared specifier to the one vendor copy — which is also what a
+  stateful singleton (a CSS-in-JS cache/context) needs. So `share` is a correctness
+  tool, not only a size one.
+- **Browser vs SSR diverge for monorepos (`origin`).** `packageInfo` tags each lib
+  `published` (its realpath is under `node_modules`) or `workspace` (defined in the
+  repo). Published → external on SSR + added to the generated `package.json` deps
+  (`readConsumerRanges` → the consumer's declared range, else `^version`). Workspace →
+  **bundled** into each SSR renderer (a private package has no deploy-time `bun
+  install`; duplicating it across SSR bundles is host disk, not client bytes — the
+  client still shares it via the browser vendor bundle). The client-download win is
+  entirely browser-side, so SSR sharing isn't worth the complexity.
+- **Whole-module, no tree-shaking → conservative selection.** The namespace re-export
+  keeps each shared module whole, so sharing a library each component barely uses can
+  *increase* total bytes below a crossover. Hence `share` is declarative (not auto-
+  hoist), and `publish` only *reports* inlined-across-≥2-components libraries
+  (`reportInlinedDuplicates`, from the per-build recorded `inputs`) as candidates —
+  advisory, never automatic. Running it on this repo flagged `markdown-to-jsx` inlined
+  in 6 components (~357 KB), now shared via `display-case.config.ts`.
+
 ## 2026-06-26: The server listens before the initial build — `/health` precedes preparation
 
 `startDisplayCase` (`src/server/server.ts`) used to `await rebuild(...)` **before**

@@ -2,11 +2,18 @@ import { describe, expect, test } from 'bun:test'
 import type { Manifest } from '../core/manifest'
 import { type DocAssets, primerDoc, renderDoc, shellDoc } from './documents'
 
+const importmap = {
+  react: '/assets/vendor-react-xyz789.js',
+  'react-dom': '/assets/vendor-react-dom-aaa111.js',
+  'react-dom/client': '/assets/vendor-react-dom-client-bbb222.js',
+  'react/jsx-runtime': '/assets/vendor-react-jsx-runtime-ccc333.js',
+}
+
 const assets: DocAssets = {
   browser: '/assets/browser-abc123.js',
   render: { button: '/assets/render-case-button-def456.js' },
   primer: '/assets/primer-ghi789.js',
-  vendor: '/assets/vendor-react-xyz789.js',
+  importmap,
 }
 
 const manifest: Manifest = {
@@ -93,7 +100,7 @@ describe('renderDoc', () => {
       markup: '<button>x</button>',
       ssr: true,
       scriptSrc: '/assets/render-case-button-def456.js',
-      vendor: '/assets/vendor-react-xyz789.js',
+      importmap,
       ...over,
     })
 
@@ -141,12 +148,12 @@ describe('renderDoc', () => {
     expect(html).toContain(`</style>${tag}`)
   })
 
-  test('emits an importmap resolving React to the shared vendor bundle', () => {
+  test('emits an importmap resolving each shared specifier to its vendor bundle', () => {
     const html = doc()
     expect(html).toContain('<script type="importmap">')
     expect(html).toContain('"react":"/assets/vendor-react-xyz789.js"')
     expect(html).toContain(
-      '"react-dom/client":"/assets/vendor-react-xyz789.js"',
+      '"react-dom/client":"/assets/vendor-react-dom-client-bbb222.js"',
     )
     // Before the module script that imports those bare specifiers.
     expect(html.indexOf('importmap')).toBeLessThan(
@@ -154,8 +161,8 @@ describe('renderDoc', () => {
     )
   })
 
-  test('omits the importmap when no vendor bundle is supplied', () => {
-    expect(doc({ vendor: '' })).not.toContain('importmap')
+  test('omits the importmap when nothing is shared', () => {
+    expect(doc({ importmap: {} })).not.toContain('importmap')
   })
 })
 
