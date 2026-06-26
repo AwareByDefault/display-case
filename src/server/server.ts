@@ -608,7 +608,25 @@ export async function startDisplayCase(
   // behaviors (watch, SSE, on-demand a11y) — it does its own one-shot scan.
   const interactive = opts.port !== 0
   const { config, configPath } = await resolveConfig(pkgDir)
-  let state = await rebuild(pkgDir, config, configPath)
+  // The initial build runs in cold `bun` subprocesses (the shell worker + the
+  // manifest); don't block the listen on it. If the port stayed closed until
+  // they finished, several servers booting at once on a constrained CI runner
+  // could blow Playwright's `webServer` readiness budget. Instead the server
+  // starts listening first — so `/health` is reachable immediately — and every
+  // other route awaits the `ready` promise built below. `startDisplayCase` still
+  // awaits `ready` before returning, so callers get a fully-prepared server.
+  //
+  // `current` is the built state, set by the initial build and each rebuild;
+  // it's optional because the server now listens before that first build lands.
+  // Every consumer reaches it through `getState()` after `await ready`, which
+  // throws loudly rather than letting an unbuilt read slip out as a render fault
+  // (a definite-assignment `!` would silence exactly that check).
+  let current: BuiltState | undefined
+  const getState = (): BuiltState => {
+    if (!current)
+      throw new Error('server state read before the initial build completed')
+    return current
+  }
   // `let` so dev mode can re-read them when the chrome's CSS/tokens change.
   let vitrineCss = await readVitrineCss()
   let tokensCss = await readDesignTokens()
@@ -650,6 +668,7 @@ export async function startDisplayCase(
   let onGraphGrew: () => Promise<void> = async () => {}
 
   const buildCase = async (componentId: string): Promise<CaseEntry | null> => {
+    const state = getState()
     const comp = state.manifest.components.find((c) => c.id === componentId)
     if (!comp) return null // unknown id → the chrome shows a not-found state
     const file = resolve(REPO_ROOT, comp.caseFile)
@@ -747,7 +766,7 @@ export async function startDisplayCase(
       ? Bun.hash(await f.arrayBuffer()).toString(16)
       : ''
   }
-  let shellHash = await shellBundleHash()
+  let shellHash = ''
   const triggerReload = (kind: 'shell' | 'content') =>
     broadcast(encoder.encode(`event: reload\ndata: ${kind}\n\n`))
 
@@ -772,6 +791,16 @@ export async function startDisplayCase(
   // other port is preferred-not-mandatory, so two worktrees never collide.
   const port = opts.port === 0 ? 0 : await firstFreePort(opts.port ?? 3100)
 
+  // The initial build, kicked off here so it runs concurrently with the listen
+  // instead of blocking it (see the note at `current`). Created with no `await`
+  // between it and the `await ready` after `Bun.serve` below, so its rejection
+  // always has a waiter — never a floating promise. Sequential inside: the
+  // shell-bundle hash reads what the build just wrote.
+  const ready = (async () => {
+    current = await rebuild(pkgDir, config, configPath)
+    shellHash = await shellBundleHash()
+  })()
+
   const server = Bun.serve({
     port,
     // The `/__livereload` SSE stream is long-lived; the default 10s idle timeout
@@ -782,7 +811,13 @@ export async function startDisplayCase(
       const url = new URL(req.url)
       const path = url.pathname
 
+      // The one liveness signal that must answer before the initial build
+      // finishes — it's what makes the server reachable while the cold build
+      // subprocesses run. Every route below needs the prepared state, so it
+      // waits for the build to complete here.
       if (path === '/health') return new Response('ok')
+      await ready
+      const state = getState()
 
       if (interactive && path === '/__livereload') {
         let self: ReadableStreamDefaultController | null = null
@@ -1000,6 +1035,18 @@ export async function startDisplayCase(
     },
   })
 
+  // The socket is open and `/health` answers now; wait for the initial build
+  // before wiring the build-dependent machinery (the a11y start-up sweep, the
+  // dependency watchers) and before returning a fully-prepared server. A
+  // captured build failure is kept in `current.shellError` and does not reject; a
+  // catastrophic throw does — close the socket rather than leak a live server.
+  try {
+    await ready
+  } catch (err) {
+    server.stop(true)
+    throw err
+  }
+
   // Build the on-demand scanner now that the server has a URL to scan against.
   if (interactive && config.a11y?.enabled) {
     const base = String(server.url).replace(/\/$/, '')
@@ -1008,6 +1055,7 @@ export async function startDisplayCase(
       config,
       baseUrl: () => base,
       caseFileAbs: (id) => {
+        const state = getState()
         const c = state.manifest.components.find((x) => x.id === id)
         return c ? resolve(REPO_ROOT, c.caseFile) : null
       },
@@ -1034,6 +1082,7 @@ export async function startDisplayCase(
     const startupMode = config.a11y?.startup ?? 'off'
     if (startupMode !== 'off') {
       const themes = config.a11y?.themes ?? ['light', 'dark']
+      const state = getState()
       const variants = state.manifest.components.flatMap((c) =>
         c.cases.flatMap((cs) =>
           themes.map((theme) => ({
@@ -1067,7 +1116,7 @@ export async function startDisplayCase(
         }
         const changed = [...pendingChanges]
         pendingChanges.clear()
-        state = await rebuild(pkgDir, config, configPath)
+        current = await rebuild(pkgDir, config, configPath)
         browserOnly.clear()
         // Invalidate only the components whose graph includes a changed file (and
         // every failed entry, so a fix is retried) — not the whole cache — so an
@@ -1160,6 +1209,7 @@ export async function startDisplayCase(
   const watchRoot = findWatchRoot(pkgDir)
   const syncGraphWatchers = async (): Promise<void> => {
     if (!subscribe || !interactive) return
+    const state = getState()
     const want = graphWatchDirs(state.inputs, {
       srcDir,
       hereDir: HERE,
