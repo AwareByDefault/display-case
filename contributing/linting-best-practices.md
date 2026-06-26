@@ -117,7 +117,14 @@ effective rule set a contributor sees:
 - `noDefaultExport` — **error**, except in `*.case.tsx`, `display-case.config.ts`,
   `*.d.ts`, and `playwright.config.ts` (these legitimately default-export).
 - `noNestedTernary`, `noNonNullAssertion`, `noParameterAssign`,
-  `useConsistentBuiltinInstantiation` — **error**.
+  `useConsistentBuiltinInstantiation` — **error**. `noNonNullAssertion` is turned
+  **off** by a Biome override in test files, `*.case.tsx`, and `shell-fixtures` —
+  they build their own data, so `arr[0]!` after constructing the array documents
+  intent without a dead-code guard. In production source, fix an indexed access
+  (`noUncheckedIndexedAccess` makes every index `T | undefined`) with a real guard
+  or an inert nullish default (`m[1] ?? ''` for a regex group that always
+  participates), never `!`. `noNonNullAssertedOptionalChain` (no `?.x!`) stays
+  **error** everywhere — use `x!.y` in the exempt files instead.
 - `useImportType` — **error** (type-only imports must use `import type`).
 - `useNamingConvention` — **error** (object-literal property names exempted).
 - `noRestrictedImports` — **error** for the optional visual toolchain

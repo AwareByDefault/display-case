@@ -284,22 +284,16 @@ references each component's own bundle. The all-cases `codegenRenderEntry` /
 `codegenSsrEntry` are deleted. Verified by publishing the real 35-component
 showcase (35 + 35 bundles, served correctly).
 
-**Per-component builds run in-process — a build subprocess (D4) was tried and
-reverted.** The idea was to spawn `bun build-case.ts` per component so a *native*
-bundler segfault would be an attributed child exit rather than a dead server. It
-worked locally, but **CI failed**: a cold `bun` start per build is pathologically
-slow on a contended 2-core runner already saturated by the a11y scanner's own
-Chromium + the e2e workers — the a11y `re-scan` e2e timed out at 45s on
-`page.goto` (the shell stage iframe loads `/render/...`, whose on-demand build was
-stuck behind the spawn). It passed locally (~1s) but not on CI. Since per-component
-bundling already keeps each graph small (the report's individual heavy cases all
-built fine — only the *aggregate* catalog crashed), a native crash doesn't arise,
-so `buildCase` calls `buildCaseBundles` **in-process** (`src/server/build-case.ts`,
-which also owns `publicEnvDefines`). A *build error* is caught there and returned
-`{ ok:false, error }`, which the server caches and serves as a chrome-free
-per-case diagnostic while every other component keeps serving. **Lesson: a
-per-request subprocess spawn is a real cost on constrained CI — don't add one for
-a defensive guard the architecture already makes unnecessary.**
+**Per-component builds first ran in-process; a build-subprocess (D4) was tried
+and reverted here.** Spawning `bun build-case.ts` per component (so a native
+segfault would be a child exit, not a dead server) worked locally but timed out
+the a11y `re-scan` e2e at 45s on a contended 2-core runner — a cold `bun` spawn
+per build is pathologically slow there. **Superseded:** the 2026-06-25 "ALL
+bundling runs in fresh child processes" entry above moved *all* bundling back to
+workers after paying that cost down (bounded concurrency + a `pageLoaded`
+stage-iframe gate), so the "builds run in-process" detail no longer holds.
+Surviving lesson: a per-request subprocess spawn is a real cost on constrained
+CI — measure it before adding one.
 
 **Live-reload invalidates per-component, by graph membership (D6, done).** Each
 cached component carries its recorded `graphRecorder` input set. The watcher
@@ -311,20 +305,17 @@ config, `render-mount`, a workspace sibling — all in every component's graph)
 still invalidates everything. A `server.test.ts` live-reload test guards the
 correctness property (an edit must reflect, never serve stale).
 
-**A shared React vendor chunk (D3) was attempted and reverted — do not retry
-naïvely.** The idea: externalize React from every per-component bundle and load
-it once via a vendor bundle + an `<script type="importmap">`. It *looked* like it
-worked in unminified dev (e2e was green) — but that was a **false positive**: the
-SSR markup masked broken client hydration. A real-browser check on a *browser-only*
-component (no SSR mask) rendered nothing, with `react does not provide an export
-named 'StrictMode'` / `'jsx'` / `'flushSync'`. Root cause: Bun's `export * from
-'react'` over a **CJS** module does not expose React's *named* exports across the
-import-map boundary to a separately-built bundle (you get `default` but not the
-named members). Making this correct needs cjs-module-lexer-style enumeration of
-React's named exports and explicit re-exports — what Vite's `optimizeDeps` does.
-Until that's built, per-component bundles bundle React via `pinReact` (correct,
-~140KB each). **Lesson: validate client rendering with a browser on a browser-only
-case, not just SSR'd output — SSR markup hides a dead client bundle.**
+**A shared React vendor chunk (D3) was attempted, reverted, then later solved.**
+The first attempt (externalize React, load it once via an importmap) broke client
+hydration — Bun's `export * from 'react'` over a **CJS** module doesn't expose
+React's *named* exports across the importmap boundary, so a browser-only case
+rendered nothing (`react does not provide an export named 'StrictMode'`). It
+*looked* green because the SSR markup masked the dead client bundle. **Superseded:**
+the cjs-module-lexer-style enumeration it lacked was built as the general
+`config.share` mechanism (2026-06-26 entry above); until then per-component
+bundles bundled React via `pinReact`. The testing lesson it taught (validate
+client hydration in a real browser on a browser-only case) now lives in
+[testing-best-practices.md](testing-best-practices.md) §11.4.
 
 ## 2026-06-24: `openspec archive` ships a placeholder `## Purpose` — fill it in
 
@@ -676,110 +667,55 @@ counterpart that captures it. Things a future agent needs to know:
 
 ## 2026-06-21: PR CI, change-scoped render checks, and committed visual baselines
 
-**CI is a backstop to husky, not a replacement.** `.github/workflows/ci.yml` runs
-the same gate the hooks run, on every PR, because hooks are bypassable and absent
-for bot/web/merge-button edits. Jobs: `lint` (uses `bun run lint`, the *no-fix*
-form — CI must fail on unformatted code, not silently fix it), `check`, `test`,
-`e2e`, `a11y`, `visual`. They're separate jobs so each is its own PR check.
+The user-facing rules — CI as a husky backstop, `--only`/`--changed` scoping (and
+the all/none soundness fallbacks), committed Linux-recorded baselines + the
+`visual`-out-of-default-phases opt-out — are now in
+[testing-best-practices.md](testing-best-practices.md) §5.4–5.6 and
+[../docs/testing.md](../docs/testing.md). Implementation residuals kept here:
 
-**Change-scoping (`--only` / `--changed`) only touches the render phases.** The
-expensive a11y/visual phases can be restricted to affected components; structure/
-tokens/ssr always run full (they're cheap). `src/core/affected.ts` builds each
-component's import closure by walking **relative** specifiers only (JS + CSS
-`@import`); bare specifiers (`react`, `display-case`) aren't traced — a PR never
-edits node_modules. There is no Bun module-graph/metafile, hence the hand-rolled
-walk.
-
-**The soundness rule is the subtle part.** Component CSS here is concatenated and
-inlined *globally* (`readVitrineCss` globs all `*.css`), and components don't
-JS-import their own CSS — so a JS closure alone would miss CSS entirely. The fix:
-a changed file that **no** component's closure claims (global CSS, the render
-pipeline, shared `src/`, the barrel `components/index.ts`) scopes to **all**
-components; a change with no render inputs at all (docs, tests, CI) scopes to
-**none**. So a `.css` edit correctly fans out to all 35, a component `.tsx` edit
-to just its dependents, and a docs edit to zero (no browser booted). Verified by
-hand; see `affected.test.ts` for the attribution unit tests.
-
-- **Gotcha — the barrel inflates closures.** The shell pages/templates import
-  `components/index.ts`, which re-exports everything, so their closures include
-  every component. A change to *any* component therefore always re-checks those ~6
-  aggregator components. Sound (over-approximation), mildly less efficient.
+- **`affected.ts` walks relative specifiers only** (JS + CSS `@import`); bare
+  specifiers (`react`, `display-case`) aren't traced — a PR never edits
+  node_modules, and there is no Bun module-graph/metafile, hence the hand-rolled
+  walk. The soundness fix for globally-inlined CSS (components don't JS-import
+  their own `.css`): a changed file **no** closure claims scopes to **all**; a
+  change with no render inputs scopes to **none**. See `affected.test.ts`.
+- **Gotcha — the barrel inflates closures.** Shell pages/templates import
+  `components/index.ts` (re-exports everything), so their closures include every
+  component — a change to *any* component always re-checks those ~6 aggregators.
+  Sound (over-approximation), mildly less efficient.
 - **Gotcha — uncommitted edits contaminate `--changed`.** It unions `git diff
-  <ref>...HEAD` with `git diff HEAD`, so a dirty working tree (e.g. mid-feature)
-  makes everything look changed → all affected. Commit first to test scoping.
-
-**Visual baselines are committed and Linux-recorded.** `display-case.config.ts`
-sets `baselineDir: ./test/visual-baselines` (208 PNGs). They MUST be recorded in
-the same env CI renders in — `bun run baselines:record` does this via the pinned
-`mcr.microsoft.com/playwright:v1.61.0-noble` Docker image (the `visual` CI job
-runs in that same image). Recording on macOS would commit baselines CI can never
-match (font/antialiasing). Keep the image tag, the record script, and the
-`playwright` version in `bun.lock` in lockstep. The record script `apt-get
-install`s unzip (bun's installer needs it; the image lacks it) and uses an
-anonymous `node_modules` volume so the container's Linux install never clobbers
-the host's.
-
-- **Gotcha — committed baselines + a bare `check .` off-platform.** Because the
-  baselines are Linux-recorded, running the visual phase on macOS reports dozens
-  of false diffs (and writes `*.diff.png`, now gitignored). So the config opts
-  `visual` out of the *default* phase set (`check.defaultPhases.visual = false`):
-  a bare `display-case check .` skips it locally, but `--visual` and the CI job
-  (which passes `--visual` in the matching container) still run it. The husky
-  hooks never ran visual anyway (pre-commit is static + `bun test`; pre-push is
-  e2e), so the local gate is unchanged.
+  <ref>...HEAD` with `git diff HEAD`, so a dirty tree makes everything look
+  changed → all affected. Commit first to test scoping.
+- **Baseline record-script details.** `bun run baselines:record` uses the pinned
+  `mcr.microsoft.com/playwright:v1.61.0-noble` image (the `visual` CI job's image);
+  keep the image tag, the record script, and the `playwright` version in
+  `bun.lock` in lockstep. The script `apt-get install`s unzip (bun's installer
+  needs it; the image lacks it) and uses an anonymous `node_modules` volume so the
+  container's Linux install never clobbers the host's. Off-platform a bare
+  `check .` would report dozens of false diffs (and write `*.diff.png`, gitignored)
+  — which is why `check.defaultPhases.visual = false`.
 
 ---
 
 ## 2026-06-21: Component CSS is server-inlined (the Vitrine stylesheet), not runtime-injected
 
-**What changed.** The design-system components used to paint by calling
-`injectStyle(id, css)` at module load — a client-only `document.head` mutation
-that **no-ops under Node**. So component CSS was absent from every
-server-rendered document and only appeared once the browser bundle ran (a flash
-of unstyled content; an unstyled `/render` snapshot if scripts were disabled).
-Now each component keeps its CSS in a **co-located `.css` file** (`Button.tsx` →
-`Button.css`) and **`readVitrineCss()`** (in `server.ts`, duplicated in
-`publish.ts` like `readDesignTokens`) reads-and-concatenates, in **path-sorted**
-order, `chrome.css` + every `components/**/*.css` + `primer.css` into one
-**Vitrine stylesheet** inlined into every document `<style>` before scripts.
-`inject-style.ts` and `src/types/css-text.d.ts` are deleted.
+The rule and mechanism are now in
+[coding-best-practices.md](coding-best-practices.md) §5.5 (co-located `.css`,
+`readVitrineCss()` concatenation, inline before scripts, no runtime injection;
+`inject-style.ts` deleted). Two residual notes kept here:
 
-**Why read-and-concat, not a JS-side `import './x.css'`.** The project already
-delivers its token CSS and `chrome.css` by reading files and concatenating
-(`readDesignTokens`), never through the JS module graph. Bundling component CSS
-through the browser/SSR entries would emit per-entry CSS assets and raise the
-question of how a bare `.css` import behaves under `renderToString` (it's a
-no-op under Bun's runtime — verified — but we avoid needing that). Reading the
-files sidesteps all of it. New components are picked up automatically (the glob);
-the dev watcher already matches `.css`, and the dev rebuild re-reads `vitrineCss`
-next to its `tokensCss` re-read.
-
-**Why it's inlined into the chrome-free `/render` too.** Display Case dogfoods
-its own design system: the `dcui-*`/`dcpl-*`/shell `page` cases are exhibited
-through `/render`, which carries no chrome. Inlining the whole Vitrine stylesheet
-(including `chrome.css`, for the shell-page cases' `.dc-*` layout) into all three
-documents keeps every such case styled before scripts. For a non-dogfooding
-consumer that's a few KB of inert, fully-prefixed (`.dc-*`/`.dcui-*`/`.dcpl-*`)
-chrome CSS in a **dev-time-only** preview doc — never shipped to their app.
-
-**`/render` still needs `--dc-*` tokens.** The Vitrine CSS supplies *rules*, not
-token values. `/render` resolves `--dc-*` from `globalCss`, which is why the
-dogfood `display-case.config.ts` lists the token files in `globalStyles`.
-
-**Lint footnote.** With the CSS now in real `.css` files, Biome's CSS linter sees
-it: a few pre-existing intentional patterns (`!important` in specimen styles, one
-descending-specificity selector in `A11yPanel.css`) surface as **warnings** —
-non-fatal, and "fixing" them would change behavior, so they stand.
-
----
-
-## 2026-06-21: A symlinked worktree `node_modules` corrupts the publish bundle (use `bun install`)
-
-**The trap.** A fresh `git worktree` has no `node_modules` (gitignored). Setting it up by **symlinking** to the main checkout's modules (`ln -s ../../../node_modules node_modules`) — i.e. a link that resolves *outside* the worktree's own directory tree — passes `bun test` for plain `renderToStaticMarkup`/unit work but **breaks `publish.test.ts`** with a baffling cascade: `EBADF reading file: node_modules/react-dom/index.js`, then parse errors like `Expected ";" but found "type"` / `Unexpected interface` blamed on `react-dom`, `react-markdown`, and `remark-gfm`.
-
-**Why it looks like remark-gfm but isn't.** The publish path runs **Bun's bundler** (`Bun.build`), not just the runtime resolver. Following a symlink that crosses the worktree boundary trips a file-descriptor bug in the bundler: it returns the *contents of a worktree source file* (`src/ui/use-shell.ts`, `test-ids.ts`) when asked to read a dependency path — so the error **path** (`react-dom/index.js`) and the error **content** (TS from our `src/`) don't match. The dependency names in the errors are red herrings; the unit tests pass because Bun's *runtime* module resolution tolerates the symlink while the *bundler* does not.
-
-**Fix / rule.** Set up a worktree's modules with a real **`bun install`** (~0.5s from Bun's global cache, leaves git status clean), never an out-of-tree symlink. This is what [worktree-safe-execution.md](worktree-safe-execution.md) and the `lint-in-worktree` / `test-in-worktree` skills already prescribe — follow them rather than hand-rolling a symlink. Quick tell: if only the bundling tests (`publish`/`--ssr`) fail with `EBADF` or mismatched path-vs-content parse errors, suspect the `node_modules` setup, not the dependency.
+- **Why read-and-concat, not a JS-side `import './x.css'`.** The project already
+  delivers token CSS + `chrome.css` by reading files and concatenating
+  (`readDesignTokens`), never through the JS module graph. A bare `.css` import
+  would emit per-entry CSS assets and raise the question of how it behaves under
+  `renderToString` (a no-op under Bun's runtime — verified — but we avoid needing
+  that). Reading the files sidesteps all of it; the glob picks up new components
+  and the dev watcher already matches `.css`. Note `/render` still needs `--dc-*`
+  *token values* from `globalCss` — the Vitrine CSS supplies rules, not tokens.
+- **Lint footnote.** With the CSS in real `.css` files, Biome's CSS linter sees a
+  few pre-existing intentional patterns (`!important` in specimen styles, one
+  descending-specificity selector in `A11yPanel.css`) as **warnings** — non-fatal,
+  and "fixing" them would change behavior, so they stand.
 
 ---
 

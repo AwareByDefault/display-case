@@ -60,6 +60,16 @@ it. This is a single-package repo, so setup is just:
 bun install          # ~2s from bun's global cache; leaves git status clean
 ```
 
+**Use a real `bun install` — never an out-of-tree symlink.** Symlinking the
+worktree's `node_modules` to the main checkout (a link that resolves *outside* the
+worktree) passes plain `bun test` but corrupts Bun's **bundler**: the publish/SSR
+build trips a file-descriptor bug and returns the contents of one worktree source
+file when asked to read a dependency, so the errors blame `react-dom`/markdown
+deps (`EBADF`, or parse errors like `Expected ";" but found "type"`) while the real
+cause is the symlink. Quick tell: if **only** the bundling tests (`publish` /
+`--ssr`) fail with `EBADF` or mismatched path-vs-content parse errors, suspect the
+`node_modules` setup, not the dependency.
+
 Then run the gate from the worktree root:
 
 ```bash
