@@ -89,6 +89,8 @@ The a11y phase prints each violation's affected nodes (for colour-contrast, the 
 
 **Change-scoping the render checks.** `--only` / `--changed` restrict the (slow, browser-backed) a11y and visual phases to a subset of components — the static phases are unaffected. With `--changed`, a component is in scope when a changed file is in its import closure; a change to a globally-applied stylesheet or the shared render path scopes to **all** components, and a change with no render inputs (docs, tests) scopes to **none** (the render phases pass without launching a browser). This is what the CI a11y/visual jobs use. See [Testing → Change-scoped checks](testing.md#change-scoped-checks).
 
+**`--ssr` and a split React install.** The SSR phase renders each case in-process, so it needs Display Case and your cases to resolve **one** React. If they don't — most often `bunx @awarebydefault/display-case` run from a directory that doesn't depend on the tool, which pulls a *second* React into a temp prefix — every hook-using case throws an identical `resolveDispatcher() … useState` and used to be misreported as ~N "move browser APIs into effects/handlers, or declare `browserOnly`" findings. The check now detects that **once** and reports a single environment fault that names both React copies (path + version), classifies the cause, and prescribes the fix (typically: add `@awarebydefault/display-case` to the package that provides your cases' React, or run the workspace-installed binary instead of `bunx`). These are not component bugs — don't edit cases or add `browserOnly` to silence them.
+
 ```bash
 display-case check .                       # all phases (minus config opt-outs)
 display-case check . --structure           # best-practice rules only (fast, no browser)

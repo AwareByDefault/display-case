@@ -296,16 +296,32 @@ export async function runChecks(
   // are expected and skipped.
   let ssrErrors = 0
   if (opts.ssr) {
-    const { findings, declared } = await checkSsr(pkgDir)
-    for (const f of findings) {
+    const { findings, declared, environment } = await checkSsr(pkgDir)
+    if (environment) {
+      // One environment fault (dual React / null dispatcher), not N component
+      // bugs: report it once, in full, and count it as a single error. The
+      // per-case findings were its symptom and are intentionally suppressed.
       ssrErrors++
-      const rel = f.file.startsWith(`${pkgDir}/`)
-        ? f.file.slice(pkgDir.length + 1)
-        : f.file
-      console.error(
-        `  ssr ✗ ${rel}: ${f.component}/${f.case} can't render before scripts (${f.error}). ` +
-          'Move browser APIs into effects/handlers, or declare the component browserOnly.',
-      )
+      console.error(`  ssr ✗ ${environment.summary}`)
+      for (const line of environment.detail.split('\n'))
+        console.error(`      ${line}`)
+      if (environment.skipped)
+        console.error(
+          `  ssr: ${environment.skipped} case(s) not server-rendered — the ` +
+            'environment fault above would make every hook-using case fail ' +
+            'identically; fix it and rerun.',
+        )
+    } else {
+      for (const f of findings) {
+        ssrErrors++
+        const rel = f.file.startsWith(`${pkgDir}/`)
+          ? f.file.slice(pkgDir.length + 1)
+          : f.file
+        console.error(
+          `  ssr ✗ ${rel}: ${f.component}/${f.case} can't render before scripts (${f.error}). ` +
+            'Move browser APIs into effects/handlers, or declare the component browserOnly.',
+        )
+      }
     }
     if (declared)
       console.log(`  ssr: ${declared} case(s) declared browser-only`)
