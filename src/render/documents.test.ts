@@ -54,6 +54,23 @@ describe('shellDoc', () => {
     expect(html).toContain('.vit{}')
   })
 
+  test('declares a user-agent color scheme matching the theme', () => {
+    expect(doc()).toContain('color-scheme:dark')
+    const light = shellDoc({
+      title: 'X',
+      tokensCss: '',
+      globalCss: '',
+      vitrineCss: '',
+      theme: 'light',
+      markup: '',
+      ssr: false,
+      manifest,
+      a11y: false,
+      assets,
+    })
+    expect(light).toContain('color-scheme:light')
+  })
+
   test('seeds the manifest, theme, and a11y flag for hydration', () => {
     const html = doc()
     expect(html).toContain('window.__dcSeed=')
@@ -116,6 +133,11 @@ describe('renderDoc', () => {
     const html = doc()
     expect(html).toContain('.g{}')
     expect(html).toContain('.vit{}')
+  })
+
+  test('declares a user-agent color scheme matching the theme', () => {
+    expect(doc({ theme: 'light' })).toContain('color-scheme:light')
+    expect(doc({ theme: 'dark' })).toContain('color-scheme:dark')
   })
 
   test('a transparent exhibit decorates the body and clears its background', () => {
@@ -193,6 +215,10 @@ describe('primerDoc', () => {
     expect(html).toContain('.glob{}')
     expect(html).toContain('.vit{}')
     expect(html).toContain('data-ssr="1"')
+  })
+
+  test('declares a user-agent color scheme matching the theme', () => {
+    expect(doc()).toContain('color-scheme:dark')
   })
 
   test('style-engine output is a discrete tag after the static <style> block', () => {

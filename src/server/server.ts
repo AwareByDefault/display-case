@@ -677,7 +677,9 @@ function shellHtml(
   // styles the isolated exhibit. `data-ssr` tells the client whether to adopt
   // the rendered shell (1) or mount fresh (0). The seed (manifest/theme/a11y)
   // is inlined before the module so the client hydrates from the same data.
-  const reset = 'html,body{margin:0;height:100%;background:var(--dc-bg)}'
+  // `color-scheme` matches the theme so user-agent-rendered surfaces (scrollbars,
+  // default form-control chrome) follow it instead of their light defaults.
+  const reset = `html,body{margin:0;height:100%;background:var(--dc-bg)}html{color-scheme:${doc.theme}}`
   return `<!doctype html><html lang="en" data-theme="${doc.theme}"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>${title}</title>${FONT_LINKS}<style>${tokensCss}\n${globalCss}\n${reset}\n${vitrineCss}</style></head><body><div id="root" data-ssr="${doc.ssr ? '1' : '0'}">${doc.markup}</div>${ERROR_OVERLAY_SCRIPT}${doc.seedScript}${clientConfig}${liveReload ? LIVERELOAD_SCRIPT : ''}<script type="module" src="/dist/browser-entry.js"></script></body></html>`
 }
 
@@ -765,7 +767,7 @@ function renderHtml(
   // block as its own discrete markup — emotion/styled-components tag their output
   // with attributes the client runtime keys on to adopt it, so it must not be
   // folded into the block above. Empty string when no engine is configured.
-  return `<!doctype html><html lang="en" data-theme="${doc.theme}" data-theme-pref="${doc.theme}"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Display Case render</title><style>html,body{margin:0}body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-sans, ui-sans-serif, system-ui, sans-serif)}${exhibitCenter}${globalCss}\n${vitrineCss}</style>${doc.headStyles ?? ''}</head><body${bodyAttrs}><main id="root"${rootAttrs}>${doc.markup}</main>${ERROR_OVERLAY_SCRIPT}${liveReload ? LIVERELOAD_SCRIPT : ''}<script type="module" src="${scriptSrc}"></script></body></html>`
+  return `<!doctype html><html lang="en" data-theme="${doc.theme}" data-theme-pref="${doc.theme}"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Display Case render</title><style>html,body{margin:0}html{color-scheme:${doc.theme}}body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-sans, ui-sans-serif, system-ui, sans-serif)}${exhibitCenter}${globalCss}\n${vitrineCss}</style>${doc.headStyles ?? ''}</head><body${bodyAttrs}><main id="root"${rootAttrs}>${doc.markup}</main>${ERROR_OVERLAY_SCRIPT}${liveReload ? LIVERELOAD_SCRIPT : ''}<script type="module" src="${scriptSrc}"></script></body></html>`
 }
 
 /**
@@ -804,7 +806,7 @@ function renderErrorHtml(
     `Component <code>${esc(doc.componentId)}</code> (<code>${esc(doc.caseFile)}</code>) ` +
     `could not be bundled, so this case can't be shown. Every other case still works.<br>` +
     `<br><pre style="white-space:pre-wrap;margin:0">${esc(doc.error)}</pre></div>`
-  return `<!doctype html><html lang="en" data-theme="${doc.theme}" data-theme-pref="${doc.theme}"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Display Case build error</title><style>html,body{margin:0}body{background:var(--color-bg);color:var(--color-fg)}${globalCss}\n${vitrineCss}</style></head><body><main id="root">${banner}</main>${liveReload ? LIVERELOAD_SCRIPT : ''}</body></html>`
+  return `<!doctype html><html lang="en" data-theme="${doc.theme}" data-theme-pref="${doc.theme}"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Display Case build error</title><style>html,body{margin:0}html{color-scheme:${doc.theme}}body{background:var(--color-bg);color:var(--color-fg)}${globalCss}\n${vitrineCss}</style></head><body><main id="root">${banner}</main>${liveReload ? LIVERELOAD_SCRIPT : ''}</body></html>`
 }
 
 function primerHtml(
@@ -827,7 +829,9 @@ function primerHtml(
   // honest. The theme is baked into <html> so the first paint is correct; the
   // mount re-applies it (idempotent) and accepts later theme messages.
   // `data-ssr` tells the client whether to adopt the markup or mount fresh.
-  const reset = 'html,body{margin:0;height:100%;background:var(--dc-bg)}'
+  // `color-scheme` matches the theme so user-agent surfaces (scrollbars, default
+  // control chrome) follow it rather than rendering in their light defaults.
+  const reset = `html,body{margin:0;height:100%;background:var(--dc-bg)}html{color-scheme:${doc.theme}}`
   const rootAttrs = ` data-ssr="${doc.ssr ? '1' : '0'}"`
   // Style-engine output follows the static <style> block as discrete markup (see
   // renderHtml). `''` when no engine is configured.

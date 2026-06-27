@@ -53,6 +53,9 @@ export function mountPrimer(Content: MDXContent): void {
   const theme = params.get('theme') === 'dark' ? 'dark' : 'light'
   document.documentElement.dataset.theme = theme
   document.documentElement.dataset.themePref = theme
+  // Match the user-agent color scheme to the theme (idempotent with the value the
+  // document baked in) so the primer's controls/scrollbars are themed from load.
+  document.documentElement.style.colorScheme = theme
 
   const rootEl = document.getElementById('root') as HTMLElement
   const tree = (

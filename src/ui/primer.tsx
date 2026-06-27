@@ -262,6 +262,9 @@ export function PrimerRoot({
       } else if (data?.type === 'dc-primer-theme' && data.theme) {
         document.documentElement.dataset.theme = data.theme
         document.documentElement.dataset.themePref = data.theme
+        // Keep the user-agent color scheme matched so the primer's controls and
+        // scrollbars re-theme with the rest of the page on a theme change.
+        document.documentElement.style.colorScheme = data.theme
       }
     }
     window.addEventListener('message', onMessage)
