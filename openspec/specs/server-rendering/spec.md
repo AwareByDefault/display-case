@@ -3,7 +3,9 @@
 ## Purpose
 
 Display Case delivers every surface with its content already rendered before any scripts execute, and provides a check that verifies every case can render before scripting.
+
 ## Requirements
+
 ### Requirement: Pre-scripting rendered content
 
 Display Case SHALL deliver each browsing surface, isolated case render, and primer as a document whose content is already rendered — laid out and themed for the requested theme — before any of the page's own scripts execute. A client that retrieves such an address and does not execute its scripts SHALL still receive that address's content, not an empty shell. The styling required to present that content as it appears once the surface is interactive SHALL itself be delivered before scripting: a surface retrieved without executing scripts SHALL appear in its styled form, not merely structurally present, and SHALL NOT restyle once the page's scripts run. For a browsing surface, the content present before scripting SHALL include the component catalog and the selected case's framing, and the catalog needed for that first paint SHALL be embedded in the delivered document so no separate catalog request is required before content appears. Interactive behaviors of those surfaces (theme switching, viewport changes, tweak controls, catalog navigation, primer navigation) MAY depend on the page's scripts, but the initial rendered content and its styling SHALL NOT. The content delivered before scripting SHALL be the same content the surface produces once interactive, so that themes, snapshots, and addresses are unchanged.
@@ -171,4 +173,3 @@ cause the surrounding surface to fail or to lose its own pre-scripting styling.
 - GIVEN a showcase that configures no render-time style collection
 - WHEN any surface is delivered
 - THEN the delivered document is identical to the one produced without this means
-
