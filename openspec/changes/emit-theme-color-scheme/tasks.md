@@ -37,13 +37,14 @@
 - [x] 4.3 `applyDocEffects` sets `documentElement.style.colorScheme` to the active
       theme; the in-place theme-swap path is exercised by the e2e theme-toggle
       flow (`e2e/chrome.spec.ts`, `e2e/a11y.spec.ts` re-evaluate-on-switch).
-- [ ] 4.4 Re-baseline the repo's dark-theme visual snapshots that include
-      user-agent-styled controls — **deferred to CI**. The visual baselines are
-      generated on CI/Linux and diff wholesale on macOS (font rendering), so every
-      case (light *and* dark) fails the visual phase locally on the pristine tree
-      too; regenerating them here would corrupt the CI baselines. The `--visual`
-      phase is intentionally outside the `bun run check` gate for this reason.
-      Any genuine dark-control baseline shift is to be captured in CI.
+- [x] 4.4 Re-baselined the 7 dark-theme variants whose user-agent surfaces shift
+      under the new color-scheme declaration: `input/withaffixes`,
+      `tweakspanel/{playground,docked}`, `a11y-page/with-tweaks-and-docs`,
+      `cases-page/{with-tweaks,with-tweaks-and-docs}`, and
+      `primer-to-cases/cases-view`. Recorded in the same CI Linux Playwright image
+      the `visual` job diffs in, via the `update-baselines` workflow (local macOS
+      renders don't match the committed baselines), and committed in this PR; the
+      visual CI job is green. Light variants were unaffected.
 - [x] 4.5 `bun run typecheck`, `bun run lint`, `bun test` (494 pass), `bun run check`
       (structure+tokens+ssr pass), and `bun run e2e` (33 pass) all green.
 
