@@ -153,7 +153,7 @@ export async function checkGraph(
           componentId: c.id,
           file: c.file,
           severity: 'error',
-          message: `building this component crashed the bundler (${outcome.error}). Its module graph is too large — split its imports (e.g. avoid importing a whole barrel such as an entire icon set).`,
+          message: `building this component crashed the bundler (${outcome.error}). This is a native bundler crash, not a logical build error, and has two known causes: a genuinely oversized module graph, or a Bun bundler bug (a use-after-free in the parallel chunk linker) that even a small graph can hit. If the graph is large, split the component's imports (e.g. avoid importing a whole barrel such as an entire icon set); otherwise treat it as a Bun bug and track it upstream. The same crash affects this component's dev /render and publish.`,
         })
         return
       }

@@ -3,7 +3,7 @@ import { realpathSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { makeTempDir, writeFiles } from '../testing/test-helpers'
-import { findWatchRoot, graphRecorder, graphWatchDirs } from './graph-recorder'
+import { findWatchRoot, graphWatchDirs } from './graph-watch'
 
 const dirs: string[] = []
 const setup = async (files: Record<string, string>) => {
@@ -18,53 +18,6 @@ const setup = async (files: Record<string, string>) => {
 afterEach(async () => {
   while (dirs.length)
     await rm(dirs.pop() as string, { recursive: true, force: true })
-})
-
-describe('graphRecorder', () => {
-  test('records every on-disk file the build actually loads, transitively', async () => {
-    const dir = await setup({
-      'entry.ts': `import { b } from './nested/b.ts'\nexport const a = b + 1\n`,
-      'nested/b.ts': `import { c } from './c.ts'\nexport const b = c\n`,
-      'nested/c.ts': `export const c = 41\n`,
-    })
-    const inputs = new Set<string>()
-    const result = await Bun.build({
-      entrypoints: [join(dir, 'entry.ts')],
-      plugins: [graphRecorder(inputs)],
-    })
-    expect(result.success).toBe(true)
-    expect(inputs).toEqual(
-      new Set([
-        join(dir, 'entry.ts'),
-        join(dir, 'nested/b.ts'),
-        join(dir, 'nested/c.ts'),
-      ]),
-    )
-  })
-
-  test('still records a path another plugin ultimately handles', async () => {
-    const dir = await setup({
-      'entry.ts': `import { v } from './data.fake'\nexport const a = v\n`,
-      'data.fake': `NOT JS\n`,
-    })
-    const inputs = new Set<string>()
-    const fake = {
-      name: 'fake',
-      setup(build: Bun.PluginBuilder) {
-        build.onLoad({ filter: /\.fake$/ }, () => ({
-          contents: 'export const v = 7',
-          loader: 'js' as const,
-        }))
-      },
-    }
-    // Recorder registered first; it returns undefined so `fake` still handles it.
-    const result = await Bun.build({
-      entrypoints: [join(dir, 'entry.ts')],
-      plugins: [graphRecorder(inputs), fake],
-    })
-    expect(result.success).toBe(true)
-    expect(inputs.has(join(dir, 'data.fake'))).toBe(true)
-  })
 })
 
 describe('graphWatchDirs', () => {

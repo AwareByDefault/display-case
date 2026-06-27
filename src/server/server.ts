@@ -15,7 +15,7 @@ import {
   loadModules,
   resolveConfig,
 } from '../core/discovery'
-import { findWatchRoot, graphWatchDirs } from '../core/graph-recorder'
+import { findWatchRoot, graphWatchDirs } from '../core/graph-watch'
 import { buildGroupTree, makeGroupResolver } from '../core/groups'
 import type { BrowseMode, Manifest } from '../core/manifest'
 import { type DisplayCaseConfig, isSurfaceLevel } from '../index'
@@ -285,7 +285,7 @@ export function planRebuild(
   return {
     needManifest: manifestRelevant(changed, configPath, primerSrc),
     // Mirror `staleCaseIds`' direct membership test (no `resolve(p)`): the
-    // watcher's path strings already match the graph-recorder's by the same
+    // watcher's path strings already match the recorded graph inputs by the same
     // invariant case invalidation relies on. Don't normalize one side only.
     needShell: changed.some((p) => prevShellInputs.has(p)),
   }

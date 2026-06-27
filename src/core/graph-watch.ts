@@ -1,35 +1,26 @@
 import { existsSync } from 'node:fs'
 import { dirname, join, resolve, sep } from 'node:path'
-import type { BunPlugin } from 'bun'
 
 /**
- * Bun bundler plugin that records the absolute path of every on-disk file the
- * build actually loads — the real module graph, transitive imports included.
+ * Watch-directory derivation from a bundle's real module graph.
  *
- * Why: the dev watcher's directory subscriptions only cover the target package's
- * `src` (and, in `--dev`, Display Case's own UI). A workspace sibling resolved to
- * its **source** (via an `exports`/`main` that points at `./src/index.ts`, with
- * no build step) is a first-class bundle input but lives outside those dirs, so
+ * The dev watcher's directory subscriptions only cover the target package's `src`
+ * (and, in `--dev`, Display Case's own UI). A workspace sibling resolved to its
+ * **source** (via an `exports`/`main` that points at `./src/index.ts`, with no
+ * build step) is a first-class bundle input but lives outside those dirs, so
  * editing it never triggers a rebuild and the served bundle goes stale silently.
- * Feeding this set to the watcher lets it follow the bundler's actual inputs
- * rather than a fixed directory — source-resolved workspace deps included.
+ * Following the bundler's actual inputs — source-resolved workspace deps included
+ * — is what `graphWatchDirs` turns into the extra directories to watch.
  *
- * It hooks `onLoad` with a catch-all filter and returns `undefined`, so it only
- * observes: the load falls through to the default loader (or another plugin's
- * `onLoad`). Register it **first** in the plugin list so paths another plugin
- * ultimately handles (e.g. the MDX plugin's `.mdx`) are still recorded.
+ * The graph itself is read from Bun's native build `metafile` in the build worker
+ * (`build-case.ts`'s `collectInputs`). Historically it was collected by a
+ * hand-rolled `graphRecorder` plugin — a pass-through, catch-all `onLoad`
+ * observer — because Bun exposed no module graph. Bun has since added `metafile`,
+ * and the observer tripped a Bun 1.3.14 use-after-free in the parallel chunk
+ * linker (`generateChunksInParallel`) whenever a `file`-loader asset was imported
+ * with a value binding, crashing every build surface for such a component — so it
+ * was removed in favor of `metafile`, which yields the same graph with no hook.
  */
-export function graphRecorder(into: Set<string>): BunPlugin {
-  return {
-    name: 'display-case-graph-recorder',
-    setup(build) {
-      build.onLoad({ filter: /.*/ }, (args) => {
-        into.add(args.path)
-        return undefined
-      })
-    },
-  }
-}
 
 /** Whether `child` is `parent` itself or nested beneath it. */
 function isInside(child: string, parent: string): boolean {
@@ -86,8 +77,8 @@ export interface WatchDirOptions {
 }
 
 /**
- * Derive the directories to watch from a bundle's real module graph (the set a
- * `graphRecorder` collected). Each input file outside the target's own `src`
+ * Derive the directories to watch from a bundle's real module graph (the input
+ * set read from Bun's `metafile`). Each input file outside the target's own `src`
  * (and Display Case's UI) maps to its owning package, collapsed to that package's
  * `src` when present. This is what picks up a workspace sibling resolved to
  * source — its edits become first-class rebuild triggers, not silent staleness.

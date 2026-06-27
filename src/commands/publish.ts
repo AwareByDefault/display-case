@@ -410,8 +410,10 @@ async function runPublishBuild(
     if (outcome.crashed) {
       throw new Error(
         `Display Case publish: bundling ${surface} crashed the bundler ` +
-          `(${outcome.error}). Split that case's imports — e.g. avoid importing a ` +
-          `whole barrel (an entire icon set); import only the parts the case uses.`,
+          `(${outcome.error}). This is a native Bun bundler crash with two known ` +
+          `causes: an oversized module graph — split that case's imports, e.g. ` +
+          `avoid importing a whole barrel (an entire icon set) — or a Bun linker ` +
+          `bug that even a small graph can hit, which should be tracked upstream.`,
       )
     }
     throw new Error(

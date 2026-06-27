@@ -7,9 +7,34 @@ import {
   codegenPrimerEntry,
   codegenSsrPrimerEntry,
 } from '../core/discovery'
-import { graphRecorder } from '../core/graph-recorder'
 import { mdxPlugin } from '../core/mdx-plugin'
 import { pinReact } from '../core/pin-react'
+
+/**
+ * Record a build's real module graph from Bun's native `metafile` — the set of
+ * on-disk files the bundler actually loaded (transitive imports, file-loader
+ * assets, and paths another plugin's `onLoad` handled, all included). Keys are
+ * relative to the worker's cwd, so each is resolved to an absolute path (the form
+ * the dev watcher and `owningPackage` expect). Tolerant of a `metafile`-less
+ * result (a logical build failure) so callers can still surface a partial graph.
+ *
+ * This replaces the former `graphRecorder` plugin — a pass-through, catch-all
+ * `onLoad` observer that returned `undefined`. That observer, combined
+ * with a `file`-loader asset imported with a value binding, tripped a Bun 1.3.14
+ * use-after-free in the parallel chunk linker (`generateChunksInParallel`),
+ * crashing every build surface for such a component. `metafile` yields the same
+ * graph without an `onLoad` hook, so the collision class is gone. (The plugin was
+ * hand-rolled originally because Bun exposed no module graph; it since added one.)
+ */
+function collectInputs(
+  into: Set<string>,
+  result: Awaited<ReturnType<typeof Bun.build>>,
+): void {
+  if (!result.metafile) return
+  for (const key of Object.keys(result.metafile.inputs)) {
+    into.add(resolve(process.cwd(), key))
+  }
+}
 
 /**
  * Externalize ONLY the exact specifiers given — not their subpaths. Bun's built-in
@@ -163,14 +188,16 @@ export async function buildCaseBundles(
       entrypoints: [renderEntry],
       outdir,
       target: 'browser',
-      plugins: [graphRecorder(inputs), mdxPlugin(), pinReact(pkgDir)],
+      plugins: [mdxPlugin(), pinReact(pkgDir)],
       define,
+      metafile: true,
       naming: {
         entry: '[name].[ext]',
         chunk: '[name]-[hash].[ext]',
         asset: '[name]-[hash].[ext]',
       },
     })
+    collectInputs(inputs, browser)
     if (!browser.success) {
       return {
         ok: false,
@@ -190,14 +217,16 @@ export async function buildCaseBundles(
       entrypoints: [ssrEntry],
       outdir: ssrOutDir,
       target: 'bun',
-      plugins: [graphRecorder(inputs), mdxPlugin(), pinReact(pkgDir)],
+      plugins: [mdxPlugin(), pinReact(pkgDir)],
       define,
+      metafile: true,
       naming: {
         entry: `ssr-case-${componentId}-${seq}.[ext]`,
         chunk: '[name]-[hash].[ext]',
         asset: '[name]-[hash].[ext]',
       },
     })
+    collectInputs(inputs, ssr)
     if (!ssr.success) {
       return {
         ok: false,
@@ -258,14 +287,16 @@ export async function buildShellBundles(
       entrypoints,
       outdir,
       target: 'browser',
-      plugins: [graphRecorder(inputs), mdxPlugin(), pinReact(pkgDir)],
+      plugins: [mdxPlugin(), pinReact(pkgDir)],
       define,
+      metafile: true,
       naming: {
         entry: '[name].[ext]',
         chunk: '[name]-[hash].[ext]',
         asset: '[name]-[hash].[ext]',
       },
     })
+    collectInputs(inputs, browser)
     if (!browser.success) {
       return {
         ok: false,
@@ -283,14 +314,16 @@ export async function buildShellBundles(
         entrypoints: [ssrPrimerEntry],
         outdir: ssrOutDir,
         target: 'bun',
-        plugins: [graphRecorder(inputs), mdxPlugin(), pinReact(pkgDir)],
+        plugins: [mdxPlugin(), pinReact(pkgDir)],
         define,
+        metafile: true,
         naming: {
           entry: `ssr-primer-entry-${seq}.[ext]`,
           chunk: '[name]-[hash].[ext]',
           asset: '[name]-[hash].[ext]',
         },
       })
+      collectInputs(inputs, ssr)
       if (!ssr.success) {
         return {
           ok: false,
@@ -359,7 +392,7 @@ export async function buildPublishBundle(
 ): Promise<PublishBuildResult> {
   const inputs = new Set<string>()
   try {
-    const plugins = [graphRecorder(inputs), mdxPlugin()]
+    const plugins = [mdxPlugin()]
     if (req.pinReact) plugins.push(pinReact(req.pkgDir))
     // Exact-match externalization is a resolve plugin (not Bun's prefix `external`),
     // so an undeclared subpath stays inlined rather than leaking past the importmap.
@@ -376,8 +409,10 @@ export async function buildPublishBundle(
       plugins,
       define: req.define,
       external: req.externalExact ? undefined : req.external,
+      metafile: true,
       naming: req.naming,
     })
+    collectInputs(inputs, result)
     if (!result.success) {
       return {
         ok: false,

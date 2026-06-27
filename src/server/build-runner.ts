@@ -113,7 +113,7 @@ export function classifyBuildResult(
     return {
       ok: false,
       inputs: [],
-      error: `the bundler crashed (killed by ${signal}; likely the large-graph heap bug in Bun)`,
+      error: `the bundler crashed (killed by ${signal}; a native Bun bundler bug — an oversized module graph or a linker use-after-free, not your code)`,
       crashed: true,
     }
   }
