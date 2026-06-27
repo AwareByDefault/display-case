@@ -270,8 +270,9 @@ on the only path that produces a deployable artifact. Now each build goes throug
 new **`publish` worker kind** (`bun build-case.ts publish <descriptorJson>`): the
 parent codegens the entry, computes the `define`/`external`/naming, and hands a
 serializable `PublishBuildRequest` to the child; the child reconstructs the plugins
-(`graphRecorder`+`mdx`+optional `pinReact`) and runs the one `Bun.build`, returning
-`{ok, inputs, outputs}` (the content-hashed entry outputs the parent maps to asset
+(`mdx`+optional `pinReact`) and runs the one `Bun.build` (with `metafile: true`),
+returning `{ok, inputs, outputs}` (the content-hashed entry outputs the parent maps
+to asset
 URLs). Per-component browser + SSR builds run concurrently through `withBuildSlot`
 (publish got *faster*, not slower). A child that dies on a signal makes publish
 throw an attributed `… crashed the bundler …` and exit non-zero — no partial build.
@@ -366,7 +367,8 @@ Surviving lesson: a per-request subprocess spawn is a real cost on constrained
 CI — measure it before adding one.
 
 **Live-reload invalidates per-component, by graph membership (D6, done).** Each
-cached component carries its recorded `graphRecorder` input set. The watcher
+cached component carries its recorded module-graph input set (from Bun's
+`metafile`). The watcher
 threads the *changed file paths* through the debounce to the rebuild, which then
 drops only the components whose graph includes a changed path (plus any failed
 entry, to retry a fix) — not the whole cache. So editing one component doesn't
@@ -1481,7 +1483,7 @@ Two non-obvious invariants:
 
 - The shell-skip test uses **direct `prev.shellInputs.has(p)`** (no `resolve(p)`),
   mirroring `staleCaseIds` — the watcher's path strings already match the
-  graph-recorder's by the same invariant case invalidation relies on. Don't
+  recorded graph inputs by the same invariant case invalidation relies on. Don't
   "normalize" one side without the other or the membership check silently misses.
 - Empty `changed` (startup, or a conservative fallback) ⇒ rebuild everything, the
   same convention `staleCaseIds` uses. Reuse only happens with `prev` present *and*
