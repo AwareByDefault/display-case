@@ -90,6 +90,11 @@ function applyDocEffects(state: RenderState): void {
   // (e.g. Navbar's ThemeToggle) initializes to the harness theme
   // rather than re-resolving from the OS and fighting the `?theme=` selection.
   document.documentElement.dataset.themePref = state.theme
+  // Keep the user-agent color scheme matched to the theme so scrollbars and
+  // default form-control chrome re-theme with the rest of the surface. Idempotent
+  // on first load (equals the value the document baked in) and correct on every
+  // in-place theme swap / in-flow transition, which all route through here.
+  document.documentElement.style.colorScheme = state.theme
 
   // Shrink-wrap the mount to the case's natural width when asked, so a
   // block/flex-rooted component (which would otherwise fill the full-width

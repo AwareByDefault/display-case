@@ -57,7 +57,9 @@ export function shellDoc(opts: {
   a11y: boolean
   assets: DocAssets
 }): string {
-  const reset = 'html,body{margin:0;height:100%;background:var(--dc-bg)}'
+  // `color-scheme` matches the theme so user-agent surfaces (scrollbars, default
+  // control chrome) follow it rather than rendering in their light defaults.
+  const reset = `html,body{margin:0;height:100%;background:var(--dc-bg)}html{color-scheme:${opts.theme}}`
   const seed = JSON.stringify({
     manifest: opts.manifest,
     theme: opts.theme,
@@ -91,7 +93,7 @@ export function renderDoc(opts: {
   // The Vitrine stylesheet follows globalCss so a dogfooded design-system case
   // paints before scripts; for a non-dogfooding consumer these are inert chrome
   // rules in a dev-time-only preview document (see server.ts renderHtml).
-  return `<!doctype html><html lang="en" data-theme="${opts.theme}" data-theme-pref="${opts.theme}"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Display Case render</title><style>html,body{margin:0}body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-sans, ui-sans-serif, system-ui, sans-serif)}${exhibitCenter}${opts.globalCss}\n${opts.vitrineCss}</style>${opts.headStyles ?? ''}${importMap(opts.importmap)}</head><body${bodyAttrs}><main id="root"${rootAttrs}>${opts.markup}</main><script type="module" src="${opts.scriptSrc}"></script></body></html>`
+  return `<!doctype html><html lang="en" data-theme="${opts.theme}" data-theme-pref="${opts.theme}"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Display Case render</title><style>html,body{margin:0}html{color-scheme:${opts.theme}}body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-sans, ui-sans-serif, system-ui, sans-serif)}${exhibitCenter}${opts.globalCss}\n${opts.vitrineCss}</style>${opts.headStyles ?? ''}${importMap(opts.importmap)}</head><body${bodyAttrs}><main id="root"${rootAttrs}>${opts.markup}</main><script type="module" src="${opts.scriptSrc}"></script></body></html>`
 }
 
 /** The primer reading-page document. */
@@ -106,6 +108,8 @@ export function primerDoc(opts: {
   headStyles?: string
   assets: DocAssets
 }): string {
-  const reset = 'html,body{margin:0;height:100%;background:var(--dc-bg)}'
+  // `color-scheme` matches the theme so user-agent surfaces (scrollbars, default
+  // control chrome) follow it rather than rendering in their light defaults.
+  const reset = `html,body{margin:0;height:100%;background:var(--dc-bg)}html{color-scheme:${opts.theme}}`
   return `<!doctype html><html lang="en" data-theme="${opts.theme}" data-theme-pref="${opts.theme}"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Primer</title>${FONT_LINKS}<style>${opts.tokensCss}\n${opts.globalCss}\n${reset}\n${opts.vitrineCss}</style>${opts.headStyles ?? ''}${importMap(opts.assets.importmap)}</head><body><main id="root" data-ssr="${opts.ssr ? '1' : '0'}">${opts.markup}</main><script type="module" src="${opts.assets.primer}"></script></body></html>`
 }

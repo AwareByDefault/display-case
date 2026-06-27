@@ -1486,3 +1486,31 @@ In the worker entry (`build-case.ts`), `badArgs` is a **`function` declaration**
 a `const` arrow: TypeScript's control-flow analysis only treats the former's
 `never` return as diverging, which is what lets each `else { badArgs() }` satisfy
 `result`'s definite assignment under the stricter flag.
+
+## `data-theme` themes tokens; `color-scheme` themes user-agent controls
+
+Every themed document declares the theme two ways, and they cover different
+surfaces. `data-theme="<theme>"` (+ `data-theme-pref`) is the hook the **showcase's
+own tokens** read (`[data-theme="dark"]{--color-bg:…}`) — it themes everything the
+authored CSS paints. It does **not** reach user-agent-rendered surfaces: the
+default `<button>`/`<input>`/`<select>` chrome, scrollbars, and `accent-color` are
+themed only by the CSS `color-scheme` property, whose initial value resolves to
+light. So a document that set only `data-theme="dark"` rendered its controls in
+their **light** defaults — most visibly a bare `<button>` carrying Chrome's
+light-mode `ButtonFace` (`#efefef`) background under a dark theme.
+
+Both render-document paths now declare `html{color-scheme:${theme}}` before
+scripting — the dev server's `renderHtml`/`shellHtml`/`primerHtml`/`renderErrorHtml`
+(`src/server/server.ts`) and the shared/publish `renderDoc`/`shellDoc`/`primerDoc`
+(`src/render/documents.ts`, used by `prod-server`) — and the client keeps it
+matched on every in-place theme swap via `applyDocEffects`
+(`document.documentElement.style.colorScheme`, `src/ui/render-mount.tsx`).
+
+Corollary for consumers (and for triaging a11y findings): `color-scheme` only
+re-themes the control; it does **not** remove the control's own background. A bare
+control still paints its (now theme-correct) user-agent surface — dark
+`ButtonFace` is `#6b6b6b`, still low-contrast against muted text. So a
+low-contrast-on-a-control finding is genuine, not a harness artifact; the fix is in
+the consumer's CSS (a global button reset in `globalStyles`, or an explicit
+`background`), never a reset injected by Display Case (which must render the
+component as authored).
