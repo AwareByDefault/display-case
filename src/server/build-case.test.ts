@@ -58,6 +58,34 @@ describe('buildCaseBundles', () => {
     ).toBe(true)
   })
 
+  // Regression: a component that imports a `file`-loader asset (e.g. an image)
+  // with a *used* value binding. Combined with the former pass-through `onLoad`
+  // observer (`graphRecorder`), this tripped a Bun 1.3.14 use-after-free in the
+  // parallel chunk linker that crashed the worker (and dev `/render` + publish)
+  // for the component. Reading the graph from `metafile` instead of an `onLoad`
+  // hook removes the trigger: the component builds, and the asset is recorded.
+  test('builds a component that imports a file-loader asset (no linker crash)', async () => {
+    const dir = await repoTemp()
+    await writeFiles(dir, {
+      'display-case.config.ts': CONFIG,
+      // `.jpeg` uses Bun's `file` loader (extension-based); the value binding is
+      // used in the rendered output so it is not tree-shaken away.
+      'pic.jpeg': 'not-a-real-jpeg-but-the-file-loader-does-not-care',
+      'Asset.case.tsx': `import pic from './pic.jpeg'\nexport default { component: 'Asset', isFlow: false, cases: { Default: () => pic } }\n`,
+    })
+    const r = await buildCaseBundles({
+      pkgDir: dir,
+      file: join(dir, 'Asset.case.tsx'),
+      configPath: join(dir, 'display-case.config.ts'),
+      componentId: 'asset',
+      seq: 1,
+    })
+    expect(r.ok).toBe(true)
+    // The asset is part of the recorded module graph (metafile inputs), as an
+    // absolute path the dev watcher and graph check can use.
+    expect(r.inputs).toContain(join(dir, 'pic.jpeg'))
+  })
+
   test('a component that cannot bundle returns ok:false with the error', async () => {
     const dir = await repoTemp()
     await writeFiles(dir, {
@@ -106,6 +134,33 @@ describe('build worker (spawned)', () => {
       join(dir, 'Good.case.tsx'),
       cfg(dir),
       'good',
+      '1',
+    ])
+    expect(code).toBe(0)
+    expect(JSON.parse(out).ok).toBe(true)
+  })
+
+  // Regression, exercised across the real crash-containment boundary: a component
+  // importing a `file`-loader asset with a used value binding. With the former
+  // pass-through `onLoad` observer this segfaulted the worker (Bun 1.3.14 linker
+  // use-after-free) — the child would die on a signal and the parent report
+  // `crashed`. Reading the graph from `metafile` removes the trigger, so the
+  // worker exits 0 with `{ok:true}`. Run through the spawned worker (not in-process)
+  // so a re-introduced trigger fails this test cleanly instead of segfaulting the
+  // whole test runner.
+  test('case kind exits 0 + {ok:true} for a component importing a file-loader asset', async () => {
+    const dir = await repoTemp()
+    await writeFiles(dir, {
+      'display-case.config.ts': CONFIG,
+      'pic.jpeg': 'not-a-real-jpeg-but-the-file-loader-does-not-care',
+      'Asset.case.tsx': `import pic from './pic.jpeg'\nexport default { component: 'Asset', isFlow: false, cases: { Default: () => pic } }\n`,
+    })
+    const { out, code } = await run([
+      'case',
+      dir,
+      join(dir, 'Asset.case.tsx'),
+      cfg(dir),
+      'asset',
       '1',
     ])
     expect(code).toBe(0)

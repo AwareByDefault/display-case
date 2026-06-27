@@ -4,6 +4,45 @@ Non-obvious decisions, debugging notes, and architectural context for the Displa
 
 ---
 
+## 2026-06-27: Module graph comes from Bun's `metafile`, not a pass-through `onLoad` observer (a Bun linker UAF)
+
+The build worker (`src/server/build-case.ts`) reads each bundle's real module graph
+from Bun's native build `metafile` (`metafile: true` → `result.metafile.inputs`),
+collected by `collectInputs`. It used to collect the graph with a hand-rolled
+`graphRecorder` plugin — a pass-through, catch-all `onLoad` that recorded
+`args.path` and returned `undefined`. That plugin was written *because* Bun
+originally exposed no module graph; Bun has since added `metafile`, so the
+workaround is gone.
+
+**Why it had to go (not just cleanup): a Bun 1.3.14 use-after-free.** A pass-through
+`onLoad` observer **combined with** a `file`-loader asset imported with a *used*
+value binding (`import img from './x.jpeg'` → `<img src={img}>`) tripped a
+use-after-free in Bun's parallel chunk linker (`generateChunksInParallel`) — a
+hard segfault (exit 133, `0xAA` poison byte), `panic: … Bun has crashed`. Both
+ingredients are necessary, neither sufficient (drop either and it builds). Because
+the same worker backs dev `/render`, `display-case publish`, **and** the graph
+check, *all three* crashed for any component importing an image/font/file asset.
+The graph size was irrelevant (it crashed a 4-byte `.jpeg`); the old graph-check
+message ("module graph is too large — split a barrel") was therefore wrong, and is
+rewritten to name both possible causes (oversized graph *or* a Bun linker bug).
+
+`metafile` reproduces the old recorder exactly with **no `onLoad` hook**, so the
+collision class is gone: `inputs` lists the entry, transitive imports, the file
+asset, **and** files another plugin's `onLoad` transformed (e.g. `.mdx`) — the
+case `graphRecorder` was registered-first to catch. **Two gotchas baked into
+`collectInputs`:** (1) metafile keys are **relative to the worker's cwd**, so each
+is `resolve(process.cwd(), key)`'d back to absolute (what the dev watcher and
+`owningPackage` expect); (2) a *throwing* `Bun.build` (unresolved import / syntax
+error) rejects with no result, so no metafile — the `catch` returns whatever
+partial graph earlier builds collected, and the graph check already surfaces that
+as "could not measure (build failed)". The recorder plugin is deleted, and with
+it gone `src/core/graph-recorder.ts` was renamed to `src/core/graph-watch.ts` —
+it now holds only the watch-dir derivation (`graphWatchDirs`/`findWatchRoot`),
+which is unchanged and still required (it follows source-resolved workspace
+siblings for live reload — see 2026-06-23 below).
+
+---
+
 ## 2026-06-26: The `ssr` check renders in-process, so it can hit dual-React — and it diagnoses it now
 
 The `ssr` check (`src/checks/ssr-check.ts`) renders every case **in-process** with
@@ -231,8 +270,9 @@ on the only path that produces a deployable artifact. Now each build goes throug
 new **`publish` worker kind** (`bun build-case.ts publish <descriptorJson>`): the
 parent codegens the entry, computes the `define`/`external`/naming, and hands a
 serializable `PublishBuildRequest` to the child; the child reconstructs the plugins
-(`graphRecorder`+`mdx`+optional `pinReact`) and runs the one `Bun.build`, returning
-`{ok, inputs, outputs}` (the content-hashed entry outputs the parent maps to asset
+(`mdx`+optional `pinReact`) and runs the one `Bun.build` (with `metafile: true`),
+returning `{ok, inputs, outputs}` (the content-hashed entry outputs the parent maps
+to asset
 URLs). Per-component browser + SSR builds run concurrently through `withBuildSlot`
 (publish got *faster*, not slower). A child that dies on a signal makes publish
 throw an attributed `… crashed the bundler …` and exit non-zero — no partial build.
@@ -327,7 +367,8 @@ Surviving lesson: a per-request subprocess spawn is a real cost on constrained
 CI — measure it before adding one.
 
 **Live-reload invalidates per-component, by graph membership (D6, done).** Each
-cached component carries its recorded `graphRecorder` input set. The watcher
+cached component carries its recorded module-graph input set (from Bun's
+`metafile`). The watcher
 threads the *changed file paths* through the debounce to the rebuild, which then
 drops only the components whose graph includes a changed path (plus any failed
 entry, to retry a fix) — not the whole cache. So editing one component doesn't
@@ -401,7 +442,9 @@ the design-system loop: edit a shared component, view it through a consuming
 app's cases, see nothing change.)
 
 Fix: watch the bundler's **actual inputs**, not a fixed directory.
-`src/core/graph-recorder.ts`:
+`src/core/graph-recorder.ts` (**later** renamed `src/core/graph-watch.ts`; the
+`graphRecorder` plugin described below was removed in favor of Bun's `metafile` —
+see 2026-06-27 above):
 
 - `graphRecorder(into)` is a Bun plugin with a catch-all `onLoad` that records
   `args.path` into a set and returns `undefined` (pure observation — the load
@@ -1440,7 +1483,7 @@ Two non-obvious invariants:
 
 - The shell-skip test uses **direct `prev.shellInputs.has(p)`** (no `resolve(p)`),
   mirroring `staleCaseIds` — the watcher's path strings already match the
-  graph-recorder's by the same invariant case invalidation relies on. Don't
+  recorded graph inputs by the same invariant case invalidation relies on. Don't
   "normalize" one side without the other or the membership check silently misses.
 - Empty `changed` (startup, or a conservative fallback) ⇒ rebuild everything, the
   same convention `staleCaseIds` uses. Reuse only happens with `prev` present *and*
