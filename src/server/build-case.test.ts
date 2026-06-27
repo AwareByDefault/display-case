@@ -140,6 +140,33 @@ describe('build worker (spawned)', () => {
     expect(JSON.parse(out).ok).toBe(true)
   })
 
+  // Regression, exercised across the real crash-containment boundary: a component
+  // importing a `file`-loader asset with a used value binding. With the former
+  // pass-through `onLoad` observer this segfaulted the worker (Bun 1.3.14 linker
+  // use-after-free) — the child would die on a signal and the parent report
+  // `crashed`. Reading the graph from `metafile` removes the trigger, so the
+  // worker exits 0 with `{ok:true}`. Run through the spawned worker (not in-process)
+  // so a re-introduced trigger fails this test cleanly instead of segfaulting the
+  // whole test runner.
+  test('case kind exits 0 + {ok:true} for a component importing a file-loader asset', async () => {
+    const dir = await repoTemp()
+    await writeFiles(dir, {
+      'display-case.config.ts': CONFIG,
+      'pic.jpeg': 'not-a-real-jpeg-but-the-file-loader-does-not-care',
+      'Asset.case.tsx': `import pic from './pic.jpeg'\nexport default { component: 'Asset', isFlow: false, cases: { Default: () => pic } }\n`,
+    })
+    const { out, code } = await run([
+      'case',
+      dir,
+      join(dir, 'Asset.case.tsx'),
+      cfg(dir),
+      'asset',
+      '1',
+    ])
+    expect(code).toBe(0)
+    expect(JSON.parse(out).ok).toBe(true)
+  })
+
   test('case kind exits non-zero + {ok:false} when it cannot bundle', async () => {
     const dir = await repoTemp()
     await writeFiles(dir, {
