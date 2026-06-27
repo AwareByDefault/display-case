@@ -1151,8 +1151,12 @@ export function useShell(seed: ShellSeed): ShellViewModel | { manifest: null } {
 
   // Drive the token theme from the document root so html/body (not just the
   // app chrome) pick up the themed background — no white bars around the app.
+  // `color-scheme` tracks it too so user-agent surfaces (scrollbars, default
+  // control chrome) re-theme with the rest of the shell on a toggle, rather than
+  // staying at the theme the document baked in.
   useEffect(() => {
     document.documentElement.dataset.theme = theme
+    document.documentElement.style.colorScheme = theme
   }, [theme])
 
   // Mark the page loaded so the stage src can be set without blocking page load.

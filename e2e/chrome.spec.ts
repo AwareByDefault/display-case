@@ -32,9 +32,13 @@ test.describe('browse chrome', () => {
     await expect(app).toHaveAttribute('data-theme', 'dark')
     // The theme is also driven onto <html> so the surrounding page is themed.
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+    // …and the user-agent color scheme tracks it so scrollbars / default control
+    // chrome re-theme with the page (spec scenario 3, the interactive switch).
+    await expect(page.locator('html')).toHaveCSS('color-scheme', 'dark')
     await expect(toggle).toHaveText('Light')
 
     await toggle.click()
     await expect(app).toHaveAttribute('data-theme', 'light')
+    await expect(page.locator('html')).toHaveCSS('color-scheme', 'light')
   })
 })
