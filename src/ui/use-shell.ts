@@ -126,9 +126,10 @@ export interface ShellViewModel {
   startDocResize: (e: ReactPointerEvent<HTMLDivElement>) => void
   onDocResizeKey: (e: ReactKeyboardEvent<HTMLDivElement>) => void
 
-  // Tweaks panel.
+  // Tweaks panel. `tweaksFloating` is the placement (docked vs. floating), chosen
+  // per exhibit by fit until the viewer overrides it via `toggleTweaksFloating`.
   tweaksFloating: boolean
-  setTweaksFloating: (update: (f: boolean) => boolean) => void
+  toggleTweaksFloating: () => void
 
   // Accessibility audit surface. Optional — absent until live audits are wired
   // into the running chrome; a page/template exhibit supplies it to demonstrate
@@ -373,6 +374,24 @@ export function useShell(seed: ShellSeed): ShellViewModel | { manifest: null } {
   const [docWidth, setDocWidth] = useState(DOC_DEFAULT_W)
   // Tweaks panel can be undocked into a free-floating, draggable overlay.
   const [tweaksFloating, setTweaksFloating] = useState(false)
+  // Whether the viewer has explicitly chosen the panel's placement this page
+  // load. While false, placement is decided per case by whether the exhibit fits
+  // beside a docked panel (see the auto-undock effect below); once true, the
+  // viewer's choice sticks across case selections until reload. In-memory only —
+  // never persisted, so a reload returns to the automatic, per-case default.
+  const [tweaksDockUserSet, setTweaksDockUserSet] = useState(false)
+  const tweaksDockUserSetRef = useRef(tweaksDockUserSet)
+  tweaksDockUserSetRef.current = tweaksDockUserSet
+  // The exhibit the auto-undock decision last ran for. Undocking frees the
+  // vertical space a docked panel took, which would otherwise flip the predicate
+  // straight back — so the decision runs at most once per exhibit, keyed here.
+  const autoDockKeyRef = useRef<string | null>(null)
+  // The header dock/undock control: flip the placement and mark it viewer-owned
+  // so the automatic per-case default no longer touches it this page load.
+  const toggleTweaksFloating = useCallback(() => {
+    setTweaksDockUserSet(true)
+    setTweaksFloating((f) => !f)
+  }, [])
   // Starts expanded deterministically (the server has no viewport width); an
   // effect collapses it on a narrow viewport after mount, so hydration matches.
   const [navCollapsed, setNavCollapsed] = useState(false)
@@ -772,6 +791,12 @@ export function useShell(seed: ShellSeed): ShellViewModel | { manifest: null } {
   // biome-ignore lint/correctness/useExhaustiveDependencies: reset keyed on shown selection
   useEffect(() => {
     setContent(null)
+    // Reset to the docked baseline so the incoming exhibit's fit is measured
+    // against docked space (the auto-undock effect decides from there). Skipped
+    // once the viewer owns the placement. Runs at the swap — while the stage and
+    // panel are faded out — so re-docking a previously auto-floated panel here is
+    // never visible.
+    if (!tweaksDockUserSetRef.current) setTweaksFloating(false)
   }, [shownSel?.componentId, shownSel?.caseId])
 
   // Crossfade controller. When the *exhibit* (component or case) changes, fade
@@ -959,6 +984,36 @@ export function useShell(seed: ShellSeed): ShellViewModel | { manifest: null } {
   const reserve = stageDecor ? MIN_PAD + 1 : 0
   const availW = Math.max(1, panel.w - 2 * reserve)
   const availH = Math.max(1, panel.h - 2 * reserve)
+
+  // Auto-undock: when the exhibit is taller than the docked preview area, float
+  // the panel so the whole component stays visible instead of being clipped by
+  // the space a docked panel takes below it. Decided from the docked baseline
+  // (reset at the swap) as the size report lands — in the same commit the stage
+  // reveals, so the panel appears already floating rather than docking then
+  // jumping. The per-exhibit key guard makes this a one-shot decision: the extra
+  // height undocking frees grows `panel.h`, and without the guard that would flip
+  // the predicate straight back. Never runs once the viewer owns the placement.
+  useEffect(() => {
+    if (tweaksDockUserSet) return
+    if (!shownSel || !content || content.h <= 0) return
+    // Trust the size only once it's been reported *for the shown exhibit* (the
+    // same gate the reveal uses). Otherwise, right after a swap, the previous
+    // case's lingering `content` would be measured against the new selection and
+    // consume its one-shot decision before the real size lands.
+    if (measuredSig !== selSignature(shownSel)) return
+    if (tweaksFloating) return // let the docked baseline settle before deciding
+    const key = `${shownSel.componentId}/${shownSel.caseId}`
+    if (autoDockKeyRef.current === key) return
+    autoDockKeyRef.current = key
+    if (content.h > availH) setTweaksFloating(true)
+  }, [
+    tweaksDockUserSet,
+    shownSel,
+    content,
+    measuredSig,
+    tweaksFloating,
+    availH,
+  ])
 
   // `renderH` is the iframe element's height — the viewport the component lays
   // out against (kept = panel height in Responsive mode so `vh`/media queries
@@ -1403,7 +1458,7 @@ export function useShell(seed: ShellSeed): ShellViewModel | { manifest: null } {
     startDocResize,
     onDocResizeKey,
     tweaksFloating,
-    setTweaksFloating,
+    toggleTweaksFloating,
     a11y,
     rescanA11y,
     navScrollRef,

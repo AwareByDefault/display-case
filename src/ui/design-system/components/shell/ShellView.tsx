@@ -600,7 +600,7 @@ function LibraryStage(props: ShellViewProps) {
     fillFrame,
     renderFrame,
     tweaksFloating,
-    setTweaksFloating,
+    toggleTweaksFloating,
     docOpen,
     changeDocsOpen,
     docText,
@@ -685,7 +685,7 @@ function LibraryStage(props: ShellViewProps) {
                 sel?.tweaks ?? {},
                 docOpen,
               )}
-              onToggleMode={() => setTweaksFloating((f) => !f)}
+              onToggleMode={toggleTweaksFloating}
               items={Object.entries(activeCase.tweaks).map(([key, desc]) => ({
                 label: key,
                 control: (

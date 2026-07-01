@@ -492,7 +492,7 @@ export function makeModel(
     startDocResize: noop,
     onDocResizeKey: noop,
     tweaksFloating: false,
-    setTweaksFloating: noop,
+    toggleTweaksFloating: noop,
     navScrollRef: nullRef,
     navBodyRef: nullRef,
     groups: groupByLevel(mockManifest.components),

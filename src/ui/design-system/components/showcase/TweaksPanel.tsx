@@ -4,6 +4,7 @@ import type {
   PointerEvent as ReactPointerEvent,
 } from 'react'
 import { useEffect, useRef, useState } from 'react'
+import { DcTestIds } from '../../../test-ids'
 import { IconButton } from '../controls/IconButton'
 import { Eyebrow } from './Eyebrow'
 
@@ -167,6 +168,7 @@ export function TweaksPanel({
     <section
       ref={ref}
       className="dcui-tweaks"
+      data-testid={DcTestIds.tweaksPanel}
       data-mode={mode}
       data-dragging={dragging ? 'true' : undefined}
       data-collapsed={collapsed ? 'true' : undefined}
@@ -208,6 +210,7 @@ export function TweaksPanel({
               active={floating}
               glyph={floating ? '▭' : '⬓'}
               label={floating ? 'Dock tweaks panel' : 'Float tweaks panel'}
+              data-testid={DcTestIds.tweaksDockToggle}
               onClick={onToggleMode}
             />
           </span>
