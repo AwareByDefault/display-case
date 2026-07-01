@@ -405,3 +405,23 @@ export function groupPrimerSections(
   }
   return out
 }
+
+/**
+ * Turn a tweak's authored key into a human-readable label for the controls
+ * panel. Splits on camelCase and underscore/space boundaries, keeps a clumped
+ * acronym intact (handing only its final letter to the following word), and
+ * capitalizes the first word — leaving the rest as authored:
+ *   `camelCase` → "Camel Case"
+ *   `thisURLAcronymShouldStayTogether` → "This URL Acronym Should Stay Together"
+ *   `snake_case_key` → "Snake case key"
+ * The raw key is still used for control names, state, and the `?t.<key>=` share
+ * URLs — this transform is display-only.
+ */
+export function humanizeTweakKey(key: string): string {
+  return key
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2') // camel/number → Upper boundary
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2') // ACRONYM|Word boundary
+    .replace(/[_\s]+/g, ' ') // underscores/whitespace → single space
+    .trim()
+    .replace(/^\w/, (c) => c.toUpperCase()) // capitalize the first word only
+}

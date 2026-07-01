@@ -11,6 +11,7 @@ import {
   DOC_MAX_W,
   DOC_MIN_W,
   type ExhibitNode,
+  humanizeTweakKey,
   LEVEL_LABEL,
   type Mode,
   RESPONSIVE,
@@ -686,23 +687,29 @@ function LibraryStage(props: ShellViewProps) {
                 docOpen,
               )}
               onToggleMode={toggleTweaksFloating}
-              items={Object.entries(activeCase.tweaks).map(([key, desc]) => ({
-                label: key,
-                control: (
-                  <TweakControl
-                    name={key}
-                    desc={desc}
-                    current={sel?.tweaks?.[key] ?? String(desc.default)}
-                    onChange={(v) =>
-                      sel &&
-                      select({
-                        ...sel,
-                        tweaks: { ...(sel.tweaks ?? {}), [key]: v },
-                      })
-                    }
-                  />
-                ),
-              }))}
+              items={Object.entries(activeCase.tweaks).map(([key, desc]) => {
+                // Humanize once: the visible label and the control's accessible
+                // name are the same string (Label-in-Name), while the raw `key`
+                // still drives state and the `?t.<key>=` share URL below.
+                const label = humanizeTweakKey(key)
+                return {
+                  label,
+                  control: (
+                    <TweakControl
+                      name={label}
+                      desc={desc}
+                      current={sel?.tweaks?.[key] ?? String(desc.default)}
+                      onChange={(v) =>
+                        sel &&
+                        select({
+                          ...sel,
+                          tweaks: { ...(sel.tweaks ?? {}), [key]: v },
+                        })
+                      }
+                    />
+                  ),
+                }
+              })}
             />
           </div>
         )}

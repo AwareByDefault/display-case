@@ -10,6 +10,7 @@ import {
   gridPad,
   groupByLevel,
   groupPrimerSections,
+  humanizeTweakKey,
   initialSelectionFor,
   MAX_PAD,
   MIN_PAD,
@@ -434,5 +435,36 @@ describe('groupPrimerSections', () => {
     expect(groups[0]!.heading).toBeNull()
     expect(groups[0]!.items.map((i) => i.id)).toEqual(['wordmark'])
     expect(groups[1]!.heading?.id).toBe('intro')
+  })
+})
+
+describe('humanizeTweakKey', () => {
+  test('splits camelCase and capitalizes the first word', () => {
+    expect(humanizeTweakKey('camelCase')).toBe('Camel Case')
+  })
+
+  test('keeps a clumped acronym together, ceding its last letter to the next word', () => {
+    expect(humanizeTweakKey('thisURLAcronymShouldStayTogether')).toBe(
+      'This URL Acronym Should Stay Together',
+    )
+  })
+
+  test('splits on underscores and whitespace', () => {
+    expect(humanizeTweakKey('snake_case_key')).toBe('Snake case key')
+    expect(humanizeTweakKey('spaced  words')).toBe('Spaced words')
+  })
+
+  test('splits digit-to-letter camel boundaries', () => {
+    expect(humanizeTweakKey('enableX2Mode')).toBe('Enable X2 Mode')
+  })
+
+  test('capitalizes only the first word, leaving the rest as authored', () => {
+    expect(humanizeTweakKey('size')).toBe('Size')
+    expect(humanizeTweakKey('kind')).toBe('Kind')
+  })
+
+  test('handles a leading acronym and empty input', () => {
+    expect(humanizeTweakKey('URLPath')).toBe('URL Path')
+    expect(humanizeTweakKey('')).toBe('')
   })
 })
