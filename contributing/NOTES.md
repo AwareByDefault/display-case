@@ -1557,3 +1557,38 @@ low-contrast-on-a-control finding is genuine, not a harness artifact; the fix is
 the consumer's CSS (a global button reset in `globalStyles`, or an explicit
 `background`), never a reset injected by Display Case (which must render the
 component as authored).
+
+## Tweaks panel auto-undock: two traps (feedback loop + stale size)
+
+The browse chrome picks the tweaks panel's default placement per exhibit: an
+exhibit taller than the docked stage area (`content.h > availH`) opens the panel
+`floating`, otherwise `docked` (`use-shell.ts`, the `autoDockKeyRef` effect). Both
+inputs already existed — `content` is the exhibit's natural size the render frame
+reports via `dc-size` (measured off `#root.scrollHeight`, so it is the *true*
+content height, not clamped to the iframe viewport), and `availH` is the measured
+docked preview area. Two non-obvious hazards shaped the implementation:
+
+- **Feedback loop.** Undocking frees the vertical space the docked panel took, so
+  `panel.h` (hence `availH`) grows — which would flip `content.h > availH` back to
+  false and re-dock, oscillating. Guard: decide **at most once per exhibit**, keyed
+  by `component/case` in `autoDockKeyRef`. The freed height can't re-trigger it. A
+  docked-baseline reset (`setTweaksFloating(false)` in the swap-time effect keyed on
+  `shownSel`, skipped once the viewer has overridden) ensures each exhibit is
+  measured against docked space, and it runs while the stage+panel are faded out so
+  re-docking a previously auto-floated panel is never visible.
+
+- **Stale size consumes the one-shot.** Right after a client-side case switch,
+  `shownSel` has advanced but the previous case's `content` still lingers for a
+  render (the `setContent(null)` reset is a scheduled update, not a synchronous
+  closure change). The decision effect would then measure the *old* size against
+  the *new* selection, record the per-exhibit key, and lock in the wrong placement
+  before the real size lands. Fix: gate on `measuredSig === selSignature(shownSel)`
+  — the same "this size was reported for the shown exhibit" gate the stage reveal
+  uses. Without it, `short → tall` navigation stayed docked (caught only by e2e,
+  not by types/lint). See `e2e/auto-undock.spec.ts` + the `consumer-autodock`
+  fixture (a deliberately tall + short tweaked case; heights fixed so the decision
+  is deterministic across viewports).
+
+The override (`tweaksDockUserSet`) is plain in-memory React state — no storage, no
+URL — so it survives client-side `pushState` case switches (the app never
+remounts) but a real reload discards it, returning to the per-case size default.

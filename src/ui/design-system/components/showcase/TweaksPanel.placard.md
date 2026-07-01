@@ -13,7 +13,7 @@
 />
 ```
 
-Modes: `docked` (default, beneath the stage) · `floating` (a free, draggable overlay — the one sanctioned floating surface, so it earns the overlay shadow; drag the head to roam over the nav, header, docs). `onToggleMode` renders the dock/float toggle.
+Modes: `docked` (beneath the stage) · `floating` (a free, draggable overlay — the one sanctioned floating surface, so it earns the overlay shadow; drag the head to roam over the nav, header, docs). `onToggleMode` renders the dock/float toggle. The panel is controlled — the parent owns `mode`. In the browse chrome that owner (`use-shell`) picks the default per case: an exhibit taller than the docked stage area opens `floating` so the whole component stays visible, otherwise `docked`. Toggling the control hands the choice to the viewer for the rest of the page load.
 
 - **items**: `{ label, control }[]` — or compose `<Row label>…</Row>` children (the exported per-row component; one `TweakControl` per row)
 - **title**: header label (defaults `'Tweaks'`)

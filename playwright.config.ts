@@ -23,9 +23,12 @@ const A11Y_PORT = Number(process.env.DISPLAY_CASE_A11Y_PORT ?? PORT + 1)
 const PLAIN_PORT = Number(process.env.DISPLAY_CASE_PLAIN_PORT ?? PORT + 2)
 // A third consumer with `a11y.startup: 'refresh'` for the start-up population spec.
 const STARTUP_PORT = Number(process.env.DISPLAY_CASE_STARTUP_PORT ?? PORT + 3)
+// A consumer with a tall + a short tweaked case for the auto-undock spec.
+const AUTODOCK_PORT = Number(process.env.DISPLAY_CASE_AUTODOCK_PORT ?? PORT + 4)
 process.env.DISPLAY_CASE_A11Y_PORT = String(A11Y_PORT)
 process.env.DISPLAY_CASE_PLAIN_PORT = String(PLAIN_PORT)
 process.env.DISPLAY_CASE_STARTUP_PORT = String(STARTUP_PORT)
+process.env.DISPLAY_CASE_AUTODOCK_PORT = String(AUTODOCK_PORT)
 
 export default defineConfig({
   testDir: './e2e',
@@ -71,6 +74,13 @@ export default defineConfig({
       // Dummy consumer with `a11y.startup: 'refresh'` (a11y-startup.spec.ts).
       command: `bun src/cli.ts e2e/fixtures/consumer-startup --port=${STARTUP_PORT}`,
       url: `http://localhost:${STARTUP_PORT}/health`,
+      reuseExistingServer: !process.env.CI,
+      timeout: 60_000,
+    },
+    {
+      // Consumer with a tall + a short tweaked case (auto-undock.spec.ts).
+      command: `bun src/cli.ts e2e/fixtures/consumer-autodock --port=${AUTODOCK_PORT}`,
+      url: `http://localhost:${AUTODOCK_PORT}/health`,
       reuseExistingServer: !process.env.CI,
       timeout: 60_000,
     },

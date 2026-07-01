@@ -27,6 +27,11 @@ export const DcTestIds = {
   docPanel: 'dc-doc-panel',
   /** The stage grid toggle in the header (decorated components only). */
   gridButton: 'dc-grid-button',
+  /** The Tweaks controls panel (present when the case declares tweaks). Its
+   *  `data-mode` attribute is `docked` or `floating`. */
+  tweaksPanel: 'dc-tweaks-panel',
+  /** The dock/float toggle in the Tweaks panel header. */
+  tweaksDockToggle: 'dc-tweaks-dock-toggle',
   /** The stage's accessibility panel (only once the case has been audited). */
   a11yPanel: 'dc-a11y-panel',
   /** The show/hide toggle in the accessibility panel's header. */
