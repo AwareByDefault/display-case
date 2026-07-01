@@ -46,7 +46,7 @@ tweak.number(8)                              // number field
 tweak.choice(['sm', 'md', 'lg'], 'md')       // select from fixed options
 ```
 
-The keys of the `tweaks` object become the control labels and the property names on the `render` argument.
+The keys of the `tweaks` object are the property names on the `render` argument, and each one is humanized into its control label: camelCase and `snake_case` keys split into words (a clumped acronym stays together) and the first word is capitalized — `fontSize` shows as "Font Size", `thisURLValue` as "This URL Value". The raw key still drives the render-argument property and the `t.<name>` URL param, so only the on-screen label changes.
 
 ## Values are URL-encoded
 
