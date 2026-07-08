@@ -22,6 +22,12 @@
 - [x] 3.2 `build-case.test.ts`: a publish build with `publicPath` rewrites the
   emitted asset URL to that prefix and emits the bytes into `outdir` under the
   named hash.
+- [x] 3.3 Dogfood/browser coverage: a `consumer-asset` e2e fixture (an `Asset`
+  component importing a real SVG, rendered as `<img src>` and CSS
+  `background-image`) + `e2e/asset.spec.ts`, which asserts the image actually
+  decodes in a real browser (`naturalWidth > 0`) on both the isolated `/render`
+  doc and the browse-chrome Stage iframe, and that the background URL resolves to
+  image bytes at the `/dist/` mount. Verified the specs fail with the fix removed.
 
 ## 4. Verify & document
 
