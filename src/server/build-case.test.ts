@@ -84,6 +84,30 @@ describe('buildCaseBundles', () => {
     // The asset is part of the recorded module graph (metafile inputs), as an
     // absolute path the dev watcher and graph check can use.
     expect(r.inputs).toContain(join(dir, 'pic.jpeg'))
+
+    // The emitted asset URL is `/dist/`-prefixed (the `publicPath` fix), so it
+    // resolves against the dev server's `/dist/` mount — not document-relative
+    // (`./pic-…`), which would resolve against `/render/<component>/…` and 404.
+    // The bundle emits the asset bytes into the same `dist` dir the URL points at.
+    const browserJs = await Bun.file(
+      join(dir, '.display-case', 'dist', 'render-case-asset.js'),
+    ).text()
+    const url = browserJs.match(/\/dist\/(pic-[A-Za-z0-9]+\.jpeg)/)
+    expect(url).not.toBeNull()
+    expect(browserJs).not.toMatch(/["']\.\/pic-[A-Za-z0-9]+\.jpeg["']/)
+    // The URL resolves to real bytes: the asset was emitted into the same `dist`
+    // dir the `/dist/` handler serves, under the exact hashed name the URL names.
+    expect(
+      await Bun.file(
+        join(dir, '.display-case', 'dist', url?.[1] ?? ''),
+      ).exists(),
+    ).toBe(true)
+    // SSR renders the same `/dist/` URL, so its `<img src>` matches the
+    // browser-emitted asset (content hash agrees across targets).
+    const ssrJs = await Bun.file(
+      join(dir, '.display-case', 'ssr', 'ssr-case-asset-1.js'),
+    ).text()
+    expect(ssrJs).toMatch(/["']\/dist\/pic-[A-Za-z0-9]+\.jpeg["']/)
   })
 
   test('a component that cannot bundle returns ok:false with the error', async () => {
@@ -256,5 +280,43 @@ describe('buildPublishBundle (direct)', () => {
     expect(r.ok).toBe(false)
     expect(r.error).toBeTruthy()
     expect(r.outputs).toEqual([])
+  })
+
+  // A publish build rewrites a `file`-loader asset import to a `publicPath`-prefixed
+  // URL, so the emitted `<img src>` points at the base-prefixed `/assets/` mount the
+  // prod server serves — not a document-relative URL that 404s. Mirrors the dev
+  // `/dist/` fix; here the prefix is `<base>/assets/`.
+  test('publicPath rewrites an emitted asset URL to the assets mount', async () => {
+    const dir = await repoTemp()
+    await writeFiles(dir, {
+      'display-case.config.ts': CONFIG,
+      'pic.jpeg': 'not-a-real-jpeg-but-the-file-loader-does-not-care',
+      'Asset.case.tsx': `import pic from './pic.jpeg'\nexport default { component: 'Asset', isFlow: false, cases: { Default: () => pic } }\n`,
+    })
+    const r = await buildPublishBundle({
+      pkgDir: dir,
+      entrypoints: [join(dir, 'Asset.case.tsx')],
+      outdir: join(dir, 'out'),
+      target: 'browser',
+      minify: false,
+      publicPath: '/base/assets/',
+      naming: {
+        entry: '[name]-[hash].[ext]',
+        chunk: '[name]-[hash].[ext]',
+        asset: '[name]-[hash].[ext]',
+      },
+      define: {},
+      pinReact: true,
+    })
+    expect(r.ok).toBe(true)
+    const ep = r.outputs.find((o) => o.kind === 'entry-point')
+    if (!ep) throw new Error('no entry-point output')
+    const js = await Bun.file(ep.path).text()
+    const url = js.match(/\/base\/assets\/(pic-[A-Za-z0-9]+\.jpeg)/)
+    expect(url).not.toBeNull()
+    expect(js).not.toMatch(/["']\.\/pic-[A-Za-z0-9]+\.jpeg["']/)
+    // The asset bytes are emitted into the build's `outdir` (served under
+    // `/assets/`) under the exact hashed name the URL points at.
+    expect(await Bun.file(join(dir, 'out', url?.[1] ?? '')).exists()).toBe(true)
   })
 })

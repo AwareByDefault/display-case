@@ -25,10 +25,13 @@ const PLAIN_PORT = Number(process.env.DISPLAY_CASE_PLAIN_PORT ?? PORT + 2)
 const STARTUP_PORT = Number(process.env.DISPLAY_CASE_STARTUP_PORT ?? PORT + 3)
 // A consumer with a tall + a short tweaked case for the auto-undock spec.
 const AUTODOCK_PORT = Number(process.env.DISPLAY_CASE_AUTODOCK_PORT ?? PORT + 4)
+// A consumer that imports a static image asset for the asset spec.
+const ASSET_PORT = Number(process.env.DISPLAY_CASE_ASSET_PORT ?? PORT + 5)
 process.env.DISPLAY_CASE_A11Y_PORT = String(A11Y_PORT)
 process.env.DISPLAY_CASE_PLAIN_PORT = String(PLAIN_PORT)
 process.env.DISPLAY_CASE_STARTUP_PORT = String(STARTUP_PORT)
 process.env.DISPLAY_CASE_AUTODOCK_PORT = String(AUTODOCK_PORT)
+process.env.DISPLAY_CASE_ASSET_PORT = String(ASSET_PORT)
 
 export default defineConfig({
   testDir: './e2e',
@@ -81,6 +84,13 @@ export default defineConfig({
       // Consumer with a tall + a short tweaked case (auto-undock.spec.ts).
       command: `bun src/cli.ts e2e/fixtures/consumer-autodock --port=${AUTODOCK_PORT}`,
       url: `http://localhost:${AUTODOCK_PORT}/health`,
+      reuseExistingServer: !process.env.CI,
+      timeout: 60_000,
+    },
+    {
+      // Consumer that imports a static image asset (asset.spec.ts).
+      command: `bun src/cli.ts e2e/fixtures/consumer-asset --port=${ASSET_PORT}`,
+      url: `http://localhost:${ASSET_PORT}/health`,
       reuseExistingServer: !process.env.CI,
       timeout: 60_000,
     },

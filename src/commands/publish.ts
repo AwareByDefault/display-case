@@ -533,6 +533,12 @@ export async function publish(
 ): Promise<{ out: string; descriptor: BuildDescriptor }> {
   const out = resolve(opts.out ?? join(pkgDir, 'dist-showcase'))
   const base = (opts.base ?? '').replace(/\/+$/, '')
+  // The URL prefix the prod server serves bundle assets from (`prod-server.ts`
+  // streams `/assets/` out of `<out>/assets`). Passed to every build as
+  // `publicPath` so a `file`-loader asset import is rewritten to an absolute
+  // `<base>/assets/<name>-<hash>.ext` URL — the same mount the browser bundles,
+  // importmap, and SSR-rendered `<img src>` all reference (matching content hash).
+  const assetsPublicPath = `${base}/assets/`
   const { config, configPath } = await resolveConfig(pkgDir)
 
   await rm(out, { recursive: true, force: true })
@@ -604,6 +610,7 @@ export async function publish(
     target: 'browser',
     minify: true,
     splitting: true,
+    publicPath: assetsPublicPath,
     naming: Hashed,
     define: defines,
     pinReact: true,
@@ -626,6 +633,7 @@ export async function publish(
     outdir: join(out, 'assets'),
     target: 'browser',
     minify: true,
+    publicPath: assetsPublicPath,
     naming: Hashed,
     define: defines,
     external: browserExternal,
@@ -660,6 +668,7 @@ export async function publish(
           outdir: join(out, 'assets'),
           target: 'browser',
           minify: true,
+          publicPath: assetsPublicPath,
           naming: Hashed,
           define: defines,
           // Shared libraries external → their vendor bundles (importmap), not inlined
@@ -719,6 +728,9 @@ export async function publish(
         outdir: join(out, 'server'),
         target: 'bun',
         minify: true,
+        // SSR markup references the same `<base>/assets/` asset URL the browser
+        // build emits (matching content hash), so a rendered `<img src>` resolves.
+        publicPath: assetsPublicPath,
         naming: { entry: '[name].[ext]', chunk: '[name]-[hash].[ext]' },
         define: defines,
         external: ssrExternal,
@@ -744,6 +756,7 @@ export async function publish(
             outdir: join(out, 'server'),
             target: 'bun',
             minify: true,
+            publicPath: assetsPublicPath,
             // Fixed name (no hash) so `prod-server` resolves it by component id.
             naming: {
               entry: `ssr-case-${c.id}.[ext]`,

@@ -11,6 +11,19 @@ import { mdxPlugin } from '../core/mdx-plugin'
 import { pinReact } from '../core/pin-react'
 
 /**
+ * The URL prefix the dev server serves bundler output from (the `/dist/` handler
+ * in `server.ts` streams files out of the cache `dist` dir). Passed to every dev
+ * `Bun.build` as `publicPath` so a `file`-loader asset import (e.g. `import logo
+ * from './logo.png'`) is rewritten to an absolute `/dist/<name>-<hash>.ext` URL
+ * that resolves against that mount — not a document-relative URL that resolves
+ * against `/render/<component>/…` and 404s. It applies to both the browser build
+ * (emits the asset bytes into `dist`) and the SSR build (whose rendered `<img
+ * src>` must reference the same URL); the content hash matches across targets, so
+ * the SSR markup points at the browser-emitted file. See `contributing/NOTES.md`.
+ */
+const DEV_ASSET_PUBLIC_PATH = '/dist/'
+
+/**
  * Record a build's real module graph from Bun's native `metafile` — the set of
  * on-disk files the bundler actually loaded (transitive imports, file-loader
  * assets, and paths another plugin's `onLoad` handled, all included). Keys are
@@ -188,6 +201,7 @@ export async function buildCaseBundles(
       entrypoints: [renderEntry],
       outdir,
       target: 'browser',
+      publicPath: DEV_ASSET_PUBLIC_PATH,
       plugins: [mdxPlugin(), pinReact(pkgDir)],
       define,
       metafile: true,
@@ -217,6 +231,9 @@ export async function buildCaseBundles(
       entrypoints: [ssrEntry],
       outdir: ssrOutDir,
       target: 'bun',
+      // SSR-rendered `<img src>` must reference the same `/dist/` asset URL the
+      // browser build emits (matching content hash), so the markup resolves.
+      publicPath: DEV_ASSET_PUBLIC_PATH,
       plugins: [mdxPlugin(), pinReact(pkgDir)],
       define,
       metafile: true,
@@ -287,6 +304,7 @@ export async function buildShellBundles(
       entrypoints,
       outdir,
       target: 'browser',
+      publicPath: DEV_ASSET_PUBLIC_PATH,
       plugins: [mdxPlugin(), pinReact(pkgDir)],
       define,
       metafile: true,
@@ -314,6 +332,7 @@ export async function buildShellBundles(
         entrypoints: [ssrPrimerEntry],
         outdir: ssrOutDir,
         target: 'bun',
+        publicPath: DEV_ASSET_PUBLIC_PATH,
         plugins: [mdxPlugin(), pinReact(pkgDir)],
         define,
         metafile: true,
@@ -356,6 +375,10 @@ export interface PublishBuildRequest {
   outdir: string
   target: 'browser' | 'bun'
   minify: boolean
+  /** URL prefix Bun rewrites `file`-loader asset imports to, so an emitted asset's
+   *  URL points at the mount that serves it (`<base>/assets/` for a publish build).
+   *  Omit to leave imports document-relative. See `DEV_ASSET_PUBLIC_PATH`. */
+  publicPath?: string
   naming: { entry: string; chunk: string; asset?: string }
   define: Record<string, string>
   external?: string[]
@@ -404,6 +427,7 @@ export async function buildPublishBundle(
       outdir: req.outdir,
       target: req.target,
       minify: req.minify,
+      publicPath: req.publicPath,
       sourcemap: 'none',
       splitting: req.splitting ?? false,
       plugins,
