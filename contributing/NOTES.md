@@ -4,6 +4,39 @@ Non-obvious decisions, debugging notes, and architectural context for the Displa
 
 ---
 
+## 2026-07-07: Imported asset URLs need `publicPath` — the bytes emit, the URL didn't point at them
+
+A component that imports a static asset (`import photo from './photo.jpeg'` →
+`<img src={photo}>`) rendered a **broken image** in `/render/…` (and the published
+build), even though the asset *was* bundled and written to disk. This is the
+**residual** of the 2026-06-27 note below: that fix stopped the linker *crash* so
+the asset emits; this one makes its *URL* resolve.
+
+**Mechanism.** Bun's `file` loader emits the asset (content-hashed) into the
+build's `outdir` and rewrites the import to a string URL. With **no `publicPath`**,
+that URL is *document-relative* (`"./photo-<hash>.jpeg"`). The render document is
+served at `/render/<component>/<case>` and loads its bundle from `/dist/…`, so a
+document-relative asset URL resolves against `/render/<component>/…` — not the
+`/dist/` mount the file lives at — and 404s. The bytes were on disk and the
+`/dist/` handler (and prod's `/assets/` handler) would have served them; only the
+URL was wrong.
+
+**Fix.** Pass `publicPath` to every `Bun.build` so the emitted URL is absolute and
+points at the serving mount: `'/dist/'` for the dev builds (`build-case.ts`,
+`DEV_ASSET_PUBLIC_PATH`) and `` `${base}/assets/` `` for the publish builds
+(`publish.ts` → `PublishBuildRequest.publicPath`, the same prefix the importmap
+already uses).
+
+**The trap: SSR and browser must agree.** The SSR build (`target: 'bun'`) renders
+the `<img src>` server-side, so it needs the **same** `publicPath` as the browser
+build — otherwise the pre-scripting `src` and the hydrating client disagree. It
+works because the content hash is a pure function of the bytes, so both targets
+emit the *same* hashed filename; the browser build emits the served copy into
+`/dist/` (or `/assets/`) and the SSR markup just references that URL. If you ever
+add a browser or SSR build surface, give it `publicPath` too, or asset-backed
+cases silently break on that surface only. Verified: `build-case.test.ts` asserts
+the emitted URL prefix **and** that the hashed file physically exists at the mount.
+
 ## 2026-06-27: Module graph comes from Bun's `metafile`, not a pass-through `onLoad` observer (a Bun linker UAF)
 
 The build worker (`src/server/build-case.ts`) reads each bundle's real module graph
