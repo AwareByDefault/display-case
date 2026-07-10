@@ -4,6 +4,27 @@ Non-obvious decisions, debugging notes, and architectural context for the Displa
 
 ---
 
+## 2026-07-09: Shell page/template/flow cases need `InteractiveShell`, not raw `ShellView`
+
+`makeModel` (shell-fixtures) builds a fully *static* `ShellViewModel` — every
+handler is a no-op, including `setNavCollapsed`. So a case that renders
+`<ShellView {...makeModel(...)}>` directly has a dead header ☰ nav toggle: the
+model never changes `navCollapsed`, so clicking does nothing. That's invisible at
+desktop width but **hides the whole page at mobile widths** — `chrome.css`'s
+`max-width: 640px` block turns an *open* nav into a full-width `grid-area: main`
+drawer (`z-index: 50`) over the stage, and with the toggle inert there's no way to
+dismiss it to see the page.
+
+Fix: render through `InteractiveShell` (shell-fixtures) instead — a thin wrapper
+that owns `navCollapsed` via `useState` (seeded from the model) and feeds a live
+setter back in. All shell page/template/flow cases use it now. Because the browse
+chrome swaps cases *in place* (same component's cases share one React root — a
+*different* component reloads the frame, so cross-file key collisions can't
+happen), each in-file usage needs a distinct `key` so the collapse state re-seeds
+per case. The `interactive-cases-keyed` check only enforces keys for
+*locally-defined* stateful specimens, so an imported wrapper like `InteractiveShell`
+won't trip it — the keys are added by hand for the same reason.
+
 ## 2026-07-07: Imported asset URLs need `publicPath` — the bytes emit, the URL didn't point at them
 
 A component that imports a static asset (`import photo from './photo.jpeg'` →
@@ -1626,38 +1647,37 @@ The override (`tweaksDockUserSet`) is plain in-memory React state — no storage
 URL — so it survives client-side `pushState` case switches (the app never
 remounts) but a real reload discards it, returning to the per-case size default.
 
-## 2026-07-09: Shell exhibits must render `ShellExhibit`, not `ShellView`, to follow the harness theme
+## 2026-07-09: `InteractiveShell` also carries the harness theme into shell exhibits
 
-The dogfooded template/page/flow exhibits (`CaseTemplate.case.tsx`,
-`CasesPage.case.tsx`, `PrimerTemplate.case.tsx`, `PrimerPage.case.tsx`,
-`A11yPage.case.tsx`, `ShellView.case.tsx`) render the browse chrome by feeding a
-static model from `makeModel` into `ShellView`. `ShellView` emits its own
-`data-theme={theme}` on `.dc-app` (`ShellView.tsx`) — load-bearing in the *real*
-app (the toggle is asserted on `.dc-app` in `e2e/chrome.spec.ts`) — but
-`makeModel` hard-codes `theme: 'light'`. Because the color tokens re-declare under
-`[data-theme="light"]` on **any** scope (`tokens/colors.css`, see the note above
-on nested-scope re-declaration), an exhibit rendered under the harness's
-`html[data-theme="dark"]` created a nested `[data-theme="light"]` island and the
-whole chrome stayed light — the *only* cases that ignored the harness theme,
-since normal component cases emit no `data-theme` wrapper and simply inherit.
+Companion to the note above (shell exhibits render `InteractiveShell`, not raw
+`ShellView`): the same wrapper is also what makes them follow the harness
+light/dark theme. Before it, the dogfooded template/page/flow exhibits fed a static
+`makeModel` (which hard-codes `theme: 'light'`) straight into `ShellView`, and
+`ShellView` emits its own `data-theme={theme}` on `.dc-app` — load-bearing in the
+*real* app (the toggle is asserted on `.dc-app` in `e2e/chrome.spec.ts`). Because
+the color tokens re-declare under `[data-theme="light"]` on **any** scope
+(`tokens/colors.css`, see the nested-scope note above), an exhibit rendered under
+the harness's `html[data-theme="dark"]` created a nested `[data-theme="light"]`
+island and the whole chrome stayed light — the *only* cases that ignored the
+harness theme, since normal component cases emit no `data-theme` wrapper and simply
+inherit.
 
 A case's `render` can't read the harness theme purely (render must be
 SSR-deterministic; `document.documentElement.dataset.theme` is a browser API
-barred during render — §3.1). The fix is `ShellExhibit` in `shell-fixtures.tsx`: a
-thin `ShellView` wrapper that renders it with **`inheritTheme`** — an opt-in prop
-(default off, so the real app and its e2e-asserted `.dc-app[data-theme]` are
-untouched) that makes `.dc-app` **omit its own `data-theme` and inherit the
-document root's**. Every `/render` document already bakes `html[data-theme]` from
-`?theme=` at SSR (`documents.ts` / `server.ts`), so the inherited chrome is
-already in the harness theme in the server HTML — **no nested light island, and no
-post-adopt re-theme flash** (this is why `inheritTheme`, not just feeding the model
-a theme via an effect: an effect-set `data-theme` is still `'light'` in the SSR
-snapshot and flips a frame later, flashing the whole chrome). Every shell exhibit
-now renders `<ShellExhibit …>` instead of `<ShellView …>`. **If you add a new
-chrome exhibit, use `ShellExhibit`** — reaching for `ShellView` directly
-reintroduces the pinned-light bug.
+barred during render — §3.1). So `InteractiveShell` renders `ShellView` with
+**`inheritTheme`** — an opt-in prop on `ShellView` (default off, so the real app
+and its e2e-asserted `.dc-app[data-theme]` are untouched) that makes `.dc-app`
+**omit its own `data-theme` and inherit the document root's**. Every `/render`
+document already bakes `html[data-theme]` from `?theme=` at SSR (`documents.ts` /
+`server.ts`), so the inherited chrome is already in the harness theme in the server
+HTML — **no nested light island, and no post-adopt re-theme flash** (this is why
+`inheritTheme`, not just feeding the model a theme via an effect: an effect-set
+`data-theme` is still `'light'` in the SSR snapshot and flips a frame later,
+flashing the whole chrome). **If you add a new chrome exhibit, render
+`InteractiveShell`** — reaching for `ShellView` directly reintroduces both the
+dead nav toggle and the pinned-light bug.
 
-`ShellExhibit` also feeds `theme` from `useHarnessTheme()` (reads `<html
+`InteractiveShell` also feeds `theme` from `useHarnessTheme()` (reads `<html
 data-theme>` via `useSyncExternalStore` — server snapshot `'light'`, so no SSR
 document access; client re-reads after adopt and a `MutationObserver` re-syncs on
 harness toggle). With `inheritTheme` on this no longer drives the colors (those

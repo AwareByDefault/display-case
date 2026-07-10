@@ -2,11 +2,11 @@ import { defineCases } from '@awarebydefault/display-case'
 import { Button } from '..'
 import {
   FlowStep,
+  InteractiveShell,
   makeModel,
   mockManifest,
   PageScreen,
   PLACEHOLDER_DOC,
-  ShellExhibit,
   StageSlot,
   selectIn,
 } from './shell-fixtures'
@@ -54,7 +54,8 @@ export default defineCases(
   {
     // The bare stage: the Variants case has no tweak schema and docs stay closed.
     Default: () => (
-      <ShellExhibit
+      <InteractiveShell
+        key="default"
         {...makeModel({
           ...selectIn(mockManifest, 'button', 'variants'),
           boxW: 280,
@@ -68,7 +69,8 @@ export default defineCases(
     // TweaksPanel rides alongside the stage — its controls at their defaults,
     // driving the Playground button on the stage.
     'With tweaks': () => (
-      <ShellExhibit
+      <InteractiveShell
+        key="with-tweaks"
         {...makeModel({
           ...selectIn(mockManifest, 'button', 'playground'),
           boxW: 280,
@@ -81,7 +83,8 @@ export default defineCases(
     // Documentation revealed: the Button component has a placard-doc, so opening
     // the docs panel pours real prose into the aside.
     'With docs': () => (
-      <ShellExhibit
+      <InteractiveShell
+        key="with-docs"
         {...makeModel({
           ...selectIn(mockManifest, 'button', 'variants'),
           docOpen: true,
@@ -96,7 +99,8 @@ export default defineCases(
     // The page at its fullest: the Playground case's tweaks panel and the open
     // docs panel flank the Playground button on the stage.
     'With tweaks and docs': () => (
-      <ShellExhibit
+      <InteractiveShell
+        key="with-tweaks-and-docs"
         {...makeModel({
           ...selectIn(mockManifest, 'button', 'playground'),
           docOpen: true,
@@ -113,7 +117,8 @@ export default defineCases(
     // button), and `fillFrame` lets the screen fill the whole stage edge to edge
     // rather than sitting in a centred box.
     Page: () => (
-      <ShellExhibit
+      <InteractiveShell
+        key="page"
         {...makeModel({
           ...selectIn(mockManifest, 'cases-page', 'default'),
           stageDecor: false,
@@ -126,7 +131,8 @@ export default defineCases(
     // Browsing a flow: a flow component shows the FlowNav stepper above the stage
     // (one tab per step) and, like a page, fills the whole stage edge to edge.
     Flow: () => (
-      <ShellExhibit
+      <InteractiveShell
+        key="flow"
         {...makeModel({
           ...selectIn(mockManifest, 'sign-in', 'request-link'),
           stageDecor: false,

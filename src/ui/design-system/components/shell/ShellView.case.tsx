@@ -1,9 +1,9 @@
 import { defineFlow } from '@awarebydefault/display-case'
 import { Button } from '..'
 import {
+  InteractiveShell,
   makeModel,
   RealPrimer,
-  ShellExhibit,
   StageSlot,
 } from './shell-fixtures'
 
@@ -22,7 +22,8 @@ export default defineFlow('Primer to Cases', {
     'Primer view': {
       transitions: ['Cases view'],
       render: ({ goto }) => (
-        <ShellExhibit
+        <InteractiveShell
+          key="primer-view"
           {...makeModel({
             mode: 'primer',
             shownMode: 'primer',
@@ -38,7 +39,8 @@ export default defineFlow('Primer to Cases', {
     'Cases view': {
       transitions: ['Primer view'],
       render: ({ goto }) => (
-        <ShellExhibit
+        <InteractiveShell
+          key="cases-view"
           {...makeModel({
             mode: 'components',
             shownMode: 'components',
