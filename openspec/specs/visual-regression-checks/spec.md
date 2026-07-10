@@ -3,9 +3,7 @@
 ## Purpose
 
 Display Case renders each case to an image and compares it against a recorded baseline, with an overridable capture/audit and comparison pipeline whose default backend is optional.
-
 ## Requirements
-
 ### Requirement: Visual-regression checks
 
 Display Case SHALL be able to render each case to an image and compare it against a previously recorded baseline for that case, reporting any case whose rendering differs beyond an allowed threshold. When no baseline exists for a case, the run SHALL be able to record one. A comparison run SHALL exit non-zero when any case differs from its baseline. The location where baselines are stored SHALL be configurable; absent configuration, a default location SHALL be used.
@@ -83,3 +81,28 @@ The packages the built-in default depends on SHALL be optional. They SHALL be lo
 - AND the default backend's packages are not installed
 - WHEN the checks run
 - THEN they complete using the custom mechanisms without requiring the default packages
+
+### Requirement: Capture reflects the requested theme in the color-scheme preference
+
+Display Case SHALL, when it renders a case for capture or audit under a requested
+theme, present the rendering environment's user-agent color-scheme preference as
+matching that theme. As a result, a showcased component that detects the theme
+*only* through the user agent's color-scheme preference — the one signal a served
+page cannot set for itself — SHALL be captured and audited in the requested theme
+rather than in the capture environment's default, for every theme a case is
+captured or audited under.
+
+#### Scenario: A preference-only component is captured in the requested theme
+
+- GIVEN a showcased component that detects light versus dark only through the user agent's color-scheme preference
+- WHEN Display Case renders that case for capture under the dark theme
+- THEN the rendering environment reports the user-agent color-scheme preference as dark
+- AND the captured image shows the component in its dark appearance
+
+#### Scenario: Each captured theme reports its matching preference
+
+- GIVEN a case captured under both the light and dark themes
+- WHEN each capture is taken
+- THEN the light capture reports the user-agent color-scheme preference as light
+- AND the dark capture reports it as dark
+
