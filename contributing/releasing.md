@@ -54,9 +54,12 @@ file(s) a PR includes. Commit/merge style therefore has no effect on the release
    changesets), commits that back to `main` as `chore(release): version packages
    [skip ci]`, `changeset publish`es to npm, and cuts a **GitHub Release** for the
    new `v<version>` tag (notes = that version's `CHANGELOG.md` section). A push
-   carrying no changesets is a clean no-op. Multiple changesets in one release
-   collapse to the highest level, and each description becomes its own changelog
-   line.
+   carrying no changesets is a clean no-op. A push carrying **only empty**
+   (no-release) changesets bumps nothing and publishes nothing, but still consumes
+   them — the workflow commits a `chore: consume empty changeset(s) [skip ci]` to
+   `main` so those files don't retrigger the release on every later push. Multiple
+   changesets in one release collapse to the highest level, and each description
+   becomes its own changelog line.
 
 The version commit is tagged `[skip ci]` so it doesn't retrigger the workflow.
 `changeset publish` creates the `v<version>` git tag; the GitHub Release is cut
