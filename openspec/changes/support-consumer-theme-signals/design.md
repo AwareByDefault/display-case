@@ -85,8 +85,8 @@ inline function cannot straddle those:
 
 - It cannot bake into an HTML string without executing during SSR, and a function
   that touches `document` cannot run during string building at all.
-- To reach the client it would have to be serialized across `__dcSeed` — functions
-  do not serialize.
+- To reach the client it would have to be serialized into the inlined
+  `__dcThemeSignals` set — functions do not serialize.
 - A *client-only* function shim (run in an effect) would reintroduce exactly the
   post-adopt re-theme **flash** that the recent exhibit-theme fix eliminated, because
   the server document could not pre-bake its result.
@@ -95,7 +95,8 @@ So the theme option is **declarative data**: a description of which signals to e
 resolvable identically on the server (bake into the string) and the client (apply to
 the DOM). The equivalent of a "custom shim" is a **custom declarative mapping**
 (attribute name + light/dark values, or a class name), which is still fully
-serializable. The resolved signal set is serialized into `__dcSeed` so the client
+serializable. The resolved signal set is serialized into a dedicated
+`__dcThemeSignals` inline so the client
 appliers emit the same signals on toggle that the server baked.
 
 - **Alternative considered — inline function `theme(root, theme)`:** matches the
@@ -161,7 +162,8 @@ addClasses: string[]; removeClasses: string[]; colorScheme: 'light' | 'dark' }`.
 - **Client seams** consume it to set/remove attributes, toggle classes, and set
   `style.colorScheme` on `documentElement` (and on the per-specimen `<Display>`
   element for its forced-theme subtree) at all 4 sites.
-- The resolved `signals` config is added to `__dcSeed` (declarative, JSON-safe) so
+- The resolved `signals` config is inlined as `__dcThemeSignals` in every document
+  (declarative, JSON-safe) — a dedicated global, since `__dcSeed` is shell-only — so
   the client appliers emit exactly what the server baked → **no flash**.
 - This also lets us **unify the existing `data-theme-pref` inconsistency** (shell
   omits it, render/primer include it) inside one resolver, rather than perpetuating
@@ -187,7 +189,7 @@ browsing of such a component still follows the OS.
   `<html>`. → Inert and invisible; default keeps it to `data-theme` + `color-scheme`
   + one class. Bootstrap/MUI are opt-in.
 - **[Seam drift]** Nine-plus seams must stay in lockstep. → The single shared
-  resolver + a serialized `__dcSeed` signal set is the mitigation; an SSR/adopt
+  resolver + a serialized `__dcThemeSignals` signal set is the mitigation; an SSR/adopt
   parity test should assert the baked signals equal the client-applied signals.
 - **[Baseline churn for consumers]** Enabling a signal a component visibly re-themes
   on changes that case's appearance. → Expected and localized; the default does not

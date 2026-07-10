@@ -1,11 +1,13 @@
-import { describe, expect, test } from 'bun:test'
+import { afterEach, describe, expect, test } from 'bun:test'
 import type { ThemeSignal } from '../index'
 import {
   applyResolvedSignals,
   DEFAULT_THEME_SIGNALS,
   effectiveThemeSignals,
+  readThemeSignals,
   resolveThemeSignals,
   themeRootAttrs,
+  themeSignalsSeedScript,
 } from './theme-signals'
 
 describe('resolveThemeSignals', () => {
@@ -102,6 +104,40 @@ describe('effectiveThemeSignals', () => {
     const signals: ThemeSignal[] = ['bootstrap', { attribute: 'data-x' }]
     expect(effectiveThemeSignals({ theme: { signals } })).toBe(signals)
     expect(effectiveThemeSignals({ theme: { signals: [] } })).toEqual([])
+  })
+})
+
+describe('client transport (themeSignalsSeedScript ↔ readThemeSignals)', () => {
+  const g = globalThis as { __dcThemeSignals?: unknown }
+  afterEach(() => {
+    delete g.__dcThemeSignals
+  })
+
+  test('what the seed script publishes is what readThemeSignals reads back', () => {
+    const signals: ThemeSignal[] = [
+      'class',
+      'bootstrap',
+      { attribute: 'data-color-mode' },
+      { class: 'night' },
+    ]
+    const script = themeSignalsSeedScript(signals)
+    expect(script.startsWith('<script>window.__dcThemeSignals=')).toBe(true)
+    // Round-trip: run the assignment the browser would, then read it back.
+    const json = script
+      .replace('<script>window.__dcThemeSignals=', '')
+      .replace('</script>', '')
+    g.__dcThemeSignals = JSON.parse(json)
+    expect(readThemeSignals()).toEqual(signals)
+  })
+
+  test('readThemeSignals falls back to the default when the global is absent', () => {
+    delete g.__dcThemeSignals
+    expect(readThemeSignals()).toBe(DEFAULT_THEME_SIGNALS)
+  })
+
+  test('readThemeSignals falls back to the default when the global is not an array', () => {
+    g.__dcThemeSignals = { not: 'an array' }
+    expect(readThemeSignals()).toBe(DEFAULT_THEME_SIGNALS)
   })
 })
 

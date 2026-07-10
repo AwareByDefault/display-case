@@ -94,9 +94,9 @@ served page), not something Display Case can implement.
     `src/ui/primer.tsx` (postMessage theme handler), and the per-specimen
     `<Display>` forced-theme wrapper.
   - Config plumbing: a new `theme` field on `DisplayCaseConfig` (`src/index.ts`);
-    the resolved signal set serialized into the inlined seed (`window.__dcSeed`,
-    built in `src/server/server.ts` / `src/render/documents.ts`, read in
-    `src/ui/browser-entry.tsx`) so the client appliers can re-emit it on toggle.
+    the resolved signal set serialized into a dedicated `window.__dcThemeSignals`
+    inline (in every document — `src/server/server.ts` / `src/render/documents.ts`),
+    read by `readThemeSignals()` in the client appliers so they re-emit it on toggle.
   - Check toolchain: `src/checks/providers/playwright-driver.ts` (emulate
     `prefers-color-scheme` per rendered theme); shared by visual and a11y checks.
 - **Public API / authoring:** additive only — a new optional `theme` config option;

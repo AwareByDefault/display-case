@@ -27,15 +27,18 @@
       `renderDoc`, `primerDoc`).
 - [x] 3.2 Same for the dev-server templates in `src/server/server.ts` (shell, isolated
       render, build-error, primer).
-- [x] 3.3 Serialize the resolved signal set into `window.__dcSeed` (built in
-      `src/server/server.ts` / `src/render/documents.ts`) so the client can re-emit it.
+- [x] 3.3 Serialize the resolved signal set into a dedicated `window.__dcThemeSignals`
+      inline script in every document (`src/server/server.ts` / `src/render/documents.ts`)
+      so the client can re-emit it. A dedicated global — not `__dcSeed`, which only the
+      shell carries — so the render and primer documents carry it too.
 - [x] 3.4 Confirm `./prod-server` inherits the change via the shared `documents.ts`
       renderers (no separate template to update).
 
 ## 4. Client (interactive) seams
 
-- [x] 4.1 Read the signal set from `__dcSeed` in `src/ui/browser-entry.tsx` / the seed
-      types and thread it to the appliers.
+- [x] 4.1 Read the signal set from `window.__dcThemeSignals` (via `readThemeSignals()`
+      in `src/render/theme-signals.ts`) in the client appliers, with a fallback to the
+      default set.
 - [x] 4.2 Apply the resolved signals (set/remove attributes, toggle classes, set
       `style.colorScheme`) in `src/ui/render-mount.tsx` `applyDocEffects`,
       `src/ui/use-shell.ts` theme effect, `src/ui/primer-mount.tsx`, and the
