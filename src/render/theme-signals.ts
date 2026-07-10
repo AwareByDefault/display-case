@@ -41,6 +41,34 @@ export function effectiveThemeSignals(
 /** The class toggled by the `'class'` signal in the dark theme (dark-only). */
 export const DEFAULT_DARK_CLASS = 'dark'
 
+// A conservative HTML/XML attribute name: a letter/underscore/colon start, then
+// name characters. Excludes whitespace, quotes, `<`/`>`/`=`/`/` and anything else
+// that would break the `<html …>` tag when baked or make the client `setAttribute`
+// throw — so the server and client never diverge on a custom `{ attribute }` name.
+const VALID_ATTRIBUTE_NAME = /^[a-zA-Z_:][-a-zA-Z0-9_:.]*$/
+
+function assertValidAttributeName(name: string): void {
+  if (!VALID_ATTRIBUTE_NAME.test(name)) {
+    throw new Error(
+      `Invalid theme signal attribute name ${JSON.stringify(name)}: an attribute ` +
+        `name must start with a letter, "_", or ":" and contain only letters, ` +
+        `digits, "-", "_", ":", or ".". Fix the \`theme.signals\` config.`,
+    )
+  }
+}
+
+function assertValidClassName(name: string): void {
+  // `classList.add` throws on an empty class or one containing ASCII whitespace,
+  // and a whitespace class would silently split into several — validate so the
+  // baked markup and the client agree.
+  if (name === '' || /\s/.test(name)) {
+    throw new Error(
+      `Invalid theme signal class name ${JSON.stringify(name)}: a class name must ` +
+        `be non-empty and contain no whitespace. Fix the \`theme.signals\` config.`,
+    )
+  }
+}
+
 /**
  * Map a theme + the configured consumer signals to the root indicators to apply.
  * Display Case's own `data-theme`, `data-theme-pref`, and `color-scheme` are
@@ -82,12 +110,15 @@ export function resolveThemeSignals(
       continue
     }
     if ('attribute' in signal) {
+      assertValidAttributeName(signal.attribute)
       attributes[signal.attribute] = isDark
         ? (signal.dark ?? 'dark')
         : (signal.light ?? 'light')
       continue
     }
     // Custom class: dark-only unless a light class is also given.
+    assertValidClassName(signal.class)
+    if (signal.light) assertValidClassName(signal.light)
     if (isDark) {
       addClasses.push(signal.class)
       if (signal.light) removeClasses.push(signal.light)
@@ -149,13 +180,26 @@ export function applyResolvedSignals(
 
 const THEME_SIGNALS_GLOBAL = '__dcThemeSignals'
 
+/** Escape JSON for safe embedding inside an inline `<script>`: `<` (so a value
+ *  like `</script>` can't close the tag) and the U+2028/U+2029 line separators
+ *  (valid in JSON strings but illegal in a script's source). Reversed by
+ *  `JSON.parse`, so the value round-trips. */
+function jsonForScript(value: unknown): string {
+  // \u003c so a value like </script> cannot close the inline <script> tag;
+  // U+2028 / U+2029 are valid in JSON strings but illegal bare in a script body.
+  return JSON.stringify(value)
+    .replace(/</g, '\\u003c')
+    .replaceAll('\u2028', '\\u2028')
+    .replaceAll('\u2029', '\\u2029')
+}
+
 /** Inline script that publishes the effective signal set to the client, so the
  *  in-place theme toggle re-emits exactly what the server baked. Placed in every
  *  delivered document. */
 export function themeSignalsSeedScript(
   signals: readonly ThemeSignal[],
 ): string {
-  return `<script>window.${THEME_SIGNALS_GLOBAL}=${JSON.stringify(signals)}</script>`
+  return `<script>window.${THEME_SIGNALS_GLOBAL}=${jsonForScript(signals)}</script>`
 }
 
 /** Read the effective signal set the server inlined; falls back to the default set

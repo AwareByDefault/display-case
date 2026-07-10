@@ -13,7 +13,8 @@ import { defineConfig } from '@awarebydefault/display-case'
  *
  * `globalStyles` loads the real, unmodified framework stylesheets: Bootstrap's
  * shipped CSS from `node_modules`, and a Tailwind stylesheet compiled from the
- * real `tailwindcss` CLI by the e2e global setup (see `e2e/theme-frameworks.setup.ts`).
+ * real `tailwindcss` CLI in this fixture server's own startup command (see the
+ * theme-frameworks `webServer` entry in `playwright.config.ts`).
  */
 export default defineConfig({
   title: 'Theme Frameworks',

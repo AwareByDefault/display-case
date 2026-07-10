@@ -5,7 +5,8 @@ import { defineCases } from '@awarebydefault/display-case'
  * under a `.dark` ancestor. Display Case's default `class` signal toggles the
  * `dark` class on the document root, so this box flips from a light to a dark
  * surface with the theme. The stylesheet is compiled by the real `tailwindcss`
- * CLI in the e2e global setup and loaded via `globalStyles`.
+ * CLI in the fixture server's startup command (see `playwright.config.ts`) and
+ * loaded via `globalStyles`.
  */
 export default defineCases(
   'Tailwind box',

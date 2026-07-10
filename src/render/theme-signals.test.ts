@@ -72,6 +72,34 @@ describe('resolveThemeSignals', () => {
     expect(paired.addClasses).toEqual(['day'])
     expect(paired.removeClasses).toEqual(['night'])
   })
+
+  test('a paired custom class in the dark theme adds the dark class and sheds the light one', () => {
+    const dark = resolveThemeSignals('dark', [{ class: 'night', light: 'day' }])
+    expect(dark.addClasses).toEqual(['night'])
+    // Toggling to dark must remove the paired light class it added under light.
+    expect(dark.removeClasses).toEqual(['day'])
+  })
+
+  test('rejects an invalid custom attribute name (server/client would diverge)', () => {
+    expect(() =>
+      resolveThemeSignals('dark', [{ attribute: 'bad name' }]),
+    ).toThrow(/attribute name/)
+    expect(() => resolveThemeSignals('dark', [{ attribute: '' }])).toThrow()
+    // A valid one does not throw.
+    expect(() =>
+      resolveThemeSignals('dark', [{ attribute: 'data-color-mode' }]),
+    ).not.toThrow()
+  })
+
+  test('rejects an invalid custom class name (whitespace / empty)', () => {
+    expect(() => resolveThemeSignals('dark', [{ class: 'a b' }])).toThrow(
+      /class name/,
+    )
+    expect(() => resolveThemeSignals('dark', [{ class: '' }])).toThrow()
+    expect(() =>
+      resolveThemeSignals('dark', [{ class: 'night', light: 'a b' }]),
+    ).toThrow()
+  })
 })
 
 describe('themeRootAttrs', () => {
@@ -138,6 +166,21 @@ describe('client transport (themeSignalsSeedScript ↔ readThemeSignals)', () =>
   test('readThemeSignals falls back to the default when the global is not an array', () => {
     g.__dcThemeSignals = { not: 'an array' }
     expect(readThemeSignals()).toBe(DEFAULT_THEME_SIGNALS)
+  })
+
+  test('the seed script escapes `<` so a value cannot break out of the <script> tag', () => {
+    const signals: ThemeSignal[] = [
+      { attribute: 'data-x', dark: '</script><b>hi', light: 'ok' },
+    ]
+    const script = themeSignalsSeedScript(signals)
+    // The only literal `</script>` is the tag's own closer.
+    expect(script.match(/<\/script>/g)).toHaveLength(1)
+    expect(script).toContain('\\u003c')
+    // …and the value still round-trips through JSON.parse.
+    const json = script
+      .replace('<script>window.__dcThemeSignals=', '')
+      .replace(/<\/script>$/, '')
+    expect(JSON.parse(json)).toEqual(signals)
   })
 })
 
