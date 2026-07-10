@@ -15,7 +15,8 @@
       "!**/.husky/",
       "!**/.vscode/",
       "!.display-case/",
-      "!dist-showcase/"
+      "!dist-showcase/",
+      "!e2e/fixtures/consumer-theme-frameworks/*.css"
     ]
   },
   "formatter": {
@@ -114,7 +115,7 @@
       }
     },
     {
-      "includes": ["**/*.d.ts", "**/playwright.config.ts"],
+      "includes": ["**/*.d.ts", "**/playwright.config.ts", "e2e/**/*.setup.ts"],
       "linter": {
         "rules": {
           "style": {

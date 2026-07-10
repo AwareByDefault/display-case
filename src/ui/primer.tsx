@@ -71,7 +71,15 @@ export function Display({
         {subtitle ? <div className="dc-display-sub">{subtitle}</div> : null}
       </div>
       <div
-        className="dc-display-specimen"
+        // A specimen pinned to a theme islands it for its subtree: `data-theme`
+        // (Display Case tokens + attribute conventions) plus the `dark` class for a
+        // dark-pinned specimen (Tailwind/shadcn). A `.dark` class can only be added,
+        // not un-inherited, so a light-pinned specimen inside a dark page still
+        // islands `data-theme` but not the class (a CSS limitation); the page root
+        // carries the full configured signal set.
+        className={
+          theme === 'dark' ? 'dc-display-specimen dark' : 'dc-display-specimen'
+        }
         data-theme={theme}
         data-flush={flush ? '' : undefined}
         data-app-surface={appSurface ? '' : undefined}>

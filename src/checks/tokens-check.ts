@@ -122,7 +122,11 @@ export async function checkTokens(pkgDir: string): Promise<TokenCheckResult> {
     if (
       match.includes('/node_modules/') ||
       match.includes('/.display-case/') ||
-      match.includes('/dist/')
+      match.includes('/dist/') ||
+      // e2e consumer fixtures are third-party-framework stubs (Tailwind/Bootstrap/
+      // MUI CSS with their own internal custom properties), not this package's own
+      // token surface — same rationale as skipping node_modules/dist.
+      match.includes('/e2e/fixtures/')
     ) {
       continue
     }

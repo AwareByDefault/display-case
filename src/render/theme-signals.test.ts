@@ -105,6 +105,39 @@ describe('effectiveThemeSignals', () => {
   })
 })
 
+describe('server/client parity (no flash, no drift)', () => {
+  // The server bakes `themeRootAttrs` into the document and the client applies
+  // `applyResolvedSignals`; both derive from the same `resolveThemeSignals`, so a
+  // fresh document and the client's first application must agree. Assert the baked
+  // attribute string carries exactly the attributes + class the client would set.
+  const signals: ThemeSignal[] = [
+    'class',
+    'bootstrap',
+    'mui',
+    { attribute: 'data-color-mode' },
+    { class: 'night' },
+  ]
+  for (const theme of ['light', 'dark'] as const) {
+    test(`baked attributes match applied attributes for a configured set (${theme})`, () => {
+      const resolved = resolveThemeSignals(theme, signals)
+      const baked = themeRootAttrs(resolved)
+      // Every always-on + configured attribute the client sets is in the markup.
+      for (const [name, value] of Object.entries(resolved.attributes)) {
+        expect(baked).toContain(`${name}="${value}"`)
+      }
+      // The class(es) the client adds are baked; the ones it removes are absent.
+      if (resolved.addClasses.length > 0) {
+        expect(baked).toContain(`class="${resolved.addClasses.join(' ')}"`)
+      } else {
+        expect(baked).not.toContain('class=')
+      }
+      for (const removed of resolved.removeClasses) {
+        expect(baked).not.toContain(`class="${removed}"`)
+      }
+    })
+  }
+})
+
 describe('applyResolvedSignals', () => {
   // A minimal fake root that records the DOM writes, so the applier is testable
   // without a full DOM. Mirrors the subset of HTMLElement the applier touches.

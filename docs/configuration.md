@@ -30,6 +30,7 @@ The CLI looks for `display-case.config.ts` then `display-case.config.tsx` in the
 | `landing` | `'primer' \| 'components' \| 'exhibits'` | no | first present mode | Which browse mode the chrome lands on at `/`. Honored only when that mode is present; otherwise the first present mode (primer → components → exhibits). See [`landing`](#landing). |
 | `nav` | `NavConfig` | no | none | Information-architecture configuration for the **Exhibits** mode: folder-derivation toggle, surface→group mapping, and group order/labels/default-collapsed. See [`nav`](#nav). |
 | `globalStyles` | `string[]` | no | none | CSS entrypoints (relative to the package) injected into previews. |
+| `theme` | `{ signals?: ThemeSignal[] }` | no | `{ signals: ['class'] }` | Which root theme signals Display Case emits so components following common dark/light conventions re-theme with the toggle. `data-theme` + `color-scheme` are always emitted; the default adds a `dark` class. See [`theme`](#theme) and [Theming](theming.md#following-your-frameworks-convention-theme-config). |
 | `decorator` | `ComponentType<{ children, level?, sourcePath?, area? }>` | no | none | Wrapper rendered around every case; also receives the active case's `level`, `sourcePath`, and `area` so it can wrap page/flow cases in app chrome. |
 | `styleEngines` | `StyleEngine[]` | no | none | Engines that collect render-time (CSS-in-JS) styling — emotion/MUI, styled-components — during the server render and deliver it before scripting. Pair with `decorator`. See [`styleEngines`](#styleengines) and [Style engines](style-engines.md). |
 | `share` | `string[]` | no | none | Runtime libraries to deliver **once** across a published showcase, beyond React (always shared). A library shared by several components is built into one cacheable vendor bundle every surface resolves to, instead of inlined into each per-component bundle. Affects only `display-case publish`. See [`share`](#share). |
@@ -58,6 +59,24 @@ CSS files concatenated and injected into both the browse shell and the isolated 
 ```ts
 globalStyles: ['./src/tokens.css', './src/components.css']
 ```
+
+### `theme`
+
+Which root theme signals Display Case emits, so components following any common dark/light convention re-theme with the preview toggle — directly or by inheriting the root signal. Display Case always emits `data-theme` + `data-theme-pref` + the CSS `color-scheme` property; `theme.signals` adds consumer conventions on top (default: a dark-only `dark` class).
+
+```ts
+theme: {
+  signals: [
+    'class', // <html class="dark"> in dark — Tailwind class strategy, shadcn, next-themes, VueUse, Nuxt
+    'bootstrap', // <html data-bs-theme="light|dark"> — Bootstrap 5.3+
+    'mui', // <html data-mui-color-scheme="light|dark"> — Material UI CSS variables
+    { attribute: 'data-color-mode' }, // custom attribute → "light" | "dark" (or pass `light`/`dark` values)
+    { class: 'night' }, // custom class, added in dark (pass `light` for a light-theme class too)
+  ],
+}
+```
+
+`ThemeSignal` is serializable data — never a function — because the set is baked into the document delivered before scripting *and* re-applied by the client on the toggle. The `class` signal is dark-only (added in dark, absent in light), matching Tailwind/shadcn/VueUse. Set `signals: []` to emit nothing beyond `data-theme` + `color-scheme`. A component that themes only through `@media (prefers-color-scheme)` cannot follow an in-page toggle (a served page cannot set that media feature) but is still captured in the right theme by the checks. See [Theming](theming.md#light-and-dark-theme-signals).
 
 ### `primer`
 

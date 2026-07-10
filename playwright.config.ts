@@ -27,14 +27,23 @@ const STARTUP_PORT = Number(process.env.DISPLAY_CASE_STARTUP_PORT ?? PORT + 3)
 const AUTODOCK_PORT = Number(process.env.DISPLAY_CASE_AUTODOCK_PORT ?? PORT + 4)
 // A consumer that imports a static image asset for the asset spec.
 const ASSET_PORT = Number(process.env.DISPLAY_CASE_ASSET_PORT ?? PORT + 5)
+// A consumer whose components come from real frameworks (Tailwind class, Bootstrap
+// data-bs-theme, MUI data-mui-color-scheme) for the theme-frameworks spec.
+const FRAMEWORKS_PORT = Number(
+  process.env.DISPLAY_CASE_FRAMEWORKS_PORT ?? PORT + 6,
+)
 process.env.DISPLAY_CASE_A11Y_PORT = String(A11Y_PORT)
 process.env.DISPLAY_CASE_PLAIN_PORT = String(PLAIN_PORT)
 process.env.DISPLAY_CASE_STARTUP_PORT = String(STARTUP_PORT)
 process.env.DISPLAY_CASE_AUTODOCK_PORT = String(AUTODOCK_PORT)
 process.env.DISPLAY_CASE_ASSET_PORT = String(ASSET_PORT)
+process.env.DISPLAY_CASE_FRAMEWORKS_PORT = String(FRAMEWORKS_PORT)
 
 export default defineConfig({
   testDir: './e2e',
+  // Compile the theme-frameworks fixture's real Tailwind stylesheet before the
+  // fixture server starts (runs once, before every webServer).
+  globalSetup: './e2e/theme-frameworks.setup.ts',
   // The suite is read-only — every spec just browses the showcase — so cases are
   // independent and safe to run fully in parallel.
   fullyParallel: true,
@@ -91,6 +100,14 @@ export default defineConfig({
       // Consumer that imports a static image asset (asset.spec.ts).
       command: `bun src/cli.ts e2e/fixtures/consumer-asset --port=${ASSET_PORT}`,
       url: `http://localhost:${ASSET_PORT}/health`,
+      reuseExistingServer: !process.env.CI,
+      timeout: 60_000,
+    },
+    {
+      // Real-framework consumer (theme-frameworks.spec.ts): Tailwind/Bootstrap/MUI
+      // components each following their own root convention.
+      command: `bun src/cli.ts e2e/fixtures/consumer-theme-frameworks --port=${FRAMEWORKS_PORT}`,
+      url: `http://localhost:${FRAMEWORKS_PORT}/health`,
       reuseExistingServer: !process.env.CI,
       timeout: 60_000,
     },

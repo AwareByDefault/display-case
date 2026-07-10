@@ -1,0 +1,6 @@
+/* Real Tailwind v4 input, compiled by the `tailwindcss` CLI in the e2e global
+   setup. The class strategy: `dark:` variants apply under a `.dark` ancestor —
+   the class Display Case's default `class` signal toggles on the document root. */
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+@source "./src/**/*.case.tsx";

@@ -41,17 +41,17 @@
       `src/ui/use-shell.ts` theme effect, `src/ui/primer-mount.tsx`, and the
       `src/ui/primer.tsx` postMessage handler — replacing the individual
       `dataset.theme`/`colorScheme` writes with the resolver output.
-- [ ] 4.3 Apply the signals on the per-specimen `<Display>` forced-theme wrapper for
+- [x] 4.3 Apply the signals on the per-specimen `<Display>` forced-theme wrapper for
       its subtree.
-- [ ] 4.4 Add an SSR/adopt parity assertion that the baked signals equal the
+- [x] 4.4 Add an SSR/adopt parity assertion that the baked signals equal the
       client-applied signals for a configured non-default set (no flash, no drift).
 
 ## 5. Capture-time `prefers-color-scheme` emulation
 
-- [ ] 5.1 In `src/checks/providers/playwright-driver.ts`, emulate the user-agent
+- [x] 5.1 In `src/checks/providers/playwright-driver.ts`, emulate the user-agent
       color-scheme preference to match each rendered theme, so visual and a11y captures
       of a preference-only component render in the requested theme.
-- [ ] 5.2 Add a test/fixture: a case that themes only via `@media (prefers-color-scheme)`
+- [x] 5.2 Add a test/fixture: a case that themes only via `@media (prefers-color-scheme)`
       captured under light and dark yields the matching appearances.
 
 ## 6. Framework integration e2e (real dependencies)
@@ -63,48 +63,48 @@ Playwright asserting each component's *computed style* changes when Display Case
 theme toggles. Display Case renders React, so each fixture is a React component using
 that library's real CSS/runtime.
 
-- [ ] 6.1 Add an `e2e/fixtures/consumer-theme-frameworks/` package (or extend an
+- [x] 6.1 Add an `e2e/fixtures/consumer-theme-frameworks/` package (or extend an
       existing fixture) with real dev dependencies: `tailwindcss` (class strategy),
       `@mui/material` + `@emotion/react` + `@emotion/styled` (CSS-variables mode),
       `bootstrap` (CSS), and `@vueuse/core` (for its convention constant). Pin
       versions in `bun.lock`; keep it isolated from the root install.
-- [ ] 6.2 Tailwind (class) case: a component styled with `dark:` variants against the
+- [x] 6.2 Tailwind (class) case: a component styled with `dark:` variants against the
       compiled Tailwind stylesheet (class strategy). `display-case.config.ts` uses the
       default signal set (which includes `class`).
-- [ ] 6.3 MUI case: a `@mui/material` component under `CssVarsProvider` reading
+- [x] 6.3 MUI case: a `@mui/material` component under `CssVarsProvider` reading
       `data-mui-color-scheme`; fixture config enables the `mui` signal.
-- [ ] 6.4 Bootstrap case: a component using Bootstrap's CSS keyed off `data-bs-theme`;
+- [x] 6.4 Bootstrap case: a component using Bootstrap's CSS keyed off `data-bs-theme`;
       fixture config enables the `bootstrap` signal.
-- [ ] 6.5 VueUse: assert Display Case's default class name equals `@vueuse/core`'s
+- [x] 6.5 VueUse: assert Display Case's default class name equals `@vueuse/core`'s
       `useDark` default (`dark`) via a dep-backed unit check — a Vue component tree
       cannot render in the React host, but its class convention is the one covered by
       6.2; document this explicitly.
-- [ ] 6.6 `e2e/theme-frameworks.spec.ts`: for each fixture case, load it in the running
+- [x] 6.6 `e2e/theme-frameworks.spec.ts`: for each fixture case, load it in the running
       showcase, read a theme-sensitive computed style (e.g. `background-color`) under
       light, toggle to dark, and assert the computed style changes to the dark value —
       proving the real library re-themed off Display Case's signal. Fail if unchanged.
-- [ ] 6.7 Wire the fixture into the e2e setup (its own `.display-case/` install) the
+- [x] 6.7 Wire the fixture into the e2e setup (its own `.display-case/` install) the
       same way existing `e2e/fixtures/consumer*` packages are, so CI runs it.
 
 ## 7. Documentation
 
-- [ ] 7.1 Document the `theme` config option, the default signal set, the named
+- [x] 7.1 Document the `theme` config option, the default signal set, the named
       conventions, and the custom mapping in the product docs (`docs/`, theming page).
-- [ ] 7.2 Add guidance that toggle-able components must read a page-controllable signal
+- [x] 7.2 Add guidance that toggle-able components must read a page-controllable signal
       (attribute/class or `color-scheme` + `light-dark()`), and that
       `prefers-color-scheme`-only components follow the OS interactively but are honored
       in captures.
-- [ ] 7.3 Record the seam list and the declarative-not-function rationale in
+- [x] 7.3 Record the seam list and the declarative-not-function rationale in
       `contributing/NOTES.md`.
 
 ## 8. Verification
 
-- [ ] 8.1 `bun run lint`, `bun run typecheck`, `bun run check` (structure + tokens + ssr)
+- [x] 8.1 `bun run lint`, `bun run typecheck`, `bun run check` (structure + tokens + ssr)
       all pass.
-- [ ] 8.2 `bun test` passes, including the new resolver, type, and parity tests.
-- [ ] 8.3 Drive the running showcase: a case using a `.dark` class and a case using a
+- [x] 8.2 `bun test` passes, including the new resolver, type, and parity tests.
+- [x] 8.3 Drive the running showcase: a case using a `.dark` class and a case using a
       custom attribute both follow the toggle in both themes with no flash (verify via
       the chrome-free `/render` endpoint in both themes).
-- [ ] 8.4 `bun run e2e` passes — including the new framework-integration suite (§6) —
+- [x] 8.4 `bun run e2e` passes — including the new framework-integration suite (§6) —
       and the repo's own baselines are unchanged by the default set.
-- [ ] 8.5 Add a changeset (`minor` — new opt-in config capability).
+- [x] 8.5 Add a changeset (`minor` — new opt-in config capability).
