@@ -4,6 +4,27 @@ Non-obvious decisions, debugging notes, and architectural context for the Displa
 
 ---
 
+## 2026-07-09: Shell page/template/flow cases need `InteractiveShell`, not raw `ShellView`
+
+`makeModel` (shell-fixtures) builds a fully *static* `ShellViewModel` — every
+handler is a no-op, including `setNavCollapsed`. So a case that renders
+`<ShellView {...makeModel(...)}>` directly has a dead header ☰ nav toggle: the
+model never changes `navCollapsed`, so clicking does nothing. That's invisible at
+desktop width but **hides the whole page at mobile widths** — `chrome.css`'s
+`max-width: 640px` block turns an *open* nav into a full-width `grid-area: main`
+drawer (`z-index: 50`) over the stage, and with the toggle inert there's no way to
+dismiss it to see the page.
+
+Fix: render through `InteractiveShell` (shell-fixtures) instead — a thin wrapper
+that owns `navCollapsed` via `useState` (seeded from the model) and feeds a live
+setter back in. All shell page/template/flow cases use it now. Because the browse
+chrome swaps cases *in place* (same component's cases share one React root — a
+*different* component reloads the frame, so cross-file key collisions can't
+happen), each in-file usage needs a distinct `key` so the collapse state re-seeds
+per case. The `interactive-cases-keyed` check only enforces keys for
+*locally-defined* stateful specimens, so an imported wrapper like `InteractiveShell`
+won't trip it — the keys are added by hand for the same reason.
+
 ## 2026-07-07: Imported asset URLs need `publicPath` — the bytes emit, the URL didn't point at them
 
 A component that imports a static asset (`import photo from './photo.jpeg'` →

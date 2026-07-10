@@ -2,8 +2,8 @@ import { defineCases } from '@awarebydefault/display-case'
 import { useState } from 'react'
 import type { A11yViolation } from '../../../../index'
 import { Button, Input, RenderAddress } from '..'
-import { ShellView } from './ShellView'
 import {
+  InteractiveShell,
   makeModel,
   mockA11y,
   mockA11yClean,
@@ -39,7 +39,7 @@ function RescanDemo() {
     setTimeout(() => setCurrent(RESCAN_RESULT.current), 1200)
   }
   return (
-    <ShellView
+    <InteractiveShell
       {...makeModel({
         ...selectIn(mockManifest, 'input', 'default'),
         a11y: { byVariant: RESCAN_RESULT.byVariant, current, reveal },
@@ -78,7 +78,8 @@ export default defineCases(
   'A11y page',
   {
     Default: () => (
-      <ShellView
+      <InteractiveShell
+        key="default"
         {...makeModel({
           ...selectIn(mockManifest, 'input', 'default'),
           a11y: mockA11y(),
@@ -100,7 +101,8 @@ export default defineCases(
     // panel shows its calm "Scanning…" state (neutral accent, no toggle) and no
     // nav markers have landed yet.
     Scanning: () => (
-      <ShellView
+      <InteractiveShell
+        key="scanning"
         {...makeModel({
           ...selectIn(mockManifest, 'input', 'default'),
           a11y: mockA11yPending(),
@@ -118,7 +120,8 @@ export default defineCases(
     // A11y configured and everything is clean: no nav markers, and the panel
     // shows its reassuring all-green pass state.
     'All clear': () => (
-      <ShellView
+      <InteractiveShell
+        key="all-clear"
         {...makeModel({
           ...selectIn(mockManifest, 'input', 'default'),
           a11y: mockA11yClean(),
@@ -136,7 +139,8 @@ export default defineCases(
     // A11y NOT configured (no `a11y` on the model): no nav markers and no panel
     // at all — the chrome is exactly as it was before the feature.
     'Not configured': () => (
-      <ShellView
+      <InteractiveShell
+        key="not-configured"
         {...makeModel({
           ...selectIn(mockManifest, 'input', 'default'),
           boxW: 260,
@@ -155,7 +159,8 @@ export default defineCases(
     // lone variant's count sits directly on the (selected, marigold) leaf row —
     // never a dot. The Accessibility panel lists that variant's violations.
     'Single-case leaf': () => (
-      <ShellView
+      <InteractiveShell
+        key="single-case-leaf"
         {...makeModel({
           ...selectIn(mockManifest, 'render-address', 'default'),
           a11y: mockA11yLeaf(),
@@ -175,7 +180,8 @@ export default defineCases(
     // (Playground 2, Variants 5, Sizes clean). The other components stay
     // collapsed, showing their summed counts — the contrast the rail draws.
     'Per-variant breakdown': () => (
-      <ShellView
+      <InteractiveShell
+        key="per-variant-breakdown"
         {...makeModel({
           ...selectIn(mockManifest, 'button', 'variants'),
           a11y: mockA11yPerVariant(),
@@ -194,7 +200,8 @@ export default defineCases(
     // scrolls internally while the "ACCESSIBILITY" header stays pinned. Use the
     // header's toggle to collapse the (long) list.
     Scrolling: () => (
-      <ShellView
+      <InteractiveShell
+        key="scrolling"
         {...makeModel({
           ...selectIn(mockManifest, 'input', 'default'),
           a11y: mockA11yScrolling(),
@@ -215,7 +222,8 @@ export default defineCases(
     // row genuinely carries violations. The docked tweaks panel can be collapsed
     // (its header chevron) to give the content column back to the stage.
     'With tweaks and docs': () => (
-      <ShellView
+      <InteractiveShell
+        key="with-tweaks-and-docs"
         {...makeModel({
           ...selectIn(mockManifest, 'button', 'playground'),
           a11y: mockA11y(),

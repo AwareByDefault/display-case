@@ -1,7 +1,11 @@
 import { defineFlow } from '@awarebydefault/display-case'
 import { Button } from '..'
-import { ShellView } from './ShellView'
-import { makeModel, RealPrimer, StageSlot } from './shell-fixtures'
+import {
+  InteractiveShell,
+  makeModel,
+  RealPrimer,
+  StageSlot,
+} from './shell-fixtures'
 
 /**
  * The headline dogfood: Display Case's own Primer ↔ Cases view change, exhibited
@@ -18,7 +22,8 @@ export default defineFlow('Primer to Cases', {
     'Primer view': {
       transitions: ['Cases view'],
       render: ({ goto }) => (
-        <ShellView
+        <InteractiveShell
+          key="primer-view"
           {...makeModel({
             mode: 'primer',
             shownMode: 'primer',
@@ -34,7 +39,8 @@ export default defineFlow('Primer to Cases', {
     'Cases view': {
       transitions: ['Primer view'],
       render: ({ goto }) => (
-        <ShellView
+        <InteractiveShell
+          key="cases-view"
           {...makeModel({
             mode: 'components',
             shownMode: 'components',
