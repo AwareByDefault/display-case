@@ -76,6 +76,7 @@ describe('emotion style engine (real library)', () => {
       globalCss: '.g{}',
       vitrineCss: '.v{}',
       theme: 'light',
+      signals: [],
       transparent: false,
       fit: false,
       markup: result.html,

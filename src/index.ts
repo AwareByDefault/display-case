@@ -566,6 +566,49 @@ export interface NavConfig {
   flowMarker?: 'glyph' | 'tag'
 }
 
+// ── Theming ──────────────────────────────────────────────────────────────────
+
+/**
+ * A theme root signal Display Case emits on the document root so a showcased
+ * component that reads that convention follows the preview theme (directly or by
+ * inheriting the root signal). There is no single cross-framework standard, so the
+ * set is configurable. Everything here is plain, serializable data — the same
+ * description is baked into the document delivered before scripting *and* applied
+ * by the running client on an in-place toggle, so a signal MUST NOT be a function.
+ *
+ * - `'class'` — toggles a `dark` class on the root in the dark theme, dark-only
+ *   (Tailwind/shadcn/next-themes-class/VueUse/Nuxt). No class is added in light.
+ * - `'bootstrap'` — sets `data-bs-theme="light|dark"` (Bootstrap 5.3+).
+ * - `'mui'` — sets `data-mui-color-scheme="light|dark"` (Material UI CSS-vars mode).
+ * - `'data-theme'` / `'color-scheme'` — Display Case's own always-present signals;
+ *   listing them is a no-op, offered only for explicitness.
+ * - `{ attribute }` — a custom attribute set to `dark`/`light` (or the given
+ *   `dark`/`light` values) per theme, e.g. `{ attribute: 'data-color-mode' }`.
+ * - `{ class }` — a custom class added in the dark theme (and `light`, if given,
+ *   in the light theme).
+ */
+export type ThemeSignal =
+  | 'class'
+  | 'bootstrap'
+  | 'mui'
+  | 'data-theme'
+  | 'color-scheme'
+  | { attribute: string; light?: string; dark?: string }
+  | { class: string; light?: string }
+
+/** How the preview theme is expressed on the document root. */
+export interface ThemeConfig {
+  /**
+   * Root theme signals emitted for showcased components, in addition to Display
+   * Case's own always-present `data-theme` + `color-scheme`. Defaults to
+   * `['class']` (the Tailwind/shadcn/VueUse dark-class convention). Provide a list
+   * to add framework conventions (`'bootstrap'`, `'mui'`) or a custom
+   * attribute/class mapping, or `[]` to emit nothing beyond Display Case's own
+   * signals.
+   */
+  signals?: ThemeSignal[]
+}
+
 // ── Config ─────────────────────────────────────────────────────────────────────
 
 export interface DisplayCaseConfig {
@@ -642,6 +685,13 @@ export interface DisplayCaseConfig {
    * Point at a committed directory to opt into shared / CI-gating baselines.
    */
   baselineDir?: string
+  /**
+   * How the preview theme is expressed on the document root, so showcased
+   * components following any common light/dark convention re-theme with the
+   * toggle (directly or by inheritance). Absent ⇒ the default set: Display Case's
+   * own `data-theme` + `color-scheme`, plus a `dark` class. See {@link ThemeConfig}.
+   */
+  theme?: ThemeConfig
   /** Design-token conformance options for the `--tokens` check. */
   tokens?: {
     /**

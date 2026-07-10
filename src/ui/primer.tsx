@@ -1,6 +1,11 @@
 import type { ReactNode } from 'react'
 import { useCallback, useEffect, useRef } from 'react'
 import { slugify } from '../core/catalog'
+import {
+  applyResolvedSignals,
+  readThemeSignals,
+  resolveThemeSignals,
+} from '../render/theme-signals'
 
 /**
  * The Primer — Display Case's long-form "wall text". A consumer authors an
@@ -260,11 +265,16 @@ export function PrimerRoot({
           armSettle()
         }
       } else if (data?.type === 'dc-primer-theme' && data.theme) {
-        document.documentElement.dataset.theme = data.theme
-        document.documentElement.dataset.themePref = data.theme
-        // Keep the user-agent color scheme matched so the primer's controls and
-        // scrollbars re-theme with the rest of the page on a theme change.
-        document.documentElement.style.colorScheme = data.theme
+        // Re-apply the full configured theme signal set so the primer's controls,
+        // scrollbars, and any consumer-convention specimens re-theme together with
+        // the rest of the page on a theme change pushed by the chrome.
+        applyResolvedSignals(
+          document.documentElement,
+          resolveThemeSignals(
+            data.theme === 'dark' ? 'dark' : 'light',
+            readThemeSignals(),
+          ),
+        )
       }
     }
     window.addEventListener('message', onMessage)

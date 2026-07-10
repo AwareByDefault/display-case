@@ -1,5 +1,11 @@
 import type { Manifest } from '../core/manifest'
+import type { ThemeSignal } from '../index'
 import type { Theme } from '../ui/shell-core'
+import {
+  resolveThemeSignals,
+  themeRootAttrs,
+  themeSignalsSeedScript,
+} from './theme-signals'
 
 /**
  * Production HTML document templates for a published build. They mirror the dev
@@ -51,6 +57,8 @@ export function shellDoc(opts: {
   globalCss: string
   vitrineCss: string
   theme: Theme
+  /** The effective theme root signals to emit (see the `theme` config). */
+  signals: readonly ThemeSignal[]
   markup: string
   ssr: boolean
   manifest: Manifest
@@ -60,12 +68,15 @@ export function shellDoc(opts: {
   // `color-scheme` matches the theme so user-agent surfaces (scrollbars, default
   // control chrome) follow it rather than rendering in their light defaults.
   const reset = `html,body{margin:0;height:100%;background:var(--dc-bg)}html{color-scheme:${opts.theme}}`
+  const rootAttrs = themeRootAttrs(
+    resolveThemeSignals(opts.theme, opts.signals),
+  )
   const seed = JSON.stringify({
     manifest: opts.manifest,
     theme: opts.theme,
     a11y: opts.a11y,
   })
-  return `<!doctype html><html lang="en" data-theme="${opts.theme}"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>${opts.title}</title>${FONT_LINKS}<style>${opts.tokensCss}\n${opts.globalCss}\n${reset}\n${opts.vitrineCss}</style>${importMap(opts.assets.importmap)}</head><body><div id="root" data-ssr="${opts.ssr ? '1' : '0'}">${opts.markup}</div><script>window.__dcSeed=${seed}</script><script type="module" src="${opts.assets.browser}"></script></body></html>`
+  return `<!doctype html><html lang="en"${rootAttrs}><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>${opts.title}</title>${FONT_LINKS}<style>${opts.tokensCss}\n${opts.globalCss}\n${reset}\n${opts.vitrineCss}</style>${importMap(opts.assets.importmap)}</head><body><div id="root" data-ssr="${opts.ssr ? '1' : '0'}">${opts.markup}</div><script>window.__dcSeed=${seed}</script>${themeSignalsSeedScript(opts.signals)}<script type="module" src="${opts.assets.browser}"></script></body></html>`
 }
 
 /** The isolated case render document. `scriptSrc` is this component's own bundle
@@ -74,6 +85,8 @@ export function renderDoc(opts: {
   globalCss: string
   vitrineCss: string
   theme: Theme
+  /** The effective theme root signals to emit (see the `theme` config). */
+  signals: readonly ThemeSignal[]
   transparent: boolean
   fit: boolean
   markup: string
@@ -90,10 +103,13 @@ export function renderDoc(opts: {
     ? ' data-decorated style="background:transparent"'
     : ''
   const rootAttrs = `${opts.fit ? ' style="width:fit-content"' : ''} data-ssr="${opts.ssr ? '1' : '0'}"`
+  const htmlAttrs = themeRootAttrs(
+    resolveThemeSignals(opts.theme, opts.signals),
+  )
   // The Vitrine stylesheet follows globalCss so a dogfooded design-system case
   // paints before scripts; for a non-dogfooding consumer these are inert chrome
   // rules in a dev-time-only preview document (see server.ts renderHtml).
-  return `<!doctype html><html lang="en" data-theme="${opts.theme}" data-theme-pref="${opts.theme}"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Display Case render</title><style>html,body{margin:0}html{color-scheme:${opts.theme}}body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-sans, ui-sans-serif, system-ui, sans-serif)}${exhibitCenter}${opts.globalCss}\n${opts.vitrineCss}</style>${opts.headStyles ?? ''}${importMap(opts.importmap)}</head><body${bodyAttrs}><main id="root"${rootAttrs}>${opts.markup}</main><script type="module" src="${opts.scriptSrc}"></script></body></html>`
+  return `<!doctype html><html lang="en"${htmlAttrs}><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Display Case render</title><style>html,body{margin:0}html{color-scheme:${opts.theme}}body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-sans, ui-sans-serif, system-ui, sans-serif)}${exhibitCenter}${opts.globalCss}\n${opts.vitrineCss}</style>${opts.headStyles ?? ''}${importMap(opts.importmap)}</head><body${bodyAttrs}><main id="root"${rootAttrs}>${opts.markup}</main>${themeSignalsSeedScript(opts.signals)}<script type="module" src="${opts.scriptSrc}"></script></body></html>`
 }
 
 /** The primer reading-page document. */
@@ -102,6 +118,8 @@ export function primerDoc(opts: {
   globalCss: string
   vitrineCss: string
   theme: Theme
+  /** The effective theme root signals to emit (see the `theme` config). */
+  signals: readonly ThemeSignal[]
   markup: string
   ssr: boolean
   /** Style-engine output, placed after the static <style> block. `''` when none. */
@@ -111,5 +129,8 @@ export function primerDoc(opts: {
   // `color-scheme` matches the theme so user-agent surfaces (scrollbars, default
   // control chrome) follow it rather than rendering in their light defaults.
   const reset = `html,body{margin:0;height:100%;background:var(--dc-bg)}html{color-scheme:${opts.theme}}`
-  return `<!doctype html><html lang="en" data-theme="${opts.theme}" data-theme-pref="${opts.theme}"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Primer</title>${FONT_LINKS}<style>${opts.tokensCss}\n${opts.globalCss}\n${reset}\n${opts.vitrineCss}</style>${opts.headStyles ?? ''}${importMap(opts.assets.importmap)}</head><body><main id="root" data-ssr="${opts.ssr ? '1' : '0'}">${opts.markup}</main><script type="module" src="${opts.assets.primer}"></script></body></html>`
+  const rootAttrs = themeRootAttrs(
+    resolveThemeSignals(opts.theme, opts.signals),
+  )
+  return `<!doctype html><html lang="en"${rootAttrs}><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Primer</title>${FONT_LINKS}<style>${opts.tokensCss}\n${opts.globalCss}\n${reset}\n${opts.vitrineCss}</style>${opts.headStyles ?? ''}${importMap(opts.assets.importmap)}</head><body><main id="root" data-ssr="${opts.ssr ? '1' : '0'}">${opts.markup}</main>${themeSignalsSeedScript(opts.signals)}<script type="module" src="${opts.assets.primer}"></script></body></html>`
 }

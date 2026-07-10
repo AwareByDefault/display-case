@@ -18,10 +18,20 @@ import {
 import { findWatchRoot, graphWatchDirs } from '../core/graph-watch'
 import { buildGroupTree, makeGroupResolver } from '../core/groups'
 import type { BrowseMode, Manifest } from '../core/manifest'
-import { type DisplayCaseConfig, isSurfaceLevel } from '../index'
+import {
+  type DisplayCaseConfig,
+  isSurfaceLevel,
+  type ThemeSignal,
+} from '../index'
 import type { PrimerHtmlResult } from '../render/ssr-primer'
 import type { CaseRenderer } from '../render/ssr-render'
 import { renderShellToHtml } from '../render/ssr-shell'
+import {
+  effectiveThemeSignals,
+  resolveThemeSignals,
+  themeRootAttrs,
+  themeSignalsSeedScript,
+} from '../render/theme-signals'
 import type { Theme } from '../ui/shell-core'
 import {
   buildTimeoutMs,
@@ -667,6 +677,7 @@ function shellHtml(
   liveReload: boolean,
   clientConfig: string,
   doc: { theme: Theme; markup: string; ssr: boolean; seedScript: string },
+  signals: readonly ThemeSignal[],
 ): string {
   // Reset html/body and paint the themed surface on them. The theme is baked
   // into <html> so the token background reaches the body edges from first paint
@@ -680,7 +691,8 @@ function shellHtml(
   // `color-scheme` matches the theme so user-agent-rendered surfaces (scrollbars,
   // default form-control chrome) follow it instead of their light defaults.
   const reset = `html,body{margin:0;height:100%;background:var(--dc-bg)}html{color-scheme:${doc.theme}}`
-  return `<!doctype html><html lang="en" data-theme="${doc.theme}"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>${title}</title>${FONT_LINKS}<style>${tokensCss}\n${globalCss}\n${reset}\n${vitrineCss}</style></head><body><div id="root" data-ssr="${doc.ssr ? '1' : '0'}">${doc.markup}</div>${ERROR_OVERLAY_SCRIPT}${doc.seedScript}${clientConfig}${liveReload ? LIVERELOAD_SCRIPT : ''}<script type="module" src="/dist/browser-entry.js"></script></body></html>`
+  const rootAttrs = themeRootAttrs(resolveThemeSignals(doc.theme, signals))
+  return `<!doctype html><html lang="en"${rootAttrs}><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>${title}</title>${FONT_LINKS}<style>${tokensCss}\n${globalCss}\n${reset}\n${vitrineCss}</style></head><body><div id="root" data-ssr="${doc.ssr ? '1' : '0'}">${doc.markup}</div>${ERROR_OVERLAY_SCRIPT}${doc.seedScript}${themeSignalsSeedScript(signals)}${clientConfig}${liveReload ? LIVERELOAD_SCRIPT : ''}<script type="module" src="/dist/browser-entry.js"></script></body></html>`
 }
 
 /** The document-level state the render template bakes in, mirroring what the
@@ -736,6 +748,7 @@ function renderHtml(
   liveReload: boolean,
   doc: RenderDoc,
   scriptSrc: string,
+  signals: readonly ThemeSignal[],
 ): string {
   // A complete document (title, lang, single <main> landmark) so the a11y runner
   // reports only real component issues, not isolated-harness chrome violations.
@@ -758,6 +771,7 @@ function renderHtml(
     ? ' data-decorated style="background:transparent"'
     : ''
   const rootAttrs = `${doc.fit ? ' style="width:fit-content"' : ''} data-ssr="${doc.ssr ? '1' : '0'}"`
+  const htmlAttrs = themeRootAttrs(resolveThemeSignals(doc.theme, signals))
   // The Vitrine stylesheet follows globalCss so a dogfooded design-system case
   // (the showcase's own `dcui-*`/`dcpl-*`/shell components) paints before
   // scripts; its `--dc-*` tokens come from globalCss (the showcase lists the
@@ -767,7 +781,7 @@ function renderHtml(
   // block as its own discrete markup — emotion/styled-components tag their output
   // with attributes the client runtime keys on to adopt it, so it must not be
   // folded into the block above. Empty string when no engine is configured.
-  return `<!doctype html><html lang="en" data-theme="${doc.theme}" data-theme-pref="${doc.theme}"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Display Case render</title><style>html,body{margin:0}html{color-scheme:${doc.theme}}body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-sans, ui-sans-serif, system-ui, sans-serif)}${exhibitCenter}${globalCss}\n${vitrineCss}</style>${doc.headStyles ?? ''}</head><body${bodyAttrs}><main id="root"${rootAttrs}>${doc.markup}</main>${ERROR_OVERLAY_SCRIPT}${liveReload ? LIVERELOAD_SCRIPT : ''}<script type="module" src="${scriptSrc}"></script></body></html>`
+  return `<!doctype html><html lang="en"${htmlAttrs}><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Display Case render</title><style>html,body{margin:0}html{color-scheme:${doc.theme}}body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-sans, ui-sans-serif, system-ui, sans-serif)}${exhibitCenter}${globalCss}\n${vitrineCss}</style>${doc.headStyles ?? ''}</head><body${bodyAttrs}><main id="root"${rootAttrs}>${doc.markup}</main>${themeSignalsSeedScript(signals)}${ERROR_OVERLAY_SCRIPT}${liveReload ? LIVERELOAD_SCRIPT : ''}<script type="module" src="${scriptSrc}"></script></body></html>`
 }
 
 /**
@@ -796,6 +810,7 @@ function renderErrorHtml(
   vitrineCss: string,
   liveReload: boolean,
   doc: { theme: Theme; componentId: string; caseFile: string; error: string },
+  signals: readonly ThemeSignal[],
 ): string {
   const esc = (s: string) =>
     s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -806,7 +821,8 @@ function renderErrorHtml(
     `Component <code>${esc(doc.componentId)}</code> (<code>${esc(doc.caseFile)}</code>) ` +
     `could not be bundled, so this case can't be shown. Every other case still works.<br>` +
     `<br><pre style="white-space:pre-wrap;margin:0">${esc(doc.error)}</pre></div>`
-  return `<!doctype html><html lang="en" data-theme="${doc.theme}" data-theme-pref="${doc.theme}"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Display Case build error</title><style>html,body{margin:0}html{color-scheme:${doc.theme}}body{background:var(--color-bg);color:var(--color-fg)}${globalCss}\n${vitrineCss}</style></head><body><main id="root">${banner}</main>${liveReload ? LIVERELOAD_SCRIPT : ''}</body></html>`
+  const htmlAttrs = themeRootAttrs(resolveThemeSignals(doc.theme, signals))
+  return `<!doctype html><html lang="en"${htmlAttrs}><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Display Case build error</title><style>html,body{margin:0}html{color-scheme:${doc.theme}}body{background:var(--color-bg);color:var(--color-fg)}${globalCss}\n${vitrineCss}</style></head><body><main id="root">${banner}</main>${liveReload ? LIVERELOAD_SCRIPT : ''}</body></html>`
 }
 
 function primerHtml(
@@ -820,6 +836,7 @@ function primerHtml(
     ssr: boolean
     headStyles?: string
   },
+  signals: readonly ThemeSignal[],
 ): string {
   // The Primer's own document. It needs the Vitrine `--dc-*` tokens (the
   // reading-page + Display-card chrome paints from them), the consumer's
@@ -833,9 +850,10 @@ function primerHtml(
   // control chrome) follow it rather than rendering in their light defaults.
   const reset = `html,body{margin:0;height:100%;background:var(--dc-bg)}html{color-scheme:${doc.theme}}`
   const rootAttrs = ` data-ssr="${doc.ssr ? '1' : '0'}"`
+  const htmlAttrs = themeRootAttrs(resolveThemeSignals(doc.theme, signals))
   // Style-engine output follows the static <style> block as discrete markup (see
   // renderHtml). `''` when no engine is configured.
-  return `<!doctype html><html lang="en" data-theme="${doc.theme}" data-theme-pref="${doc.theme}"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Primer</title>${FONT_LINKS}<style>${tokensCss}\n${globalCss}\n${reset}\n${vitrineCss}</style>${doc.headStyles ?? ''}</head><body><main id="root"${rootAttrs}>${doc.markup}</main>${ERROR_OVERLAY_SCRIPT}${liveReload ? LIVERELOAD_SCRIPT : ''}<script type="module" src="/dist/primer-entry.js"></script></body></html>`
+  return `<!doctype html><html lang="en"${htmlAttrs}><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Primer</title>${FONT_LINKS}<style>${tokensCss}\n${globalCss}\n${reset}\n${vitrineCss}</style>${doc.headStyles ?? ''}</head><body><main id="root"${rootAttrs}>${doc.markup}</main>${themeSignalsSeedScript(signals)}${ERROR_OVERLAY_SCRIPT}${liveReload ? LIVERELOAD_SCRIPT : ''}<script type="module" src="/dist/primer-entry.js"></script></body></html>`
 }
 
 export interface StartOptions {
@@ -883,6 +901,9 @@ export async function startDisplayCase(
   // behaviors (watch, SSE, on-demand a11y) — it does its own one-shot scan.
   const interactive = opts.port !== 0
   const { config, configPath } = await resolveConfig(pkgDir)
+  // The effective theme root signals emitted on every delivered document, so a
+  // showcased component reading any configured convention follows the theme.
+  const themeSignals = effectiveThemeSignals(config)
   // The initial build runs in cold `bun` subprocesses (the shell worker + the
   // manifest); don't block the listen on it. If the port stayed closed until
   // they finished, several servers booting at once on a constrained CI runner
@@ -1208,6 +1229,7 @@ export async function startDisplayCase(
               ssr,
               headStyles,
             },
+            themeSignals,
           ),
           {
             headers: { 'content-type': 'text/html; charset=utf-8' },
@@ -1230,12 +1252,18 @@ export async function startDisplayCase(
           // Every other component still builds and serves — one bad case can't
           // take down the whole showcase.
           return new Response(
-            renderErrorHtml(state.globalCss, vitrineCss, reload && !scanning, {
-              theme: rs.theme,
-              componentId: built.componentId,
-              caseFile: built.caseFile,
-              error: built.error,
-            }),
+            renderErrorHtml(
+              state.globalCss,
+              vitrineCss,
+              reload && !scanning,
+              {
+                theme: rs.theme,
+                componentId: built.componentId,
+                caseFile: built.caseFile,
+                error: built.error,
+              },
+              themeSignals,
+            ),
             { headers: { 'content-type': 'text/html; charset=utf-8' } },
           )
         }
@@ -1272,6 +1300,7 @@ export async function startDisplayCase(
             reload && !scanning,
             rs,
             scriptSrc,
+            themeSignals,
           ),
           {
             headers: { 'content-type': 'text/html; charset=utf-8' },
@@ -1314,6 +1343,7 @@ export async function startDisplayCase(
           dev,
           interactive ? clientConfigScript({ reload, a11y, dev }) : '',
           { theme, markup: shell.html, ssr: shell.ssr, seedScript },
+          themeSignals,
         ),
         {
           headers: { 'content-type': 'text/html; charset=utf-8' },

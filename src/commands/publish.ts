@@ -11,7 +11,8 @@ import {
   loadModules,
   resolveConfig,
 } from '../core/discovery'
-import type { DisplayCaseConfig } from '../index'
+import type { DisplayCaseConfig, ThemeSignal } from '../index'
+import { effectiveThemeSignals } from '../render/theme-signals'
 import type { PublishBuildRequest } from '../server/build-case'
 import { spawnBuildWorker } from '../server/build-runner'
 import { getManifest } from '../server/server'
@@ -525,6 +526,9 @@ export interface BuildDescriptor {
   tokensCss: string
   globalCss: string
   vitrineCss: string
+  /** The effective theme root signals to emit on every delivered document (from
+   *  the `theme` config), baked at build time since the prod server has no config. */
+  themeSignals: ThemeSignal[]
 }
 
 export async function publish(
@@ -782,6 +786,7 @@ export async function publish(
     tokensCss: await readDesignTokens(),
     globalCss: await readGlobalCss(pkgDir, config),
     vitrineCss: await readVitrineCss(),
+    themeSignals: [...effectiveThemeSignals(config)],
   }
 
   await Bun.write(

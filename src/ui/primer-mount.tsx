@@ -1,6 +1,11 @@
 import type { ReactNode } from 'react'
 import { StrictMode } from 'react'
 import { createRoot, hydrateRoot } from 'react-dom/client'
+import {
+  applyResolvedSignals,
+  readThemeSignals,
+  resolveThemeSignals,
+} from '../render/theme-signals'
 import { PrimerRoot } from './primer'
 
 /**
@@ -51,11 +56,12 @@ export function mountPrimer(Content: MDXContent): void {
   blockFrameNavigation()
   const params = new URLSearchParams(window.location.search)
   const theme = params.get('theme') === 'dark' ? 'dark' : 'light'
-  document.documentElement.dataset.theme = theme
-  document.documentElement.dataset.themePref = theme
-  // Match the user-agent color scheme to the theme (idempotent with the value the
-  // document baked in) so the primer's controls/scrollbars are themed from load.
-  document.documentElement.style.colorScheme = theme
+  // Apply the full configured theme signal set the document baked in (idempotent),
+  // so an embedded specimen reading any configured convention is themed from load.
+  applyResolvedSignals(
+    document.documentElement,
+    resolveThemeSignals(theme, readThemeSignals()),
+  )
 
   const rootEl = document.getElementById('root') as HTMLElement
   const tree = (
