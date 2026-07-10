@@ -49,9 +49,8 @@ function subscribeHarnessTheme(onChange: () => void): () => void {
  * Display Case sets from `?theme=`. SSR-safe: the server snapshot is `'light'`
  * (matching the default document), and the client re-reads + subscribes after
  * adopt via {@link useSyncExternalStore}, so no browser API is touched during
- * render. Dogfooded shell exhibits feed this into {@link makeModel} instead of
- * pinning `'light'`, so the chrome inherits the harness theme like every other
- * case rather than forcing a nested light scope that overrides it.
+ * render. {@link ShellExhibit} feeds this into the header's theme-toggle label so
+ * it names the theme the chrome is actually showing.
  */
 export function useHarnessTheme(): Theme {
   return useSyncExternalStore(
@@ -62,14 +61,23 @@ export function useHarnessTheme(): Theme {
 }
 
 /**
- * {@link ShellView} for the dogfooded page/template/flow exhibits: identical to
- * `ShellView`, but its `theme` follows the harness ({@link useHarnessTheme})
- * rather than the model's pinned `'light'`. Every shell exhibit renders this
- * instead of `ShellView` directly so its chrome re-themes with the harness.
+ * {@link ShellView} for the dogfooded page/template/flow exhibits. Two things
+ * differ from rendering `ShellView` directly:
+ *
+ * 1. `inheritTheme` — the chrome's `.dc-app` inherits the harness's server-baked
+ *    `html[data-theme]` instead of pinning the model's `'light'` scope. So the
+ *    exhibit is already in the harness theme at SSR (no nested light island
+ *    overriding a dark harness, and no post-adopt re-theme flash).
+ * 2. `theme` follows the harness ({@link useHarnessTheme}) so the header's
+ *    theme-toggle label reads correctly. With `inheritTheme` on, `theme` no
+ *    longer drives the colors — only that label — so it may settle a frame after
+ *    adopt, but the chrome itself never flashes.
+ *
+ * Every shell exhibit renders this instead of `ShellView` directly.
  */
 export function ShellExhibit(props: ShellViewProps) {
   const theme = useHarnessTheme()
-  return <ShellView {...props} theme={theme} />
+  return <ShellView {...props} theme={theme} inheritTheme />
 }
 
 function mkCase(

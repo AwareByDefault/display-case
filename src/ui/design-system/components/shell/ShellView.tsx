@@ -65,6 +65,13 @@ export interface ShellViewProps extends ShellViewModel {
    *  panel); a static page/flow *exhibit* sets it so a full-screen page or flow
    *  fills the whole stage rather than sitting in a small centred box. */
   fillFrame?: boolean
+  /** Inherit the theme from the document root instead of declaring `data-theme`
+   *  on `.dc-app`. The live chrome leaves this off — it owns the theme scope
+   *  (`<html>` mirrors it for the body background). A dogfooded exhibit sets it
+   *  so its `.dc-app` inherits the harness's server-baked `html[data-theme]`
+   *  rather than pinning a nested scope, keeping SSR in the harness theme with no
+   *  post-adopt re-theme flash. */
+  inheritTheme?: boolean
 }
 
 export function ShellView(props: ShellViewProps) {
@@ -83,7 +90,7 @@ export function ShellView(props: ShellViewProps) {
     <div
       className="dc-app"
       data-testid={DcTestIds.app}
-      data-theme={theme}
+      data-theme={props.inheritTheme ? undefined : theme}
       data-nav={props.navCollapsed ? 'collapsed' : 'open'}
       style={{ '--dc-sidebar-w': `${sidebarWidth}px` } as CSSProperties}>
       <ShellHeader {...props} />

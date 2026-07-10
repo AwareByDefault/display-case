@@ -1644,12 +1644,22 @@ since normal component cases emit no `data-theme` wrapper and simply inherit.
 A case's `render` can't read the harness theme purely (render must be
 SSR-deterministic; `document.documentElement.dataset.theme` is a browser API
 barred during render — §3.1). The fix is `ShellExhibit` in `shell-fixtures.tsx`: a
-thin `ShellView` wrapper whose `theme` comes from `useHarnessTheme()`, which reads
-`<html data-theme>` via `useSyncExternalStore` (server snapshot `'light'` → no SSR
+thin `ShellView` wrapper that renders it with **`inheritTheme`** — an opt-in prop
+(default off, so the real app and its e2e-asserted `.dc-app[data-theme]` are
+untouched) that makes `.dc-app` **omit its own `data-theme` and inherit the
+document root's**. Every `/render` document already bakes `html[data-theme]` from
+`?theme=` at SSR (`documents.ts` / `server.ts`), so the inherited chrome is
+already in the harness theme in the server HTML — **no nested light island, and no
+post-adopt re-theme flash** (this is why `inheritTheme`, not just feeding the model
+a theme via an effect: an effect-set `data-theme` is still `'light'` in the SSR
+snapshot and flips a frame later, flashing the whole chrome). Every shell exhibit
+now renders `<ShellExhibit …>` instead of `<ShellView …>`. **If you add a new
+chrome exhibit, use `ShellExhibit`** — reaching for `ShellView` directly
+reintroduces the pinned-light bug.
+
+`ShellExhibit` also feeds `theme` from `useHarnessTheme()` (reads `<html
+data-theme>` via `useSyncExternalStore` — server snapshot `'light'`, so no SSR
 document access; client re-reads after adopt and a `MutationObserver` re-syncs on
-every harness toggle). Every shell exhibit now renders `<ShellExhibit …>` instead
-of `<ShellView …>`. **If you add a new chrome exhibit, use `ShellExhibit`** —
-reaching for `ShellView` directly reintroduces the pinned-light bug. There is a
-one-frame flash of light chrome on a dark `/render` page (the server SSRs the
-`'light'` snapshot, the effect flips it after hydration); acceptable for a static
-exhibit and the sanctioned §3.2 "browser reads in effects" pattern.
+harness toggle). With `inheritTheme` on this no longer drives the colors (those
+inherit) — only the header's theme-toggle *label*, so at worst that 4-char label
+settles one frame after adopt; the chrome itself never flashes.
