@@ -1,6 +1,9 @@
 import { defineCases } from '@awarebydefault/display-case'
-import { ShellView } from './ShellView'
-import { makeModel, PlaceholderPrimer } from './shell-fixtures'
+import {
+  InteractiveShell,
+  makeModel,
+  PlaceholderPrimer,
+} from './shell-fixtures'
 
 /**
  * The Primer layout as a *template*: the chrome in reading mode — the mode
@@ -11,7 +14,7 @@ export default defineCases(
   'Primer template',
   {
     Default: () => (
-      <ShellView
+      <InteractiveShell
         {...makeModel({ mode: 'primer', shownMode: 'primer' })}
         renderFrame={null}
         primerFrame={<PlaceholderPrimer />}

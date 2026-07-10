@@ -5,7 +5,7 @@
 // {@link useShell} produces live) so the pure {@link ShellView} can be exhibited
 // as a template (placeholder slots), a page (real content slotted in), and a
 // flow (Primer ↔ Cases) — Display Case dogfooding its own layout end to end.
-import type { ReactNode } from 'react'
+import { type ReactNode, useState } from 'react'
 import { slugify } from '../../../../core/catalog'
 import type {
   Manifest,
@@ -21,6 +21,7 @@ import {
 } from '../../../shell-core'
 import type { A11ySurface, ShellViewModel } from '../../../use-shell'
 import { Button, Chip } from '..'
+import { ShellView, type ShellViewProps } from './ShellView'
 
 const noop = () => {}
 const nullRef = { current: null }
@@ -525,6 +526,30 @@ export function makeModel(
     primerSrc: null,
   }
   return { ...base, ...overrides }
+}
+
+/**
+ * A {@link ShellView} whose header nav toggle actually works in a static case.
+ * `makeModel` wires `setNavCollapsed` to a no-op (the model is inert), so the ☰
+ * button does nothing on its own — which hides the page entirely at mobile
+ * widths, where an open nav becomes a full-width drawer over the stage. This thin
+ * wrapper owns `navCollapsed` locally (seeded from the model) and feeds a live
+ * setter back in, so the exhibit can open and close the rail like the real chrome.
+ *
+ * Because the browse chrome swaps cases *in place* (no remount), give each case's
+ * `<InteractiveShell>` a distinct `key` so the collapse state re-seeds per case
+ * instead of leaking across a switch — the same discipline the
+ * `interactive-cases-keyed` check enforces for locally-defined specimens.
+ */
+export function InteractiveShell(props: ShellViewProps): ReactNode {
+  const [navCollapsed, setNavCollapsed] = useState(props.navCollapsed)
+  return (
+    <ShellView
+      {...props}
+      navCollapsed={navCollapsed}
+      setNavCollapsed={setNavCollapsed}
+    />
+  )
 }
 
 /** A dashed placeholder standing in for a component on the stage (templates). */
