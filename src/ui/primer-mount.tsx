@@ -6,7 +6,7 @@ import {
   readThemeSignals,
   resolveThemeSignals,
 } from '../render/theme-signals'
-import { PrimerRoot } from './primer'
+import { PrimerRoot, PrimerThemeSignals } from './primer'
 
 /**
  * Entry point for the isolated `/render/primer` document. Mounts the compiled MDX
@@ -66,7 +66,9 @@ export function mountPrimer(Content: MDXContent): void {
   const rootEl = document.getElementById('root') as HTMLElement
   const tree = (
     <StrictMode>
-      <PrimerRoot content={Content} />
+      <PrimerThemeSignals.Provider value={readThemeSignals()}>
+        <PrimerRoot content={Content} />
+      </PrimerThemeSignals.Provider>
     </StrictMode>
   )
   // Adopt the server-rendered primer when present (`data-ssr="1"`); otherwise

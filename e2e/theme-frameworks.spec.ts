@@ -12,20 +12,34 @@ import { expect, test } from '@playwright/test'
  */
 const PORT = Number(process.env.DISPLAY_CASE_FRAMEWORKS_PORT ?? 3196)
 const BASE = `http://localhost:${PORT}`
+const TRANSPARENT = 'rgba(0, 0, 0, 0)'
 
-/** Read a component's computed color once it has rendered and painted. */
-async function bgOf(
+/**
+ * Navigate to a render URL and return the component's computed background once it
+ * is actually styled — retrying the navigation, not just polling.
+ *
+ * The framework CSS (Tailwind/Bootstrap) is inlined into the `/render` document at
+ * request time from `globalStyles`. The dev server starts listening before its
+ * initial build populates `globalCss`, so under cold-start contention an early
+ * request can be served *before* the stylesheet is ready — the component then has
+ * no background rule (transparent), and since the CSS is per-document, polling the
+ * same page won't recover. Re-navigating does, once the build has landed. So we
+ * gate readiness on a non-transparent background across reloads.
+ */
+async function loadBg(
   page: import('@playwright/test').Page,
+  url: string,
   testId: string,
 ): Promise<string> {
-  const el = page.getByTestId(testId)
-  await el.waitFor({ state: 'visible' })
-  // Wait for a non-transparent background (browser-only components paint after the
-  // client renders; SSR ones are already painted).
-  await expect
-    .poll(async () => el.evaluate((n) => getComputedStyle(n).backgroundColor))
-    .not.toBe('rgba(0, 0, 0, 0)')
-  return el.evaluate((n) => getComputedStyle(n).backgroundColor)
+  let bg = TRANSPARENT
+  await expect(async () => {
+    await page.goto(url, { waitUntil: 'domcontentloaded' })
+    const el = page.getByTestId(testId)
+    await el.waitFor({ state: 'visible' })
+    bg = await el.evaluate((n) => getComputedStyle(n).backgroundColor)
+    expect(bg).not.toBe(TRANSPARENT)
+  }).toPass({ timeout: 15_000 })
+  return bg
 }
 
 const rootConventionCases = [
@@ -42,15 +56,16 @@ for (const c of rootConventionCases) {
   test(`${c.name} re-themes with Display Case's theme signal`, async ({
     page,
   }) => {
-    await page.goto(`${BASE}/render/${c.id}/default?theme=light`, {
-      waitUntil: 'domcontentloaded',
-    })
-    const light = await bgOf(page, c.testId)
-
-    await page.goto(`${BASE}/render/${c.id}/default?theme=dark`, {
-      waitUntil: 'domcontentloaded',
-    })
-    const dark = await bgOf(page, c.testId)
+    const light = await loadBg(
+      page,
+      `${BASE}/render/${c.id}/default?theme=light`,
+      c.testId,
+    )
+    const dark = await loadBg(
+      page,
+      `${BASE}/render/${c.id}/default?theme=dark`,
+      c.testId,
+    )
 
     // The real component's surface changed with the theme — it followed the signal.
     expect(dark).not.toBe(light)
@@ -67,12 +82,10 @@ test('a prefers-color-scheme-only component is captured in the requested theme',
   const url = `${BASE}/render/prefers-color-scheme-box/default`
 
   await page.emulateMedia({ colorScheme: 'light' })
-  await page.goto(url, { waitUntil: 'domcontentloaded' })
-  const light = await bgOf(page, 'ps-box')
+  const light = await loadBg(page, url, 'ps-box')
 
   await page.emulateMedia({ colorScheme: 'dark' })
-  await page.goto(url, { waitUntil: 'domcontentloaded' })
-  const dark = await bgOf(page, 'ps-box')
+  const dark = await loadBg(page, url, 'ps-box')
 
   expect(light).toBe('rgb(255, 255, 255)')
   expect(dark).toBe('rgb(0, 0, 0)')
