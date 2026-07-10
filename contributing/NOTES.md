@@ -1625,3 +1625,31 @@ docked preview area. Two non-obvious hazards shaped the implementation:
 The override (`tweaksDockUserSet`) is plain in-memory React state — no storage, no
 URL — so it survives client-side `pushState` case switches (the app never
 remounts) but a real reload discards it, returning to the per-case size default.
+
+## 2026-07-09: Shell exhibits must render `ShellExhibit`, not `ShellView`, to follow the harness theme
+
+The dogfooded template/page/flow exhibits (`CaseTemplate.case.tsx`,
+`CasesPage.case.tsx`, `PrimerTemplate.case.tsx`, `PrimerPage.case.tsx`,
+`A11yPage.case.tsx`, `ShellView.case.tsx`) render the browse chrome by feeding a
+static model from `makeModel` into `ShellView`. `ShellView` emits its own
+`data-theme={theme}` on `.dc-app` (`ShellView.tsx`) — load-bearing in the *real*
+app (the toggle is asserted on `.dc-app` in `e2e/chrome.spec.ts`) — but
+`makeModel` hard-codes `theme: 'light'`. Because the color tokens re-declare under
+`[data-theme="light"]` on **any** scope (`tokens/colors.css`, see the note above
+on nested-scope re-declaration), an exhibit rendered under the harness's
+`html[data-theme="dark"]` created a nested `[data-theme="light"]` island and the
+whole chrome stayed light — the *only* cases that ignored the harness theme,
+since normal component cases emit no `data-theme` wrapper and simply inherit.
+
+A case's `render` can't read the harness theme purely (render must be
+SSR-deterministic; `document.documentElement.dataset.theme` is a browser API
+barred during render — §3.1). The fix is `ShellExhibit` in `shell-fixtures.tsx`: a
+thin `ShellView` wrapper whose `theme` comes from `useHarnessTheme()`, which reads
+`<html data-theme>` via `useSyncExternalStore` (server snapshot `'light'` → no SSR
+document access; client re-reads after adopt and a `MutationObserver` re-syncs on
+every harness toggle). Every shell exhibit now renders `<ShellExhibit …>` instead
+of `<ShellView …>`. **If you add a new chrome exhibit, use `ShellExhibit`** —
+reaching for `ShellView` directly reintroduces the pinned-light bug. There is a
+one-frame flash of light chrome on a dark `/render` page (the server SSRs the
+`'light'` snapshot, the effect flips it after hydration); acceptable for a static
+exhibit and the sanctioned §3.2 "browser reads in effects" pattern.

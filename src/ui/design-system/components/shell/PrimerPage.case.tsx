@@ -1,6 +1,5 @@
 import { defineCases } from '@awarebydefault/display-case'
-import { ShellView } from './ShellView'
-import { makeModel, RealPrimer } from './shell-fixtures'
+import { makeModel, RealPrimer, ShellExhibit } from './shell-fixtures'
 
 /**
  * The Primer *page*: the Primer template filled with the real reading page —
@@ -11,7 +10,7 @@ export default defineCases(
   'Primer page',
   {
     Default: () => (
-      <ShellView
+      <ShellExhibit
         {...makeModel({ mode: 'primer', shownMode: 'primer' })}
         renderFrame={null}
         primerFrame={<RealPrimer />}

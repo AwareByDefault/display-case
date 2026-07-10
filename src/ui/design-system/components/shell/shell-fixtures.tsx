@@ -5,7 +5,7 @@
 // {@link useShell} produces live) so the pure {@link ShellView} can be exhibited
 // as a template (placeholder slots), a page (real content slotted in), and a
 // flow (Primer ↔ Cases) — Display Case dogfooding its own layout end to end.
-import type { ReactNode } from 'react'
+import { type ReactNode, useSyncExternalStore } from 'react'
 import { slugify } from '../../../../core/catalog'
 import type {
   Manifest,
@@ -18,12 +18,59 @@ import {
   buildExhibitView,
   groupByLevel,
   groupPrimerSections,
+  type Theme,
 } from '../../../shell-core'
 import type { A11ySurface, ShellViewModel } from '../../../use-shell'
 import { Button, Chip } from '..'
+import { ShellView, type ShellViewProps } from './ShellView'
 
 const noop = () => {}
 const nullRef = { current: null }
+
+/** Read the harness theme off the document root — Display Case drives
+ *  `<html data-theme>` from `?theme=`. Client-only; the server never calls it. */
+function readHarnessTheme(): Theme {
+  return document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light'
+}
+
+/** Re-read {@link readHarnessTheme} whenever the harness flips `<html data-theme>`
+ *  (its light/dark toggle), so a live exhibit re-themes with the rest of the app. */
+function subscribeHarnessTheme(onChange: () => void): () => void {
+  const observer = new MutationObserver(onChange)
+  observer.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['data-theme'],
+  })
+  return () => observer.disconnect()
+}
+
+/**
+ * The live harness theme (light/dark), read from `<html data-theme>` — the scope
+ * Display Case sets from `?theme=`. SSR-safe: the server snapshot is `'light'`
+ * (matching the default document), and the client re-reads + subscribes after
+ * adopt via {@link useSyncExternalStore}, so no browser API is touched during
+ * render. Dogfooded shell exhibits feed this into {@link makeModel} instead of
+ * pinning `'light'`, so the chrome inherits the harness theme like every other
+ * case rather than forcing a nested light scope that overrides it.
+ */
+export function useHarnessTheme(): Theme {
+  return useSyncExternalStore(
+    subscribeHarnessTheme,
+    readHarnessTheme,
+    () => 'light',
+  )
+}
+
+/**
+ * {@link ShellView} for the dogfooded page/template/flow exhibits: identical to
+ * `ShellView`, but its `theme` follows the harness ({@link useHarnessTheme})
+ * rather than the model's pinned `'light'`. Every shell exhibit renders this
+ * instead of `ShellView` directly so its chrome re-themes with the harness.
+ */
+export function ShellExhibit(props: ShellViewProps) {
+  const theme = useHarnessTheme()
+  return <ShellView {...props} theme={theme} />
+}
 
 function mkCase(
   componentId: string,

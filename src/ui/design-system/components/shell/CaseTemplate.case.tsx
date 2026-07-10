@@ -1,9 +1,9 @@
 import { defineCases } from '@awarebydefault/display-case'
-import { ShellView } from './ShellView'
 import {
   caseTemplateSelection,
   makeModel,
   PlaceholderExhibit,
+  ShellExhibit,
 } from './shell-fixtures'
 
 /**
@@ -16,7 +16,7 @@ export default defineCases(
   'Case template',
   {
     Default: () => (
-      <ShellView
+      <ShellExhibit
         {...makeModel({
           ...caseTemplateSelection(),
           docText: '_Placeholder documentation lives here._',
