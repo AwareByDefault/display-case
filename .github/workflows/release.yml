@@ -63,7 +63,13 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 24
-      - run: npm install -g npm@latest
+      # Pinned, not `npm@latest`: npm 12.0.0 (2026-07-08) broke `sigstore` bundling
+      # on `npm install -g`, so provenance publish fails with
+      # `Cannot find module 'sigstore'`. 11.18.0 is the newest 11.x with working
+      # provenance and still satisfies the trusted-publishing floor (>= 11.5.1).
+      # Bump when a fixed npm 12.x is confirmed, or drop once `bun publish` gains
+      # OIDC + provenance (oven-sh/bun#30522, #24855).
+      - run: npm install -g npm@11.18.0
       - run: npm --version # must be >= 11.5.1 for trusted publishing
       - run: bun install --frozen-lockfile
       # Browser-free correctness gate (mirrors .husky/pre-commit). The e2e +
