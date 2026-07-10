@@ -115,7 +115,7 @@
       }
     },
     {
-      "includes": ["**/*.d.ts", "**/playwright.config.ts", "e2e/**/*.setup.ts"],
+      "includes": ["**/*.d.ts", "**/playwright.config.ts"],
       "linter": {
         "rules": {
           "style": {

@@ -16,15 +16,16 @@ const TRANSPARENT = 'rgba(0, 0, 0, 0)'
 
 /**
  * Navigate to a render URL and return the component's computed background once it
- * is actually styled — retrying the navigation, not just polling.
+ * has actually painted.
  *
- * The framework CSS (Tailwind/Bootstrap) is inlined into the `/render` document at
- * request time from `globalStyles`. The dev server starts listening before its
- * initial build populates `globalCss`, so under cold-start contention an early
- * request can be served *before* the stylesheet is ready — the component then has
- * no background rule (transparent), and since the CSS is per-document, polling the
- * same page won't recover. Re-navigating does, once the build has landed. So we
- * gate readiness on a non-transparent background across reloads.
+ * The MUI case is `browserOnly`, so it renders client-side after the document
+ * loads — its Paper background is transparent until React mounts. So we poll for a
+ * non-transparent background (retrying the navigation as a belt-and-braces guard
+ * against any first-paint hiccup). The server itself never serves unstyled content:
+ * every non-health route `await`s the initial build (which reads `globalStyles`)
+ * before responding, so the Tailwind/Bootstrap CSS is always inlined for real
+ * requests — the fixture's Tailwind stylesheet is compiled by the server's own
+ * startup command before that read (see playwright.config.ts).
  */
 async function loadBg(
   page: import('@playwright/test').Page,

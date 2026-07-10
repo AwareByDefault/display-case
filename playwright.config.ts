@@ -41,9 +41,6 @@ process.env.DISPLAY_CASE_FRAMEWORKS_PORT = String(FRAMEWORKS_PORT)
 
 export default defineConfig({
   testDir: './e2e',
-  // Compile the theme-frameworks fixture's real Tailwind stylesheet before the
-  // fixture server starts (runs once, before every webServer).
-  globalSetup: './e2e/theme-frameworks.setup.ts',
   // The suite is read-only — every spec just browses the showcase — so cases are
   // independent and safe to run fully in parallel.
   fullyParallel: true,
@@ -105,8 +102,11 @@ export default defineConfig({
     },
     {
       // Real-framework consumer (theme-frameworks.spec.ts): Tailwind/Bootstrap/MUI
-      // components each following their own root convention.
-      command: `bun src/cli.ts e2e/fixtures/consumer-theme-frameworks --port=${FRAMEWORKS_PORT}`,
+      // components each following their own root convention. Compile the fixture's
+      // real Tailwind stylesheet FIRST — in the same command, before the server's
+      // one-time `globalStyles` read — so its `dark:` rules are always present (no
+      // race between a separate setup step and the server's initial build).
+      command: `node_modules/.bin/tailwindcss -i e2e/fixtures/consumer-theme-frameworks/tailwind.in.css -o e2e/fixtures/consumer-theme-frameworks/tailwind.out.css && bun src/cli.ts e2e/fixtures/consumer-theme-frameworks --port=${FRAMEWORKS_PORT}`,
       url: `http://localhost:${FRAMEWORKS_PORT}/health`,
       reuseExistingServer: !process.env.CI,
       timeout: 60_000,
