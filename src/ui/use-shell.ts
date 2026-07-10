@@ -9,6 +9,11 @@ import type { Manifest, ManifestComponent } from '../core/manifest'
 import type { A11yViolation } from '../index'
 import { isSurfaceLevel } from '../index'
 import {
+  applyResolvedSignals,
+  readThemeSignals,
+  resolveThemeSignals,
+} from '../render/theme-signals'
+import {
   buildAddressUrl,
   buildExhibitView,
   buildRenderSrc,
@@ -1204,14 +1209,17 @@ export function useShell(seed: ShellSeed): ShellViewModel | { manifest: null } {
     [persistSidebarWidth],
   )
 
-  // Drive the token theme from the document root so html/body (not just the
-  // app chrome) pick up the themed background — no white bars around the app.
-  // `color-scheme` tracks it too so user-agent surfaces (scrollbars, default
-  // control chrome) re-theme with the rest of the shell on a toggle, rather than
+  // Drive the theme signals from the document root so html/body (not just the
+  // app chrome) pick up the themed background — no white bars around the app — and
+  // any configured consumer conventions (a `.dark` class, `data-bs-theme`, …)
+  // re-theme with the shell on a toggle. `color-scheme` tracks it too so
+  // user-agent surfaces (scrollbars, default control chrome) re-theme rather than
   // staying at the theme the document baked in.
   useEffect(() => {
-    document.documentElement.dataset.theme = theme
-    document.documentElement.style.colorScheme = theme
+    applyResolvedSignals(
+      document.documentElement,
+      resolveThemeSignals(theme, readThemeSignals()),
+    )
   }, [theme])
 
   // Mark the page loaded so the stage src can be set without blocking page load.

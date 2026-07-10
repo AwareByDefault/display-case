@@ -38,3 +38,4 @@ dist/
 # full checkouts with their own configs — ignoring them keeps tooling run from
 # the main checkout from descending into the duplicate root configs.
 .claude/worktrees/
+e2e/fixtures/consumer-theme-frameworks/tailwind.out.css

@@ -1,7 +1,12 @@
 import type { ReactNode } from 'react'
 import { StrictMode } from 'react'
 import { createRoot, hydrateRoot } from 'react-dom/client'
-import { PrimerRoot } from './primer'
+import {
+  applyResolvedSignals,
+  readThemeSignals,
+  resolveThemeSignals,
+} from '../render/theme-signals'
+import { PrimerRoot, PrimerThemeSignals } from './primer'
 
 /**
  * Entry point for the isolated `/render/primer` document. Mounts the compiled MDX
@@ -51,16 +56,19 @@ export function mountPrimer(Content: MDXContent): void {
   blockFrameNavigation()
   const params = new URLSearchParams(window.location.search)
   const theme = params.get('theme') === 'dark' ? 'dark' : 'light'
-  document.documentElement.dataset.theme = theme
-  document.documentElement.dataset.themePref = theme
-  // Match the user-agent color scheme to the theme (idempotent with the value the
-  // document baked in) so the primer's controls/scrollbars are themed from load.
-  document.documentElement.style.colorScheme = theme
+  // Apply the full configured theme signal set the document baked in (idempotent),
+  // so an embedded specimen reading any configured convention is themed from load.
+  applyResolvedSignals(
+    document.documentElement,
+    resolveThemeSignals(theme, readThemeSignals()),
+  )
 
   const rootEl = document.getElementById('root') as HTMLElement
   const tree = (
     <StrictMode>
-      <PrimerRoot content={Content} />
+      <PrimerThemeSignals.Provider value={readThemeSignals()}>
+        <PrimerRoot content={Content} />
+      </PrimerThemeSignals.Provider>
     </StrictMode>
   )
   // Adopt the server-rendered primer when present (`data-ssr="1"`); otherwise

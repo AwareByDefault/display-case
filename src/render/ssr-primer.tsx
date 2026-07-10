@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react'
 import { StrictMode } from 'react'
 import type { DisplayCaseConfig } from '../index'
-import { PrimerRoot } from '../ui/primer'
+import { PrimerRoot, PrimerThemeSignals } from '../ui/primer'
 import { renderWithStyles } from './collect-styles'
+import { effectiveThemeSignals } from './theme-signals'
 
 /**
  * Server-side primer rendering — the sibling of {@link makeCaseRenderer} for
@@ -38,7 +39,9 @@ export function makePrimerRenderer(
       // delivered before scripting too.
       const { html, headStyles } = renderWithStyles(
         <StrictMode>
-          <PrimerRoot content={Content} />
+          <PrimerThemeSignals.Provider value={effectiveThemeSignals(config)}>
+            <PrimerRoot content={Content} />
+          </PrimerThemeSignals.Provider>
         </StrictMode>,
         config.styleEngines,
       )

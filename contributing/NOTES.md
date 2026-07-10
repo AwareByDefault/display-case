@@ -1646,3 +1646,51 @@ docked preview area. Two non-obvious hazards shaped the implementation:
 The override (`tweaksDockUserSet`) is plain in-memory React state — no storage, no
 URL — so it survives client-side `pushState` case switches (the app never
 remounts) but a real reload discards it, returning to the per-case size default.
+
+## 2026-07-10: Theme root signals — one resolver, every seam, declarative-not-function
+
+There is no single cross-framework standard for how a component reads dark/light,
+so Display Case emits a **configurable set of root signals** (`theme.signals` in
+`DisplayCaseConfig`) beyond its own always-present `data-theme` + `data-theme-pref`
++ `color-scheme`. Default adds a dark-only `dark` class (Tailwind/shadcn/VueUse);
+opt-in `bootstrap` (`data-bs-theme`), `mui` (`data-mui-color-scheme`), and custom
+`{ attribute }` / `{ class }` mappings.
+
+**Why declarative data, not a function (the load-bearing decision).** A theme
+applier must run in BOTH the document delivered before scripting (an HTML *string*
+built on the server) AND the live client DOM (the in-place toggle). Unlike the
+`providers` toolchain (a server-only function used by the `check` CLI), a function
+can't bake into a string, can't serialize to the client, and a client-only shim
+would reintroduce the post-adopt re-theme flash. So `ThemeSignal` is serializable
+data; the resolved set is inlined as `window.__dcThemeSignals` in every document so
+the client re-emits exactly what the server baked (no drift, no flash).
+
+**One resolver, many seams.** `src/render/theme-signals.ts` is the single source:
+`resolveThemeSignals(theme, signals)` → `{ attributes, addClasses, removeClasses,
+colorScheme }`; `themeRootAttrs` renders the `<html …>` string (server);
+`applyResolvedSignals(root, resolved)` sets the DOM (client). Every seam calls it —
+server: `documents.ts` (shell/render/primer) + `server.ts`
+(shell/render/build-error/primer) + `prod-server` via `BuildDescriptor.themeSignals`
+(baked at publish, since the prod server has no config); client: `render-mount`
+`applyDocEffects`, `use-shell` theme effect, `primer-mount`, `primer` postMessage.
+**If you add a new themed document or a new client theme write, call the resolver**
+— don't hand-write `data-theme`/`color-scheme` again, or that surface will miss the
+configured signals. The shell now emits `data-theme-pref` too (it didn't before);
+the resolver unified that inconsistency.
+
+**Gotchas found wiring the real-framework e2e** (`e2e/fixtures/consumer-theme-frameworks`,
+real Tailwind/Bootstrap/MUI/VueUse deps):
+- **Unlayered beats layered.** Bootstrap ships unlayered `.bg-white`/`.bg-black`;
+  Tailwind v4 puts utilities in `@layer utilities`. Unlayered CSS wins the cascade
+  regardless of source order, so Bootstrap's `.bg-white` overrode Tailwind's
+  `dark:bg-black`. The fixture uses non-colliding Tailwind classes (`bg-zinc-*`).
+  A real consumer mixing both frameworks would hit the same cascade rule.
+- **MUI owns `data-mui-color-scheme`.** MUI's provider *writes* that attribute to
+  its own mode, clobbering the value Display Case set. The fixture's MUI case is
+  `browserOnly`, reads the harness theme off the document at render, and hands it to
+  MUI as `defaultMode` (with a per-mode `modeStorageKey` so a prior load's mode
+  doesn't stick) — so MUI writes the same value Display Case did and they agree.
+- **`prefers-color-scheme` is capture-only.** The interactive path can't drive it;
+  the check driver (`playwright-driver.ts`) calls `page.emulateMedia({ colorScheme })`
+  so media-query-only components snapshot/audit in the right theme. The e2e proves
+  it by mirroring that emulation.

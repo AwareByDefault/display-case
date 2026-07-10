@@ -4,6 +4,11 @@ import { createRoot, hydrateRoot } from 'react-dom/client'
 import { slugify } from '../core/catalog'
 import type { CaseModule, DisplayCaseConfig, GotoFn } from '../index'
 import { caseTree, encodeOverrides } from '../render/render-node'
+import {
+  applyResolvedSignals,
+  readThemeSignals,
+  resolveThemeSignals,
+} from '../render/theme-signals'
 
 /**
  * Entry point for the isolated `/render/:component/:case` document. Renders
@@ -85,16 +90,16 @@ function pushStepUrl(state: RenderState): void {
  * never sees.
  */
 function applyDocEffects(state: RenderState): void {
-  document.documentElement.dataset.theme = state.theme
-  // Also set the explicit preference so a `ThemeProvider` used inside app chrome
-  // (e.g. Navbar's ThemeToggle) initializes to the harness theme
-  // rather than re-resolving from the OS and fighting the `?theme=` selection.
-  document.documentElement.dataset.themePref = state.theme
-  // Keep the user-agent color scheme matched to the theme so scrollbars and
-  // default form-control chrome re-theme with the rest of the surface. Idempotent
-  // on first load (equals the value the document baked in) and correct on every
-  // in-place theme swap / in-flow transition, which all route through here.
-  document.documentElement.style.colorScheme = state.theme
+  // Apply the full configured theme signal set the server baked into this
+  // document (`data-theme` + `data-theme-pref` + `color-scheme`, plus any
+  // configured consumer conventions — a `.dark` class, `data-bs-theme`, …), so a
+  // showcased component reading any of them follows the theme. Idempotent on first
+  // load (equals what the document baked in) and correct on every in-place theme
+  // swap / in-flow transition, which all route through here.
+  applyResolvedSignals(
+    document.documentElement,
+    resolveThemeSignals(state.theme, readThemeSignals()),
+  )
 
   // Shrink-wrap the mount to the case's natural width when asked, so a
   // block/flex-rooted component (which would otherwise fill the full-width
