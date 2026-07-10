@@ -5,8 +5,9 @@ name: Release
 # with `changeset version` (bumps package.json + CHANGELOG.md), commits that back
 # to main, `changeset publish`es to npm, and cuts a GitHub Release for the new
 # `v<version>` tag (notes = that version's CHANGELOG section). A push that carries
-# no changesets is a clean no-op. The version comes from the changeset files a PR
-# includes, not from commit messages.
+# no changesets is a clean no-op; one carrying only *empty* (no-release) changesets
+# consumes them (so they don't retrigger later pushes) but publishes nothing. The
+# version comes from the changeset files a PR includes, not from commit messages.
 #
 # The version commit + tags push DIRECTLY to main, which the 'Protect main'
 # ruleset gates behind a PR. So this job pushes as the awarebydefault-release
@@ -101,13 +102,30 @@ jobs:
           git config user.email "${bot_id}+${APP_SLUG}[bot]@users.noreply.github.com"
 
           # Bump package.json + CHANGELOG.md and delete the consumed changesets.
+          # An *empty* (no-release) changeset is still consumed here — the file is
+          # deleted — but the version is NOT bumped, so capture it either side.
+          prev_version="$(bun --print "require('./package.json').version")"
           bun run changeset:version
+          new_version="$(bun --print "require('./package.json').version")"
 
           git add -A
           if git diff --cached --quiet; then
             echo "Versioning produced no file changes — nothing to release."
             exit 0
           fi
+
+          # No version bump means only empty (no-release) changesets were consumed.
+          # A staged change still exists (the deleted changeset file), so the diff
+          # guard above can't catch this — publishing here would re-push the
+          # unchanged version and fail. Clean the consumed changeset(s) off main so
+          # they don't retrigger every future push, but publish nothing.
+          if [ "$prev_version" = "$new_version" ]; then
+            echo "No version bump — only empty changeset(s). Cleaning up, not publishing."
+            git commit -m "chore: consume empty changeset(s) [skip ci]"
+            git push origin HEAD:main
+            exit 0
+          fi
+
           git commit -m "chore(release): version packages [skip ci]"
 
           # npm auth: prefer OIDC trusted publishing (no token). Only write an
