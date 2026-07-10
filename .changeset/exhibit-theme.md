@@ -1,8 +1,7 @@
 ---
-"@awarebydefault/display-case": patch
 ---
 
-Fix the dogfooded template, page, and flow exhibits (the chrome cased as
-`ShellView`) so they follow the harness light/dark theme instead of always
-rendering light. The exhibits now read the active `?theme=` from the document
-root and re-theme with the rest of the showcase.
+Fix the dogfooded template, page, and flow exhibits (Display Case's own browse
+chrome, cased for dogfooding) so they follow the harness light/dark theme instead
+of always rendering light. Internal-only — the changed files are excluded from the
+published package, so this ships no consumer-facing change.
