@@ -54,24 +54,57 @@
 - [ ] 5.2 Add a test/fixture: a case that themes only via `@media (prefers-color-scheme)`
       captured under light and dark yields the matching appearances.
 
-## 6. Documentation
+## 6. Framework integration e2e (real dependencies)
 
-- [ ] 6.1 Document the `theme` config option, the default signal set, the named
+Prove the signals actually drive real components, not just that the attributes/classes
+appear. Add an e2e fixture consumer package whose `package.json` installs the real
+libraries as dev dependencies and authors a case per convention; drive it with
+Playwright asserting each component's *computed style* changes when Display Case's
+theme toggles. Display Case renders React, so each fixture is a React component using
+that library's real CSS/runtime.
+
+- [ ] 6.1 Add an `e2e/fixtures/consumer-theme-frameworks/` package (or extend an
+      existing fixture) with real dev dependencies: `tailwindcss` (class strategy),
+      `@mui/material` + `@emotion/react` + `@emotion/styled` (CSS-variables mode),
+      `bootstrap` (CSS), and `@vueuse/core` (for its convention constant). Pin
+      versions in `bun.lock`; keep it isolated from the root install.
+- [ ] 6.2 Tailwind (class) case: a component styled with `dark:` variants against the
+      compiled Tailwind stylesheet (class strategy). `display-case.config.ts` uses the
+      default signal set (which includes `class`).
+- [ ] 6.3 MUI case: a `@mui/material` component under `CssVarsProvider` reading
+      `data-mui-color-scheme`; fixture config enables the `mui` signal.
+- [ ] 6.4 Bootstrap case: a component using Bootstrap's CSS keyed off `data-bs-theme`;
+      fixture config enables the `bootstrap` signal.
+- [ ] 6.5 VueUse: assert Display Case's default class name equals `@vueuse/core`'s
+      `useDark` default (`dark`) via a dep-backed unit check — a Vue component tree
+      cannot render in the React host, but its class convention is the one covered by
+      6.2; document this explicitly.
+- [ ] 6.6 `e2e/theme-frameworks.spec.ts`: for each fixture case, load it in the running
+      showcase, read a theme-sensitive computed style (e.g. `background-color`) under
+      light, toggle to dark, and assert the computed style changes to the dark value —
+      proving the real library re-themed off Display Case's signal. Fail if unchanged.
+- [ ] 6.7 Wire the fixture into the e2e setup (its own `.display-case/` install) the
+      same way existing `e2e/fixtures/consumer*` packages are, so CI runs it.
+
+## 7. Documentation
+
+- [ ] 7.1 Document the `theme` config option, the default signal set, the named
       conventions, and the custom mapping in the product docs (`docs/`, theming page).
-- [ ] 6.2 Add guidance that toggle-able components must read a page-controllable signal
+- [ ] 7.2 Add guidance that toggle-able components must read a page-controllable signal
       (attribute/class or `color-scheme` + `light-dark()`), and that
       `prefers-color-scheme`-only components follow the OS interactively but are honored
       in captures.
-- [ ] 6.3 Record the seam list and the declarative-not-function rationale in
+- [ ] 7.3 Record the seam list and the declarative-not-function rationale in
       `contributing/NOTES.md`.
 
-## 7. Verification
+## 8. Verification
 
-- [ ] 7.1 `bun run lint`, `bun run typecheck`, `bun run check` (structure + tokens + ssr)
+- [ ] 8.1 `bun run lint`, `bun run typecheck`, `bun run check` (structure + tokens + ssr)
       all pass.
-- [ ] 7.2 `bun test` passes, including the new resolver, type, and parity tests.
-- [ ] 7.3 Drive the running showcase: a case using a `.dark` class and a case using a
+- [ ] 8.2 `bun test` passes, including the new resolver, type, and parity tests.
+- [ ] 8.3 Drive the running showcase: a case using a `.dark` class and a case using a
       custom attribute both follow the toggle in both themes with no flash (verify via
       the chrome-free `/render` endpoint in both themes).
-- [ ] 7.4 `bun run e2e` passes; the repo's own baselines are unchanged by the default set.
-- [ ] 7.5 Add a changeset (`minor` — new opt-in config capability).
+- [ ] 8.4 `bun run e2e` passes — including the new framework-integration suite (§6) —
+      and the repo's own baselines are unchanged by the default set.
+- [ ] 8.5 Add a changeset (`minor` — new opt-in config capability).
