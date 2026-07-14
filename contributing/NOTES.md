@@ -1647,6 +1647,43 @@ The override (`tweaksDockUserSet`) is plain in-memory React state — no storage
 URL — so it survives client-side `pushState` case switches (the app never
 remounts) but a real reload discards it, returning to the per-case size default.
 
+## 2026-07-09: `InteractiveShell` also carries the harness theme into shell exhibits
+
+Companion to the note above (shell exhibits render `InteractiveShell`, not raw
+`ShellView`): the same wrapper is also what makes them follow the harness
+light/dark theme. Before it, the dogfooded template/page/flow exhibits fed a static
+`makeModel` (which hard-codes `theme: 'light'`) straight into `ShellView`, and
+`ShellView` emits its own `data-theme={theme}` on `.dc-app` — load-bearing in the
+*real* app (the toggle is asserted on `.dc-app` in `e2e/chrome.spec.ts`). Because
+the color tokens re-declare under `[data-theme="light"]` on **any** scope
+(`tokens/colors.css`, see the nested-scope note above), an exhibit rendered under
+the harness's `html[data-theme="dark"]` created a nested `[data-theme="light"]`
+island and the whole chrome stayed light — the *only* cases that ignored the
+harness theme, since normal component cases emit no `data-theme` wrapper and simply
+inherit.
+
+A case's `render` can't read the harness theme purely (render must be
+SSR-deterministic; `document.documentElement.dataset.theme` is a browser API
+barred during render — §3.1). So `InteractiveShell` renders `ShellView` with
+**`inheritTheme`** — an opt-in prop on `ShellView` (default off, so the real app
+and its e2e-asserted `.dc-app[data-theme]` are untouched) that makes `.dc-app`
+**omit its own `data-theme` and inherit the document root's**. Every `/render`
+document already bakes `html[data-theme]` from `?theme=` at SSR (`documents.ts` /
+`server.ts`), so the inherited chrome is already in the harness theme in the server
+HTML — **no nested light island, and no post-adopt re-theme flash** (this is why
+`inheritTheme`, not just feeding the model a theme via an effect: an effect-set
+`data-theme` is still `'light'` in the SSR snapshot and flips a frame later,
+flashing the whole chrome). **If you add a new chrome exhibit, render
+`InteractiveShell`** — reaching for `ShellView` directly reintroduces both the
+dead nav toggle and the pinned-light bug.
+
+`InteractiveShell` also feeds `theme` from `useHarnessTheme()` (reads `<html
+data-theme>` via `useSyncExternalStore` — server snapshot `'light'`, so no SSR
+document access; client re-reads after adopt and a `MutationObserver` re-syncs on
+harness toggle). With `inheritTheme` on this no longer drives the colors (those
+inherit) — only the header's theme-toggle *label*, so at worst that 4-char label
+settles one frame after adopt; the chrome itself never flashes.
+
 ## 2026-07-10: Theme root signals — one resolver, every seam, declarative-not-function
 
 There is no single cross-framework standard for how a component reads dark/light,

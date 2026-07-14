@@ -5,7 +5,7 @@
 // {@link useShell} produces live) so the pure {@link ShellView} can be exhibited
 // as a template (placeholder slots), a page (real content slotted in), and a
 // flow (Primer ↔ Cases) — Display Case dogfooding its own layout end to end.
-import { type ReactNode, useState } from 'react'
+import { type ReactNode, useState, useSyncExternalStore } from 'react'
 import { slugify } from '../../../../core/catalog'
 import type {
   Manifest,
@@ -18,6 +18,7 @@ import {
   buildExhibitView,
   groupByLevel,
   groupPrimerSections,
+  type Theme,
 } from '../../../shell-core'
 import type { A11ySurface, ShellViewModel } from '../../../use-shell'
 import { Button, Chip } from '..'
@@ -25,6 +26,39 @@ import { ShellView, type ShellViewProps } from './ShellView'
 
 const noop = () => {}
 const nullRef = { current: null }
+
+/** Read the harness theme off the document root — Display Case drives
+ *  `<html data-theme>` from `?theme=`. Client-only; the server never calls it. */
+function readHarnessTheme(): Theme {
+  return document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light'
+}
+
+/** Re-read {@link readHarnessTheme} whenever the harness flips `<html data-theme>`
+ *  (its light/dark toggle), so a live exhibit re-themes with the rest of the app. */
+function subscribeHarnessTheme(onChange: () => void): () => void {
+  const observer = new MutationObserver(onChange)
+  observer.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['data-theme'],
+  })
+  return () => observer.disconnect()
+}
+
+/**
+ * The live harness theme (light/dark), read from `<html data-theme>` — the scope
+ * Display Case sets from `?theme=`. SSR-safe: the server snapshot is `'light'`
+ * (matching the default document), and the client re-reads + subscribes after
+ * adopt via {@link useSyncExternalStore}, so no browser API is touched during
+ * render. {@link InteractiveShell} feeds this into the header's theme-toggle label
+ * so it names the theme the chrome is actually showing.
+ */
+export function useHarnessTheme(): Theme {
+  return useSyncExternalStore(
+    subscribeHarnessTheme,
+    readHarnessTheme,
+    () => 'light',
+  )
+}
 
 function mkCase(
   componentId: string,
@@ -529,25 +563,39 @@ export function makeModel(
 }
 
 /**
- * A {@link ShellView} whose header nav toggle actually works in a static case.
- * `makeModel` wires `setNavCollapsed` to a no-op (the model is inert), so the ☰
- * button does nothing on its own — which hides the page entirely at mobile
- * widths, where an open nav becomes a full-width drawer over the stage. This thin
- * wrapper owns `navCollapsed` locally (seeded from the model) and feeds a live
- * setter back in, so the exhibit can open and close the rail like the real chrome.
+ * The {@link ShellView} every dogfooded page/template/flow exhibit renders (never
+ * `ShellView` directly). It makes the static chrome behave like the live app in
+ * two ways the inert model can't:
+ *
+ * 1. **Working nav toggle.** `makeModel` wires `setNavCollapsed` to a no-op, so
+ *    the header ☰ does nothing on its own — which hides the page entirely at
+ *    mobile widths, where an open nav becomes a full-width drawer over the stage.
+ *    This wrapper owns `navCollapsed` locally (seeded from the model) and feeds a
+ *    live setter back in, so the exhibit can open and close the rail.
+ * 2. **Harness theme.** `inheritTheme` makes `.dc-app` inherit the harness's
+ *    server-baked `html[data-theme]` instead of pinning the model's `'light'`
+ *    scope — so the exhibit is already in the harness theme at SSR (no nested
+ *    light island overriding a dark harness, no post-adopt re-theme flash). It
+ *    also feeds the live harness theme in so the header's theme-toggle label
+ *    reads correctly; with `inheritTheme` on that `theme` no longer drives the
+ *    colors (they inherit), only the label, so at worst the label settles a frame
+ *    after adopt while the chrome itself never flashes.
  *
  * Because the browse chrome swaps cases *in place* (no remount), give each case's
- * `<InteractiveShell>` a distinct `key` so the collapse state re-seeds per case
+ * `<InteractiveShell>` a distinct `key` so the local state re-seeds per case
  * instead of leaking across a switch — the same discipline the
  * `interactive-cases-keyed` check enforces for locally-defined specimens.
  */
 export function InteractiveShell(props: ShellViewProps): ReactNode {
   const [navCollapsed, setNavCollapsed] = useState(props.navCollapsed)
+  const theme = useHarnessTheme()
   return (
     <ShellView
       {...props}
       navCollapsed={navCollapsed}
       setNavCollapsed={setNavCollapsed}
+      theme={theme}
+      inheritTheme
     />
   )
 }
