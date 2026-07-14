@@ -1,6 +1,31 @@
 import type { ReactNode } from 'react'
-import { useCallback, useEffect, useRef } from 'react'
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+} from 'react'
 import { slugify } from '../core/catalog'
+import type { ThemeSignal } from '../index'
+import {
+  applyResolvedSignals,
+  DEFAULT_THEME_SIGNALS,
+  readThemeSignals,
+  resolveThemeSignals,
+} from '../render/theme-signals'
+
+/**
+ * The effective theme signal set for the primer, so a forced-theme `<Display>`
+ * specimen can island the same configured conventions the page root carries
+ * (`data-bs-theme`, `data-mui-color-scheme`, custom attributes — not just
+ * `data-theme`). Seeded identically on both sides — from the config in
+ * `makePrimerRenderer` (server) and from `readThemeSignals()` in `primer-mount`
+ * (client) — so a specimen hydrates without mismatch.
+ */
+export const PrimerThemeSignals = createContext<readonly ThemeSignal[]>(
+  DEFAULT_THEME_SIGNALS,
+)
 
 /**
  * The Primer — Display Case's long-form "wall text". A consumer authors an
@@ -55,6 +80,18 @@ export function Display({
   appSurface,
   children,
 }: DisplayProps) {
+  const signals = useContext(PrimerThemeSignals)
+  // A specimen pinned to a theme islands the *full* configured signal set for its
+  // subtree — `data-theme` (Display Case tokens), `data-bs-theme`,
+  // `data-mui-color-scheme`, and any custom attributes — plus the added class(es),
+  // so a pinned Bootstrap/MUI/Tailwind specimen re-themes. A class can only be
+  // added, not un-inherited, so a light-pinned specimen inside a dark page islands
+  // its attributes but not the inherited dark class (a CSS limitation). Omit
+  // `theme` to inherit the page.
+  const pinned = theme ? resolveThemeSignals(theme, signals) : null
+  const specimenClass = pinned?.addClasses.length
+    ? `dc-display-specimen ${pinned.addClasses.join(' ')}`
+    : 'dc-display-specimen'
   return (
     <section
       className="dc-display"
@@ -66,8 +103,8 @@ export function Display({
         {subtitle ? <div className="dc-display-sub">{subtitle}</div> : null}
       </div>
       <div
-        className="dc-display-specimen"
-        data-theme={theme}
+        {...pinned?.attributes}
+        className={specimenClass}
         data-flush={flush ? '' : undefined}
         data-app-surface={appSurface ? '' : undefined}>
         {children}
@@ -260,11 +297,16 @@ export function PrimerRoot({
           armSettle()
         }
       } else if (data?.type === 'dc-primer-theme' && data.theme) {
-        document.documentElement.dataset.theme = data.theme
-        document.documentElement.dataset.themePref = data.theme
-        // Keep the user-agent color scheme matched so the primer's controls and
-        // scrollbars re-theme with the rest of the page on a theme change.
-        document.documentElement.style.colorScheme = data.theme
+        // Re-apply the full configured theme signal set so the primer's controls,
+        // scrollbars, and any consumer-convention specimens re-theme together with
+        // the rest of the page on a theme change pushed by the chrome.
+        applyResolvedSignals(
+          document.documentElement,
+          resolveThemeSignals(
+            data.theme === 'dark' ? 'dark' : 'light',
+            readThemeSignals(),
+          ),
+        )
       }
     }
     window.addEventListener('message', onMessage)

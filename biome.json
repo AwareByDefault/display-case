@@ -15,7 +15,8 @@
       "!**/.husky/",
       "!**/.vscode/",
       "!.display-case/",
-      "!dist-showcase/"
+      "!dist-showcase/",
+      "!e2e/fixtures/consumer-theme-frameworks/*.css"
     ]
   },
   "formatter": {

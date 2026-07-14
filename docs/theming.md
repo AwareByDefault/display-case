@@ -21,16 +21,22 @@ export default defineConfig({
 
 Paths are resolved relative to the package. A listed file that does not exist is silently skipped.
 
-## Light and dark via `data-theme`
+## Light and dark theme signals
 
-The isolated render reads a `theme` query parameter and sets it on the document root before rendering:
+The isolated render reads a `theme` query parameter and expresses it on the document root before rendering:
 
 ```
 /render/tweak-control/variants?theme=light
 /render/tweak-control/variants?theme=dark
 ```
 
-It applies as `<html data-theme="light">` (or `"dark"`). The render document also sets `data-theme-pref` to the same value, so an app `ThemeProvider` rendered via the [decorator](configuration.md#decorator) (e.g. behind a nav `ThemeToggle`) initializes to the harness theme instead of re-resolving from the OS and fighting the `?theme=` selection. Any value other than `dark` is treated as light. Author your tokens against this attribute:
+Any value other than `dark` is treated as light. The browse chrome's theme toggle drives the same signals in place.
+
+### What Display Case always emits
+
+- `<html data-theme="light|dark">` — the attribute Display Case's own tokens key off; author your tokens against it (`:root[data-theme='dark'] { … }`).
+- `<html data-theme-pref="…">` — the same value, so an app `ThemeProvider` rendered via the [decorator](configuration.md#decorator) (e.g. behind a nav `ThemeToggle`) initializes to the harness theme instead of re-resolving from the OS and fighting the `?theme=` selection.
+- `html { color-scheme: light|dark }` — the standard CSS property, so user-agent controls (scrollbars, default form controls) re-theme, and the CSS `light-dark()` function resolves correctly.
 
 ```css
 :root[data-theme='dark'] {
@@ -38,6 +44,40 @@ It applies as `<html data-theme="light">` (or `"dark"`). The render document als
   --fg: #eee;
 }
 ```
+
+### Following your framework's convention (`theme` config)
+
+There is no single cross-framework standard for how a component detects dark/light. So beyond the always-present signals above, Display Case emits a **configurable set of root signals** so components built with common frameworks re-theme with the toggle — directly or by inheriting the root signal. By default it also toggles a **`dark` class** on the root (the Tailwind / shadcn / next-themes / VueUse / Nuxt convention). Opt into more via `theme.signals`:
+
+```ts
+// display-case.config.ts
+export default defineConfig({
+  title: 'Display Case',
+  roots: ['src/**/*.case.tsx'],
+  theme: {
+    // Defaults to ['class']. `data-theme` + `color-scheme` are always emitted too.
+    signals: [
+      'class', // <html class="dark"> in dark (Tailwind class strategy, shadcn, VueUse)
+      'bootstrap', // <html data-bs-theme="light|dark"> (Bootstrap 5.3+)
+      'mui', // <html data-mui-color-scheme="light|dark"> (Material UI CSS variables)
+      { attribute: 'data-color-mode' }, // a custom attribute → "light" | "dark"
+      { class: 'night' }, // a custom class, added in dark
+    ],
+  },
+})
+```
+
+Notes:
+
+- The `class` signal is **dark-only** (matching Tailwind/shadcn/VueUse): the class is added in the dark theme and absent in light. A custom `{ class }` behaves the same unless you also give a `light` class.
+- Signals are **serializable data, not functions** — Display Case bakes them into the document delivered before scripting *and* re-applies them on the client toggle, so an in-page function can't be used (it couldn't reach both, and would flash).
+- Set `signals: []` to emit nothing beyond Display Case's own `data-theme` + `color-scheme`.
+
+### Components that theme only via `@media (prefers-color-scheme)`
+
+A component that themes **only** through the `prefers-color-scheme` media query cannot follow an in-page toggle — that media feature reflects the OS/user-agent setting and no served page can override it (setting `color-scheme` does not flip it). Such a component follows the OS while you browse. Give it a page-controllable signal instead — a class or data-attribute, or `color-scheme` + `light-dark()` — if you want the toggle to drive it.
+
+Display Case's snapshot and accessibility checks **do** honor it: the capture toolchain emulates the color-scheme preference to match each rendered theme, so a media-query-only component is still captured and audited in the requested theme.
 
 The check runner exercises **both** themes for every case, so a baseline is captured per theme. See [Testing](testing.md).
 

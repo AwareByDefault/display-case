@@ -74,9 +74,16 @@ export async function createPlaywrightDriver(): Promise<RenderDriver> {
   })
 
   return {
-    async open(url: string, _ctx: CaseContext): Promise<RenderedPage> {
+    async open(url: string, ctx: CaseContext): Promise<RenderedPage> {
       const page = await context.newPage()
       try {
+        // Present the OS/user-agent color-scheme preference as the theme being
+        // captured, so a component that themes ONLY through
+        // `@media (prefers-color-scheme)` — the one signal a served page cannot
+        // set for itself — is captured/audited in the requested theme instead of
+        // the capture environment's default. (Root-signal conventions are already
+        // baked into the document; this covers the media-query-only case.)
+        await page.emulateMedia({ colorScheme: ctx.theme })
         await page.goto(url, {
           waitUntil: 'networkidle',
           timeout: NAV_TIMEOUT_MS,

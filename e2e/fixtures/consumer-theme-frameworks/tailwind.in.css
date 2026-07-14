@@ -1,0 +1,7 @@
+/* Real Tailwind v4 input, compiled by the `tailwindcss` CLI in the theme-frameworks
+   fixture server's startup command (see playwright.config.ts). The class strategy:
+   `dark:` variants apply under a `.dark` ancestor — the class Display Case's default
+   `class` signal toggles on the document root. */
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+@source "./src/**/*.case.tsx";
