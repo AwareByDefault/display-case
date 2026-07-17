@@ -60,7 +60,7 @@ jobs:
       # part of the pipeline; drop it once `bun publish` gains provenance + OIDC
       # (oven-sh/bun#30522 and #24855, both open). No `registry-url` — it would
       # write an .npmrc that shadows NPM_TOKEN / OIDC.
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
       # Pinned, not `npm@latest`: npm 12.0.0 (2026-07-08) broke `sigstore` bundling
