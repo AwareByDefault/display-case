@@ -121,7 +121,7 @@
     "@emotion/react": "^11.14.0",
     "@emotion/server": "^11.11.0",
     "@emotion/styled": "^11.14.1",
-    "@fission-ai/openspec": "1.5.0",
+    "@fission-ai/openspec": "1.6.0",
     "@mui/material": "^9.2.0",
     "@playwright/test": "^1.60.0",
     "@tailwindcss/cli": "^4.3.2",
