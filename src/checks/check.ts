@@ -4,7 +4,7 @@ import { Glob } from 'bun'
 import { componentClosures } from '../core/affected'
 import { baselineDir, cacheDir, resolveConfig } from '../core/discovery'
 import type { ManifestComponent } from '../core/manifest'
-import type { SubstrateVariantAxis } from '../core/substrate'
+import type { Substrate, SubstrateVariantAxis } from '../core/substrate'
 import type {
   A11yViolation,
   CaseContext,
@@ -190,8 +190,22 @@ async function resolveDriver(config: DisplayCaseConfig): Promise<RenderDriver> {
   }
 }
 
-async function resolveDiff(config: DisplayCaseConfig): Promise<DiffFn> {
+/**
+ * The comparison the visual phase uses, in precedence order: the consumer's
+ * explicit override, then the substrate's own default, then the built-in
+ * pixel diff.
+ *
+ * The substrate's default matters beyond tidiness: a substrate that captures
+ * text supplies a text comparison, and falling straight through to the
+ * pixelmatch PNG differ would either mis-compare its frames or fail for want of
+ * an image toolchain it never needed.
+ */
+async function resolveDiff(
+  config: DisplayCaseConfig,
+  substrate: Substrate,
+): Promise<DiffFn> {
   if (config.providers?.diff) return config.providers.diff
+  if (substrate.checks?.diff) return substrate.checks.diff
   try {
     const { pixelmatchDiff } = await import('./providers/pixelmatch-diff')
     return pixelmatchDiff
@@ -546,7 +560,7 @@ export async function runChecks(
   const a11yExclude = config.a11y?.exclude
 
   const driver = await resolveDriver(config)
-  const diff = opts.visual ? await resolveDiff(config) : null
+  const diff = opts.visual ? await resolveDiff(config, substrate) : null
   // Both render phases go through the substrate. A substrate that supplies no
   // session cannot be captured or audited by this runner — report that rather
   // than failing the run over a phase that does not apply to the medium.

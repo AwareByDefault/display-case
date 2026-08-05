@@ -58,6 +58,22 @@ export const LEVEL_LABEL: Record<HierarchyLevel | 'unclassified', string> = {
   unclassified: 'Unclassified',
 }
 
+/**
+ * The display label for a hierarchy level, honoring a substrate's relabelling.
+ *
+ * The level *taxonomy* is fixed across substrates — classification, manifest
+ * grouping, the browse-mode split, and four structure rules all operate on it —
+ * but its vocabulary is presentational, so a substrate may rename what a viewer
+ * reads (a terminal showcase presenting "Pages" as "Screens"). Anything the
+ * substrate doesn't rename falls back to Display Case's own label.
+ */
+export function levelLabel(
+  manifest: Manifest | null,
+  key: HierarchyLevel | 'unclassified',
+): string {
+  return manifest?.substrate?.levelLabels?.[key] ?? LEVEL_LABEL[key]
+}
+
 export const GROUP_ORDER: (HierarchyLevel | 'unclassified')[] = [
   ...HIERARCHY_LEVELS,
   'unclassified',

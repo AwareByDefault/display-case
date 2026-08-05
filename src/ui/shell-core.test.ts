@@ -12,6 +12,7 @@ import {
   groupPrimerSections,
   humanizeTweakKey,
   initialSelectionFor,
+  levelLabel,
   MAX_PAD,
   MIN_PAD,
   type PrimerSection,
@@ -585,5 +586,20 @@ describe('humanizeTweakKey', () => {
   test('handles a leading acronym and empty input', () => {
     expect(humanizeTweakKey('URLPath')).toBe('URL Path')
     expect(humanizeTweakKey('')).toBe('')
+  })
+})
+
+describe('levelLabel', () => {
+  test('uses Display Case’s own label when the substrate renames nothing', () => {
+    expect(levelLabel(manifest({}), 'page')).toBe('Pages')
+  })
+
+  test('honours a substrate’s relabelling', () => {
+    // The taxonomy is fixed across substrates; only what a viewer reads moves.
+    const m = manifest({
+      substrate: { id: 'term', variants: [], levelLabels: { page: 'Screens' } },
+    })
+    expect(levelLabel(m, 'page')).toBe('Screens')
+    expect(levelLabel(m, 'atom')).toBe('Atoms')
   })
 })

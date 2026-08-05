@@ -447,6 +447,7 @@ function manifestSubstrate(substrate: Substrate): ManifestSubstrate {
       values: axis.values.map((v) => ({ value: v.value, label: v.label })),
       default: axis.default,
     })),
+    levelLabels: substrate.levelLabels,
   }
 }
 

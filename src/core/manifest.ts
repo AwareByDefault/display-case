@@ -81,6 +81,10 @@ export interface ManifestSubstrate {
   id: string
   /** The axes this substrate's renderings vary over, in presentation order. */
   variants: ManifestVariantAxis[]
+  /** Display labels overriding the fixed hierarchy vocabulary (e.g. presenting
+   *  `page` as "Screens"). Absent keys keep Display Case own label; the
+   *  taxonomy itself is identical across substrates. */
+  levelLabels?: Partial<Record<string, string>>
 }
 
 /** One declared variant axis. Mirrors the substrate contract's declaration,

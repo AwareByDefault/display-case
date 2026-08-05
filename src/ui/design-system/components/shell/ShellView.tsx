@@ -12,7 +12,7 @@ import {
   DOC_MIN_W,
   type ExhibitNode,
   humanizeTweakKey,
-  LEVEL_LABEL,
+  levelLabel,
   type Mode,
   RESPONSIVE,
   SIDEBAR_MAX_W,
@@ -462,7 +462,9 @@ function NavContents(props: ShellViewProps) {
     if (fg.length === 0) return null
     return fg.map(({ key, components }) => (
       <div key={key} className="dc-group">
-        <Eyebrow className="dc-group-label">{LEVEL_LABEL[key]}</Eyebrow>
+        <Eyebrow className="dc-group-label">
+          {levelLabel(props.manifest, key)}
+        </Eyebrow>
         {components.map(componentRow)}
       </div>
     ))
