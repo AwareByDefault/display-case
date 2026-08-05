@@ -63,7 +63,9 @@ return step.render(ctx)
 
 ## 3. Render purity & determinism
 
-This is the central Display Case rule. Every surface — each isolated `/render/<component>/<case>`, the primer, and the published build — is **server-rendered to complete HTML before any script runs**, then the client *adopts* (hydrates) that markup. The server and client must produce **identical** output. The `ssr` check (`src/checks/ssr-check.ts`) enforces it by rendering every case on the server with no browser.
+This is the central Display Case rule. Every surface — each isolated `/render/<component>/<case>`, the primer, and the published build — is **rendered completely before any script runs**, then the client *adopts* (hydrates) that rendering. The server and client must produce **identical** output. The render-safety check (`--safety`, historically `--ssr`; `src/checks/ssr-check.ts`) enforces it by rendering every case headlessly through the active substrate, with no browser.
+
+A case that cannot render headlessly is opted out with `browserOnly`. That opt-out is applied *before the case tree is built*, not merely before it is rendered — a browser-only case may touch `document` in its own thunk (reading the root theme to pick a provider mode, as Material UI's setup does), so constructing the tree is itself unsafe for it.
 
 **3.1** **Keep render pure.** A case's render function (and the components it renders) MUST NOT, *during render*:
 

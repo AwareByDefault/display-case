@@ -44,7 +44,7 @@ generalizations. The Carte substrate itself is out-of-tree and not in this list.
 
 ## 6. Docs, skills, and release
 
-- [ ] 6.1 Update README, `docs/` (configuration, checks, publishing, ai-agents), and `display-case.prompt.md` for the substrate key, declared axes, `--safety`, and the render subcommand
-- [ ] 6.2 Redirect the bundled skills' capture steps (`display-case-snapshot`, `display-case-review`) through the render subcommand where a browser isn't needed
-- [ ] 6.3 Post-change review: update `contributing/coding-best-practices.md`, `contributing/testing-best-practices.md`, and `contributing/NOTES.md` where the substrate seam changes guidance
+- [x] 6.1 Update README, `docs/` (configuration, checks, publishing, ai-agents), and `display-case.prompt.md` for the substrate key, declared axes, `--safety`, and the render subcommand
+- [x] 6.2 Redirect the bundled skills' capture steps (`display-case-snapshot`, `display-case-review`) through the render subcommand where a browser isn't needed
+- [x] 6.3 Post-change review: update `contributing/coding-best-practices.md`, `contributing/testing-best-practices.md`, and `contributing/NOTES.md` where the substrate seam changes guidance
 - [x] 6.4 Add the changeset (minor: new public `substrate` config key, `./core` export, render subcommand; no breaking changes)

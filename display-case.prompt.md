@@ -52,14 +52,16 @@ export default defineCases(
 
 ## Config
 
-The consuming package has a `display-case.config.ts` (`defineConfig({ title, roots, globalStyles, decorator?, baselineDir?, tokens?, providers? })`) — `roots` are the globs that locate `*.case.tsx` files. Launch with `bun run display-case`; check accessibility + visual regression + tokens with `bun run display-case:check`.
+The consuming package has a `display-case.config.ts` (`defineConfig({ title, roots, globalStyles, decorator?, baselineDir?, tokens?, providers?, substrate? })`) — `roots` are the globs that locate `*.case.tsx` files; `substrate` selects what a case renders *into* (absent ⇒ the DOM: React → HTML → a hydrated browser document). Launch with `bun run display-case`; check accessibility + visual regression + tokens with `bun run display-case:check`.
 
 ## Driving the tool (for agents)
 
 The enumerate → snapshot → verify loop:
 
 1. **Enumerate** — `bun run display-case -- --print-manifest` (no server/browser needed) lists every component, case, hierarchy level, tweak schema, the `caseFile`/`placardDoc` paths, each component's resolved IA `group`, and the top-level `modes` + `groups` (the Exhibits group tree). A surface's in-app address uses the `/e/` prefix; a kit case uses `/c/` — but `/render/<component>/<case>` is unified for snapshotting either.
-2. **Snapshot** — with the server up (`bun run display-case`, port 3100), open `/render/<component>/<case>?theme=light|dark&t.<tweak>=<value>` — a chrome-free HTML document; rasterize it with a headless browser. Same URL → same render.
+2. **Snapshot** — two ways, both deterministic (same inputs → same render):
+   - **No server, no browser:** `bun run display-case render <component>/<case> -- --variant=theme=dark --tweak=<name>=<value>` prints the frame to stdout. Under the DOM substrate that is the same chrome-free document the endpoint serves; under a text-serializing substrate it is something you read directly.
+   - **Over HTTP:** with the server up (`bun run display-case`, port 3100), open `/render/<component>/<case>?theme=light|dark&t.<tweak>=<value>` and rasterize it with a headless browser. The manifest's `substrate.variants` lists which axis parameters are valid — don't assume `theme`.
 3. **Verify** — `bun run display-case:check` runs a11y + visual + token checks (exit non-zero on failure).
 
 Full reference: [docs/ai-agents.md](docs/ai-agents.md).

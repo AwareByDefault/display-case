@@ -92,6 +92,8 @@ Never `--update` on macOS and commit — CI (Linux) would never match. Because t
 
 **6.2** Every test id comes from [`src/ui/test-ids.ts`](../src/ui/test-ids.ts) (`DcTestIds`). Specs import that module and pass its constants/builders to `getByTestId` — never a hardcoded string literal. A renamed id then becomes a compile-time error in both the chrome and the specs, not a silent runtime break.
 
+**6.2a** A control for a **substrate-declared variant axis** is keyed by axis id, not enumerated: `DcTestIds.variantControl(axisId)`. The axes come from the active substrate (the manifest reports them under `substrate.variants`), so a spec reads the axis ids from `/manifest.json` rather than hardcoding `theme` — the same rule that already applies to component and case ids.
+
 **6.3** When a new chrome element needs a locator: add it to `DcTestIds` first (a constant, or a builder like `navCase(componentId, caseId)` for keyed rows), apply it in the chrome as `data-testid={DcTestIds.yourKey}`, then reference `DcTestIds.yourKey` in the spec. Component/case ids themselves are read from the live `/manifest.json` (see `e2e/helpers.ts`), never hardcoded, so specs survive renames and reordering of the showcased components.
 
 **6.4** All Playwright specs live under `e2e/`. Do not write them anywhere else (see §2).

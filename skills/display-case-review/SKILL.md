@@ -12,13 +12,15 @@ Run the Display Case `check` runner and turn its output into actionable fixes.
 ## Steps
 
 1. **Run the checks**: `bun run display-case:check` (or `bunx @awarebydefault/display-case check <pkgDir>`). Phases:
-   - **a11y** — axe, WCAG 2 A/AA, per case × theme.
-   - **visual** — pixel-diff each case (light + dark) against recorded baselines.
+   - **a11y** — axe, WCAG 2 A/AA, per case × variant.
+   - **visual** — diff each case (per declared render variant) against recorded baselines.
    - **tokens** — design-token conformance.
+   - **safety** (`--safety`, formerly `--ssr`) — every case renders headlessly without throwing.
    - Run one phase with a flag, e.g. `bunx @awarebydefault/display-case check <pkgDir> --a11y`.
+   - Each render phase is supplied by the active [substrate]; one it does not supply is reported *not applicable* rather than failing. A phase reported that way is not a problem to fix.
 2. **Triage each finding** by category:
    - **a11y** (`label`, `color-contrast`, `aria-*`, …): if the case renders a bare control, fix the *case* (add a label/`aria-label`); if the component itself fails (contrast tokens, missing accessible name), fix the *component*/tokens.
-   - **visual** diffs: inspect the written `*.diff.png`; if the change is intended, re-record with `--update`; otherwise it's a regression to fix.
+   - **visual** diffs: inspect the written `*.diff.*` next to the baseline (under `<baselineDir>/<substrate>/<component>/`); if the change is intended, re-record with `--update`; otherwise it's a regression to fix.
    - **tokens**: resolve the flagged custom property, or add it to the config `tokens.allow` if it's supplied by a host stylesheet.
 3. **Fix at the right layer** — prefer fixing the component/tokens over weakening the check. Never silence a real finding.
 4. **Re-run** until the relevant phase is clean (exit 0).

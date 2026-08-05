@@ -242,7 +242,9 @@ export default defineFlow('Sign-in flow', {
 
 **Documentation panel** — a component's sibling `<component>.placard.md` renders alongside its cases as full CommonMark + GFM.
 
-**Isolated render endpoint** — every case is also reachable at `/render/<component>/<case>`, the exact document the browse iframe embeds and the check runner screenshots.
+**Isolated render endpoint** — every case is also reachable at `/render/<component>/<case>`, the exact document the browse iframe embeds and the check runner screenshots. `display-case render <component>/<case>` prints the same rendering to stdout with no server and no browser.
+
+**Pluggable rendering substrate** — what a case renders *into* is replaceable via [`substrate`](docs/configuration.md#substrate). Absent, you get the DOM (React → HTML → a hydrated document) and nothing about your showcase changes. Set it and the whole pipeline — chrome, tweaks, flows, placards, manifest, checks, publish — comes along to a medium that was never HTML. The contract ships from `@awarebydefault/display-case/core` and is experimental until a second, non-DOM substrate has been built against it.
 
 **Pre-scripting (server) rendering** — the isolated `/render/<component>/<case>` document and the `/render/primer` document are rendered to complete, themed HTML on the server *before* the page's scripts run. Fetch the address without executing it (a crawler, a screenshot before scripts settle, plain `curl`) and the case content — under the requested `?theme=` and tweaks — is already there; the client then *adopts* that markup (hydrates) to drive interactivity (tweaks, in-place swaps, the primer's scrollspy). This is the groundwork for hosting a Display Case as a real webapp beyond localhost. Two things to know as an author:
 
