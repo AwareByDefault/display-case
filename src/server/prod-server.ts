@@ -303,8 +303,19 @@ export async function writeStaticExport(buildDir: string): Promise<void> {
       pages += 2
     }
   }
+  // What happens to an address-encoded variation that has no per-path file
+  // depends on whether the substrate can render in the client at all. With a
+  // stage runtime, the page resolves it after hydration as it always has.
+  // Without one, every rendering is server-produced — so such an address simply
+  // has no file, and saying it "resolves on the client" would be false.
+  const clientRenderable = Boolean(loaded.substrate.stage)
   console.log(
-    `  static export: ${pages} page(s). Note: query-encoded tweak/theme ` +
-      'variations have no per-path file — they resolve on the client after hydration.',
+    `  static export: ${pages} page(s). Note: query-encoded tweak/variant ` +
+      (clientRenderable
+        ? 'variations have no per-path file — they resolve on the client after hydration.'
+        : `variations have no per-path file, and the "${loaded.substrate.id}" ` +
+          'substrate renders only on the server — those addresses are ' +
+          'unavailable in a static export. Host the build with its server to ' +
+          'reach them.'),
   )
 }

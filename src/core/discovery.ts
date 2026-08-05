@@ -122,11 +122,18 @@ export async function codegenCaseRenderEntry(
   file: string,
   configPath: string,
   componentId: string,
+  /** The substrate stage runtime to mount with. Defaults to the DOM mount —
+   *  the built-in substrate's stage — so a caller that has not resolved a
+   *  substrate still generates the entry Display Case has always generated. */
+  stageEntry?: string,
 ): Promise<string> {
   const dir = cacheDir(pkgDir)
   const entry = join(dir, `render-case-${componentId}.tsx`)
   const here = resolve(import.meta.dir, '..')
-  const mountImport = importPath(entry, join(here, 'ui', 'render-mount.tsx'))
+  const mountImport = importPath(
+    entry,
+    stageEntry ?? join(here, 'ui', 'render-mount.tsx'),
+  )
   const configImport = importPath(entry, configPath)
   const modImport = importPath(entry, file)
 

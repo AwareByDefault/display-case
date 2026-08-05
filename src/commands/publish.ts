@@ -12,11 +12,13 @@ import {
   loadModules,
   resolveConfig,
 } from '../core/discovery'
+import type { Substrate } from '../core/substrate'
 import type { DisplayCaseConfig, ThemeSignal } from '../index'
 import { effectiveThemeSignals } from '../render/theme-signals'
 import type { PublishBuildRequest } from '../server/build-case'
 import { spawnBuildWorker } from '../server/build-runner'
 import { getManifest } from '../server/server'
+import { resolveSubstrate } from '../substrate/resolve'
 
 /**
  * Build a self-contained, hostable showcase: production-bundled assets
@@ -320,6 +322,11 @@ async function readConsumerRanges(
 async function resolveSharedLibs(
   pkgDir: string,
   share: string[],
+  /** Specifiers the substrate declares always-shared — its own rendering
+   *  runtime (the DOM substrate: React) — plus whatever its stage runtime
+   *  needs delivered once. Merged ahead of the author's `share`, so a
+   *  consumer never has to name the substrate's own dependencies. */
+  substrateShare: string[] = [],
 ): Promise<SharedLib[]> {
   const byPackage = new Map<string, SharedLib>()
   const ensure = async (pkg: string): Promise<SharedLib> => {
@@ -335,11 +342,34 @@ async function resolveSharedLibs(
     const lib = await ensure(packageNameOf(spec))
     if (!lib.specifiers.includes(spec)) lib.specifiers.push(spec)
   }
-  // React first, so its bundles sort ahead deterministically.
-  for (const spec of ['react', 'react/jsx-runtime']) await add(spec)
-  for (const spec of ['react-dom', 'react-dom/client']) await add(spec)
+  // The substrate's own runtime first, so its bundles sort ahead
+  // deterministically — the DOM substrate declares React, and a substrate whose
+  // stage is not React-based is not forced to carry it.
+  for (const spec of substrateShare) await add(spec)
   for (const spec of share) await add(spec)
   return [...byPackage.values()]
+}
+
+/**
+ * Everything the active substrate needs delivered once across the build: its
+ * always-shared rendering runtime plus its stage runtime's own dependencies.
+ *
+ * The stage runtime is bundled into *every* per-component render bundle, so a
+ * library it imports (a terminal emulator, say) is precisely the N-copies case
+ * sharing exists to collapse — and the consumer should not have to know that
+ * library's name to prevent the duplication.
+ */
+export function substrateSharedSpecifiers(substrate: Substrate): string[] {
+  const specs = [...(substrate.alwaysShare ?? [])]
+  for (const spec of substrate.stage?.share ?? []) {
+    if (!specs.includes(spec)) specs.push(spec)
+  }
+  // React's JSX runtime is a distinct specifier a bundle can import without
+  // naming `react`, so a React-based substrate needs it shared too.
+  if (specs.includes('react') && !specs.includes('react/jsx-runtime')) {
+    specs.splice(specs.indexOf('react') + 1, 0, 'react/jsx-runtime')
+  }
+  return specs
 }
 
 /**
@@ -596,7 +626,12 @@ export async function publish(
   // engine, markdown-to-jsx, a monorepo workspace package). The vendor builds
   // themselves bundle the libraries (pinReact pins the consumer's single React copy);
   // the externalized surface builds carry none.
-  const sharedLibs = await resolveSharedLibs(pkgDir, config.share ?? [])
+  const substrate = resolveSubstrate(config)
+  const sharedLibs = await resolveSharedLibs(
+    pkgDir,
+    config.share ?? [],
+    substrateSharedSpecifiers(substrate),
+  )
   const browserExternal = sharedLibs.flatMap((l) => l.specifiers)
 
   // One bounded `Bun.build` over every shared specifier's generated entry, with
@@ -659,11 +694,14 @@ export async function publish(
   // without ever holding the whole catalog as one graph.
   const perComponentInputs = await Promise.all(
     components.map(async (c) => {
+      // The stage runtime is the substrate's, so a non-DOM substrate's
+      // client runtime is what each per-component bundle mounts with.
       const entry = await codegenCaseRenderEntry(
         pkgDir,
         c.file,
         configPath,
         c.id,
+        substrate.stage?.entry,
       )
       const outs = await runPublishBuild(
         `component "${c.id}" (${relative(pkgDir, c.file)})`,

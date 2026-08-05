@@ -6,6 +6,7 @@ import {
   codegenCaseSsrEntry,
   codegenPrimerEntry,
   codegenSsrPrimerEntry,
+  resolveConfig,
 } from '../core/discovery'
 import { mdxPlugin } from '../core/mdx-plugin'
 import { pinReact } from '../core/pin-react'
@@ -191,11 +192,15 @@ export async function buildCaseBundles(
   try {
     const define = await publicEnvDefines(pkgDir)
 
+    // The stage runtime the substrate declares (the DOM mount by default).
+    const { resolveSubstrate } = await import('../substrate/resolve')
+    const { config } = await resolveConfig(pkgDir)
     const renderEntry = await codegenCaseRenderEntry(
       pkgDir,
       file,
       configPath,
       componentId,
+      resolveSubstrate(config).stage?.entry,
     )
     const browser = await Bun.build({
       entrypoints: [renderEntry],

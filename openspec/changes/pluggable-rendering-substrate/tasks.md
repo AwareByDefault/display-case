@@ -38,9 +38,9 @@ generalizations. The Carte substrate itself is out-of-tree and not in this list.
 
 ## 5. Publish pipeline
 
-- [ ] 5.1 Bundle `stage.entry` into per-component render bundles; merge `stage.share` into the consumer's share list; make the always-shared rendering runtime substrate-declared (design D5)
-- [ ] 5.2 Handle the static export per substrate capability: client-renderable substrates resolve un-pre-rendered variations via scripts; static-frame substrates identify them as unavailable
-- [ ] 5.3 Cover the publish changes with unit tests and a publish e2e pass
+- [x] 5.1 Bundle `stage.entry` into per-component render bundles; merge `stage.share` into the consumer's share list; make the always-shared rendering runtime substrate-declared (design D5)
+- [x] 5.2 Handle the static export per substrate capability: client-renderable substrates resolve un-pre-rendered variations via scripts; static-frame substrates identify them as unavailable
+- [x] 5.3 Cover the publish changes with unit tests and a publish e2e pass
 
 ## 6. Docs, skills, and release
 
