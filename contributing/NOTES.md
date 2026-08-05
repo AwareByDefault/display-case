@@ -1773,3 +1773,26 @@ release after it ships.
 `test/visual-baselines/` were recorded on other hardware, so `check --visual`
 reports diffs on a dev machine for components that are perfectly fine. Reproduce
 against `origin/main` in a scratch worktree before believing a visual failure.
+
+## Dependency overrides
+
+`package.json` carries an `overrides` block pinning **transitive** dev
+dependencies past known advisories, so CI’s `bun audit --audit-level=high`
+gate stays green:
+
+- `postcss` — reached via `vue → @vue/compiler-sfc` (the theme-frameworks e2e
+  fixture). Advisory GHSA-r28c-9q8g-f849 (path traversal in source-map
+  auto-loading) covers `<=8.5.17`.
+- `js-yaml` — reached via `@changesets/cli → @manypkg/get-packages →
+  read-yaml-file`. Advisory GHSA-52cp-r559-cp3m (quadratic CPU on merge-key
+  chains) covers `>=4.0.0 <4.3.0`.
+
+Both fixes sit inside the parents’ own semver ranges, so the override only
+nudges resolution — it forces nothing incompatible, and neither package becomes
+a direct dependency (`bun update <pkg>` would have *added* them to
+`dependencies`, and would have taken `js-yaml` to 5.x across a major).
+
+Drop an entry once every parent has released a version that resolves past the
+advisory on its own; re-run `bun audit --audit-level=high` to confirm. The
+block is inert for consumers — npm/Bun apply `overrides` only to the root of an
+install, never to a package pulled in as a dependency.
