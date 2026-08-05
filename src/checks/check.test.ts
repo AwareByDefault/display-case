@@ -7,6 +7,7 @@ import {
   a11yDetailLines,
   baselinePathFor,
   legacyBaselinePath,
+  renderVariantCombos,
   runChecks,
 } from './check'
 
@@ -200,8 +201,12 @@ describe('check: structure phase wiring', () => {
 })
 
 describe('baseline paths', () => {
-  const substrate = { id: 'dom', serialize: () => ({ ext: 'html' }) }
-  const target = { componentId: 'button', caseId: 'primary', theme: 'dark' }
+  const substrate = { id: 'dom' }
+  const target = {
+    componentId: 'button',
+    caseId: 'primary',
+    variantKey: 'dark',
+  }
 
   test('keys a baseline by substrate, component, case, and variant', () => {
     // The substrate segment is what stops one substrate’s recordings from
@@ -221,5 +226,43 @@ describe('baseline paths', () => {
   test('the legacy path is the pre-substrate flat layout', () => {
     // Read for one release so a committed baseline dir is not invalidated.
     expect(legacyBaselinePath('/b', target)).toBe('/b/button/primary.dark.png')
+  })
+})
+
+describe('renderVariantCombos', () => {
+  const axis = (id: string, values: string[], kind: 'render' | 'stage') => ({
+    id,
+    label: id,
+    kind,
+    values: values.map((v) => ({ value: v, label: v })),
+    default: values[0] as string,
+  })
+
+  test('enumerates every combination of the declared render axes', () => {
+    // A substrate varying over two axes has one rendering per pair — checking
+    // only one axis would leave the others unverified.
+    const combos = renderVariantCombos([
+      axis('size', ['80x24', '120x40'], 'render'),
+      axis('color', ['truecolor', 'none'], 'render'),
+    ])
+    expect(combos.map((c) => c.key)).toEqual([
+      '80x24.truecolor',
+      '80x24.none',
+      '120x40.truecolor',
+      '120x40.none',
+    ])
+  })
+
+  test('ignores stage axes, which do not change the rendering', () => {
+    const combos = renderVariantCombos([
+      axis('theme', ['light', 'dark'], 'render'),
+      axis('viewport', ['full', 'mobile'], 'stage'),
+    ])
+    expect(combos.map((c) => c.key)).toEqual(['light', 'dark'])
+  })
+
+  test('a substrate with no render axes yields one rendering', () => {
+    // Not zero: there is still exactly one thing to check.
+    expect(renderVariantCombos([])).toEqual([{ variants: {}, key: 'default' }])
   })
 })

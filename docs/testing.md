@@ -188,7 +188,7 @@ When baselines are committed and diffed in CI (Linux), record them in that same 
 
 ### Where baselines live
 
-By default baselines are written to the gitignored cache at `.display-case/baselines/`, organized as `<component>/<case>.<theme>.png`. These are local-only and will be recorded fresh on a clean checkout.
+By default baselines are written to the gitignored cache at `.display-case/baselines/`, organized as `<substrate>/<component>/<case>.<variant>.<ext>` — e.g. `dom/button/primary.dark.png`. The substrate segment stops one substrate’s recordings from standing in for another’s after a switch, and the extension follows what that substrate captures (an image for the DOM, text for a text-serializing substrate). These are local-only and will be recorded fresh on a clean checkout. Baselines recorded under the older flat `<component>/<case>.<theme>.png` layout are still read when the keyed path is absent; re-record with `--update` to migrate them.
 
 To **commit** baselines and gate CI on them, point `baselineDir` at a tracked directory in your config:
 

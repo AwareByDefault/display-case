@@ -33,6 +33,8 @@ export interface SelectMenuProps {
   size?: SelectMenuSize
   disabled?: boolean
   'aria-label'?: string
+  /** Test id applied to the trigger, for e2e locators. */
+  'data-testid'?: string
   id?: string
 }
 
@@ -118,6 +120,7 @@ export function SelectMenu({
   size = 'md',
   disabled = false,
   'aria-label': ariaLabel,
+  'data-testid': testId,
   id,
 }: SelectMenuProps) {
   const opts = normalize(options)
@@ -318,6 +321,7 @@ export function SelectMenu({
         aria-expanded={open}
         aria-controls={listboxId}
         aria-label={ariaLabel}
+        data-testid={testId}
         aria-disabled={disabled || undefined}
         aria-activedescendant={open ? optionId(activeIndex) : undefined}
         className="dcui-select-el dcui-selectmenu-trigger"

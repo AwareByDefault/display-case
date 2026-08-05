@@ -266,7 +266,18 @@ export function domSubstrate(opts: DomSubstrateOptions = {}): DomSubstrate {
        * belongs to the substrate rather than to the check runner.
        */
       async tokens(ctx) {
-        const { checkTokens } = await import('../checks/tokens-check')
+        // The specifier is assembled at runtime so the bundler cannot follow it.
+        // This module is reachable from a *consumer's config* (a showcase that
+        // writes `substrate: domSubstrate(...)`), and that config is bundled for
+        // the **browser** to build each case. A statically-visible import would
+        // drag the token checker — and its `import { Glob } from 'bun'` — into
+        // that browser graph and fail the build outright. The check phases only
+        // ever run under Bun, so deferring resolution to call time is correct,
+        // not a trick.
+        const specifier = ['..', 'checks', 'tokens-check'].join('/')
+        const { checkTokens } = (await import(
+          specifier
+        )) as typeof import('../checks/tokens-check')
         // `checkTokens` reads the showcase's `tokens.allow` from its own config
         // resolution, so the allow-list on the context is already honored.
         const { violations } = await checkTokens(ctx.pkgDir)

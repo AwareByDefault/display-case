@@ -1,6 +1,6 @@
 import type { Substrate } from '../core/substrate'
 import type { DisplayCaseConfig } from '../index'
-import { type DomSubstrate, domSubstrate } from './dom'
+import { domSubstrate } from './dom'
 
 /**
  * Resolve the substrate a showcase renders through.
@@ -22,7 +22,7 @@ import { type DomSubstrate, domSubstrate } from './dom'
  * them.
  */
 export function resolveSubstrate(config: DisplayCaseConfig): Substrate {
-  if (config.substrate) return config.substrate as Substrate
+  if (config.substrate) return config.substrate
   return domSubstrate({ driver: config.providers?.driver })
 }
 
@@ -50,9 +50,4 @@ export function renderVariants(
     variants[axis.id] = declared ? raw : axis.default
   }
   return variants
-}
-
-/** The resolved substrate, narrowed when it is the built-in DOM one. */
-export function asDomSubstrate(substrate: Substrate): DomSubstrate | undefined {
-  return substrate.id === 'dom' ? (substrate as DomSubstrate) : undefined
 }

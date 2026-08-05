@@ -32,12 +32,18 @@ const ASSET_PORT = Number(process.env.DISPLAY_CASE_ASSET_PORT ?? PORT + 5)
 const FRAMEWORKS_PORT = Number(
   process.env.DISPLAY_CASE_FRAMEWORKS_PORT ?? PORT + 6,
 )
+// A consumer whose substrate declares a render axis beyond theme, so the
+// chrome's generic per-axis control has coverage (substrate-axis.spec.ts).
+const SUBSTRATE_PORT = Number(
+  process.env.DISPLAY_CASE_SUBSTRATE_PORT ?? PORT + 7,
+)
 process.env.DISPLAY_CASE_A11Y_PORT = String(A11Y_PORT)
 process.env.DISPLAY_CASE_PLAIN_PORT = String(PLAIN_PORT)
 process.env.DISPLAY_CASE_STARTUP_PORT = String(STARTUP_PORT)
 process.env.DISPLAY_CASE_AUTODOCK_PORT = String(AUTODOCK_PORT)
 process.env.DISPLAY_CASE_ASSET_PORT = String(ASSET_PORT)
 process.env.DISPLAY_CASE_FRAMEWORKS_PORT = String(FRAMEWORKS_PORT)
+process.env.DISPLAY_CASE_SUBSTRATE_PORT = String(SUBSTRATE_PORT)
 
 export default defineConfig({
   testDir: './e2e',
@@ -108,6 +114,14 @@ export default defineConfig({
       // race between a separate setup step and the server's initial build).
       command: `node_modules/.bin/tailwindcss -i e2e/fixtures/consumer-theme-frameworks/tailwind.in.css -o e2e/fixtures/consumer-theme-frameworks/tailwind.out.css && bun src/cli.ts e2e/fixtures/consumer-theme-frameworks --port=${FRAMEWORKS_PORT}`,
       url: `http://localhost:${FRAMEWORKS_PORT}/health`,
+      reuseExistingServer: !process.env.CI,
+      timeout: 60_000,
+    },
+    {
+      // Consumer whose substrate declares an extra render axis
+      // (substrate-axis.spec.ts).
+      command: `bun src/cli.ts e2e/fixtures/consumer-substrate --port=${SUBSTRATE_PORT}`,
+      url: `http://localhost:${SUBSTRATE_PORT}/health`,
       reuseExistingServer: !process.env.CI,
       timeout: 60_000,
     },

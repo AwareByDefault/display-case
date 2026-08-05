@@ -4,6 +4,7 @@ import { Glob } from 'bun'
 import { componentClosures } from '../core/affected'
 import { baselineDir, cacheDir, resolveConfig } from '../core/discovery'
 import type { ManifestComponent } from '../core/manifest'
+import type { SubstrateVariantAxis } from '../core/substrate'
 import type {
   A11yViolation,
   CaseContext,
@@ -97,8 +98,44 @@ async function mapPool<T>(
 interface Target {
   componentId: string
   caseId: string
-  theme: (typeof THEMES)[number]
+  /** Values for every `render`-kind axis the substrate declares. Under the DOM
+   *  substrate this is `{ theme }`; another medium declares its own. */
+  variants: Record<string, string>
+  /** Deterministic join over `variants`, used in output and in baseline paths
+   *  (`light`, `dark`, `80x24.truecolor`). */
+  variantKey: string
   renderUrl: string
+}
+
+/**
+ * Every combination of the substrate's `render`-kind axis values — the distinct
+ * renderings a case actually has.
+ *
+ * Enumerating the declared axes rather than a fixed light/dark pair is what lets
+ * a substrate for another medium be checked at all: it might vary over terminal
+ * size and colour depth and have no theme whatsoever. A substrate that declares
+ * no render axes yields one unnamed variant, which is correct — there is only
+ * one rendering to check.
+ */
+export function renderVariantCombos(
+  axes: SubstrateVariantAxis[],
+): { variants: Record<string, string>; key: string }[] {
+  let combos: Record<string, string>[] = [{}]
+  for (const axis of axes) {
+    if (axis.kind !== 'render') continue
+    combos = combos.flatMap((base) =>
+      axis.values.map((v: { value: string }) => ({
+        ...base,
+        [axis.id]: v.value,
+      })),
+    )
+  }
+  return combos.map((variants) => ({
+    variants,
+    // Axis order follows the declaration, so the key is stable across runs —
+    // a baseline recorded today is found again tomorrow.
+    key: Object.values(variants).join('.') || 'default',
+  }))
 }
 
 /** One scanned variant in the written a11y report (only failing variants). */
@@ -182,27 +219,27 @@ async function resolveDiff(config: DisplayCaseConfig): Promise<DiffFn> {
  */
 export function baselinePathFor(
   baselines: string,
-  substrate: { id: string; serialize: (frame: never) => { ext: string } },
-  target: { componentId: string; caseId: string; theme: string },
+  substrate: { id: string },
+  target: { componentId: string; caseId: string; variantKey: string },
   ext = 'png',
 ): string {
   return join(
     baselines,
     substrate.id,
     target.componentId,
-    `${target.caseId}.${target.theme}.${ext}`,
+    `${target.caseId}.${target.variantKey}.${ext}`,
   )
 }
 
 /** The pre-substrate baseline path, read (never written) for one release. */
 export function legacyBaselinePath(
   baselines: string,
-  target: { componentId: string; caseId: string; theme: string },
+  target: { componentId: string; caseId: string; variantKey: string },
 ): string {
   return join(
     baselines,
     target.componentId,
-    `${target.caseId}.${target.theme}.png`,
+    `${target.caseId}.${target.variantKey}.png`,
   )
 }
 
@@ -477,16 +514,21 @@ export async function runChecks(
     }
   }
 
+  // One target per case per declared rendering, with each axis value written
+  // into the address under its own id.
+  const combos = renderVariantCombos(substrate.variants)
   const targets: Target[] = []
   for (const c of manifest.components) {
     if (scope && !scope.has(c.id)) continue
     for (const cs of c.cases) {
-      for (const theme of THEMES) {
+      for (const combo of combos) {
+        const query = new URLSearchParams(combo.variants).toString()
         targets.push({
           componentId: c.id,
           caseId: cs.id,
-          theme,
-          renderUrl: `${base}${cs.renderUrl}?theme=${theme}`,
+          variants: combo.variants,
+          variantKey: combo.key,
+          renderUrl: `${base}${cs.renderUrl}${query ? `?${query}` : ''}`,
         })
       }
     }
@@ -495,7 +537,12 @@ export async function runChecks(
   // Shared scan parameters (also honored by the live in-app surface) so the
   // panel and this gate agree on what counts as a violation. `enabled` is NOT
   // consulted here — the gate runs whenever invoked.
+  // `a11y.themes` narrows the theme axis specifically; a target with no theme
+  // (a substrate that declares none) is always in scope.
   const a11yThemes = config.a11y?.themes ?? THEMES
+  const inA11yScope = (t: Target): boolean =>
+    t.variants.theme === undefined ||
+    (a11yThemes as readonly string[]).includes(t.variants.theme)
   const a11yExclude = config.a11y?.exclude
 
   const driver = await resolveDriver(config)
@@ -535,10 +582,13 @@ export async function runChecks(
     const ctx: CaseContext = {
       componentId: t.componentId,
       caseId: t.caseId,
-      theme: t.theme,
+      // Kept for providers written before axes were substrate-declared; a
+      // substrate with no theme axis reports the default rather than lying.
+      theme: t.variants.theme === 'dark' ? 'dark' : 'light',
+      variants: t.variants,
       width: VIEWPORT_WIDTH,
     }
-    const name = `${t.componentId}/${t.caseId} [${t.theme}]`
+    const name = `${t.componentId}/${t.caseId} [${t.variantKey}]`
     const out: string[] = []
     // One session per variant, shared by both phases: the audit and the capture
     // must describe the same rendering, and for the DOM substrate that means
@@ -547,7 +597,7 @@ export async function runChecks(
       componentId: t.componentId,
       caseId: t.caseId,
       tweaks: {},
-      variants: { theme: t.theme },
+      variants: t.variants,
       params: {},
       clientOnly: false,
       config,
@@ -556,7 +606,7 @@ export async function runChecks(
       driver,
     })
     try {
-      if (opts.a11y && a11yThemes.includes(t.theme)) {
+      if (opts.a11y && inA11yScope(t)) {
         const t0 = Bun.nanoseconds()
         const violations = await session.audit({ exclude: a11yExclude })
         const dur = Bun.nanoseconds() - t0
@@ -565,7 +615,7 @@ export async function runChecks(
           a11yReport.push({
             component: t.componentId,
             case: t.caseId,
-            theme: t.theme,
+            theme: t.variantKey,
             violations,
           })
           out.push(testLine('a11y', name, 'fail', dur))

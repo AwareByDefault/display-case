@@ -295,7 +295,23 @@ export function flowStep<T extends TweakSchema = Record<never, never>>(
 export interface CaseContext {
   componentId: string
   caseId: string
+  /**
+   * The light/dark theme this rendering was produced under.
+   *
+   * Predates substrate-declared variant axes and is kept so providers written
+   * before them keep working. It is meaningful only when the active substrate
+   * declares a `theme` axis (the built-in DOM one does); a substrate that
+   * declares none reports `'light'` here rather than inventing a theme — read
+   * {@link variants} instead.
+   */
   theme: 'light' | 'dark'
+  /**
+   * Values for every `render`-kind axis the active substrate declares — the
+   * full identity of *which* rendering this is. `{ theme: 'dark' }` under the
+   * DOM substrate; another medium declares its own axes (terminal size, colour
+   * depth), and a substrate declaring none yields `{}`.
+   */
+  variants: Record<string, string>
   width: number
 }
 

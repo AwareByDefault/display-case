@@ -44,6 +44,7 @@ src/
   core/           Data model + discovery: catalog, manifest, discovery, mdx-plugin,
                   the substrate contract, and index.ts (the "./core" export)
   render/         Server-side rendering: ssr-render/shell/primer, render-node, the HTML documents
+  substrate/      The built-in DOM substrate + resolution (the "./substrate" export)
   server/         The hosts: dev server + prod-server (the "./prod-server" export)
   checks/         `display-case check` phases: check (runner), structure/tokens/ssr/check-text,
                   a11y-scanner, and providers/ (the lazy, optional visual toolchain)
@@ -54,8 +55,8 @@ src/
 ```
 
 The public surface is small and deliberate: only `index.ts`, `core/index.ts`
-(`./core`), `checks/tokens-check.ts` (`./tokens-check`), and
-`server/prod-server.ts` (`./prod-server`) are exported (see `package.json`
+(`./core`), `substrate/index.ts` (`./substrate`), `checks/tokens-check.ts`
+(`./tokens-check`), and `server/prod-server.ts` (`./prod-server`) are exported (see `package.json`
 `exports`); everything else is internal. Imports point "inward"
 (commands/server/checks → render/core → index); keep that direction.
 

@@ -279,6 +279,7 @@ describe('domSubstrate check phases', () => {
         componentId: 'button',
         caseId: 'default',
         theme: 'light',
+        variants: { theme: 'light' },
         width: 1024,
       },
       renderUrl: 'http://localhost/render/button/default',
@@ -309,7 +310,13 @@ describe('domSubstrate check phases', () => {
       params: {},
       clientOnly: false,
       config: NO_CONFIG,
-      case: { componentId: 'b', caseId: 'd', theme: 'light', width: 1024 },
+      case: {
+        componentId: 'b',
+        caseId: 'd',
+        theme: 'light',
+        variants: { theme: 'light' },
+        width: 1024,
+      },
       renderUrl: 'http://localhost/render/b/d',
       driver: {
         open: async () => ({
@@ -334,7 +341,13 @@ describe('domSubstrate check phases', () => {
         params: {},
         clientOnly: false,
         config: NO_CONFIG,
-        case: { componentId: 'b', caseId: 'd', theme: 'light', width: 1024 },
+        case: {
+          componentId: 'b',
+          caseId: 'd',
+          theme: 'light',
+          variants: { theme: 'light' },
+          width: 1024,
+        },
         renderUrl: '/render/b/d',
       }),
     ).rejects.toThrow(/needs a render driver/)

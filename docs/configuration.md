@@ -29,6 +29,7 @@ The CLI looks for `display-case.config.ts` then `display-case.config.tsx` in the
 | `primer` | `string` | no | none | Path (relative to the package) to an `.mdx` document rendered as the Primer reading page. When set, a **Primer** tab joins the mode switch. See [`primer`](#primer). |
 | `landing` | `'primer' \| 'components' \| 'exhibits'` | no | first present mode | Which browse mode the chrome lands on at `/`. Honored only when that mode is present; otherwise the first present mode (primer → components → exhibits). See [`landing`](#landing). |
 | `nav` | `NavConfig` | no | none | Information-architecture configuration for the **Exhibits** mode: folder-derivation toggle, surface→group mapping, and group order/labels/default-collapsed. See [`nav`](#nav). |
+| `substrate` | `Substrate` | no | DOM | What a case renders *into*. Absent ⇒ React → HTML → a hydrated browser document (unchanged behavior). Set it to target another medium while keeping the chrome, tweaks, flows, manifest, checks, and publish. See [`substrate`](#substrate). |
 | `globalStyles` | `string[]` | no | none | CSS entrypoints (relative to the package) injected into previews. |
 | `theme` | `{ signals?: ThemeSignal[] }` | no | `{ signals: ['class'] }` | Which root theme signals Display Case emits so components following common dark/light conventions re-theme with the toggle. `data-theme` + `color-scheme` are always emitted; the default adds a `dark` class. See [`theme`](#theme) and [Theming](theming.md#following-your-frameworks-convention-theme-config). |
 | `decorator` | `ComponentType<{ children, level?, sourcePath?, area? }>` | no | none | Wrapper rendered around every case; also receives the active case's `level`, `sourcePath`, and `area` so it can wrap page/flow cases in app chrome. |
@@ -75,7 +76,7 @@ A showcase targets **exactly one** substrate. Cases are not portable across them
 To configure the DOM substrate itself (rather than replace it), pass it explicitly:
 
 ```ts
-import { domSubstrate } from '@awarebydefault/display-case/core'
+import { domSubstrate } from '@awarebydefault/display-case/substrate'
 substrate: domSubstrate({ driver: () => myDriver() })
 ```
 
