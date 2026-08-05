@@ -124,8 +124,16 @@ export interface Substrate<Frame = unknown> {
 not through new top-level config keys. Existing top-level DOM-shaped keys
 (`globalStyles`, `styleEngines`, `theme`, `a11y.themes`, `providers`) remain
 public API and are routed into the DOM substrate; a non-DOM substrate ignores
-them (the structure check SHOULD warn when they're set alongside a substrate
-that doesn't consume them).
+them.
+
+**Deferred:** an earlier draft of this decision said the structure check SHOULD
+warn when such a key is set alongside a substrate that does not consume it. That
+is not built, and is deliberately left out of this change rather than shipped
+untested: which keys a substrate consumes is a property only that substrate
+knows, and with no non-DOM implementation in the tree the rule could be neither
+exercised nor honestly specified. It belongs with the Carte substrate (step 5),
+where a real second consumer makes the warning meaningful. No spec delta claims
+it, so nothing here promises behavior the code does not have.
 
 **Why this shape over alternatives:** a single object (vs. separate
 `renderer`/`stage`/`checks` config keys) keeps the invariant that a showcase
