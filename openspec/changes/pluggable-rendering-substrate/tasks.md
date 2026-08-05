@@ -33,7 +33,7 @@ generalizations. The Carte substrate itself is out-of-tree and not in this list.
 - [ ] 4.2 Delegate the a11y audit to `substrate.checks.audit` with not-applicable reporting for substrates that supply none
 - [ ] 4.3 Delegate capture to `substrate.checks.capture` (default `serialize(render(...))`); the DOM substrate implements capture via its browser driver; substrate `diff` is the default under consumer overrides (design D4)
 - [ ] 4.4 Re-key baselines to `<baselineDir>/<substrate.id>/<component>/<case>.<variantKey>.<ext>` with the DOM substrate reading the legacy flat path for one release and printing a migration hint (design D6)
-- [ ] 4.5 Add `display-case render <component>/<case>` printing the serialized frame to stdout (`--variant k=v` repeatable, `--out` optional), no server or browser required (design D12)
+- [x] 4.5 Add `display-case render <component>/<case>` printing the serialized frame to stdout (`--variant k=v` repeatable, `--out` optional), no server or browser required (design D12)
 - [ ] 4.6 Delegate token conformance through the substrate with the DOM substrate supplying today's tokens check; unsupplied ⇒ reported not applicable
 
 ## 5. Publish pipeline
@@ -47,4 +47,4 @@ generalizations. The Carte substrate itself is out-of-tree and not in this list.
 - [ ] 6.1 Update README, `docs/` (configuration, checks, publishing, ai-agents), and `display-case.prompt.md` for the substrate key, declared axes, `--safety`, and the render subcommand
 - [ ] 6.2 Redirect the bundled skills' capture steps (`display-case-snapshot`, `display-case-review`) through the render subcommand where a browser isn't needed
 - [ ] 6.3 Post-change review: update `contributing/coding-best-practices.md`, `contributing/testing-best-practices.md`, and `contributing/NOTES.md` where the substrate seam changes guidance
-- [ ] 6.4 Add the changeset (minor: new public `substrate` config key, `./core` export, render subcommand; no breaking changes)
+- [x] 6.4 Add the changeset (minor: new public `substrate` config key, `./core` export, render subcommand; no breaking changes)

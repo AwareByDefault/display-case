@@ -21,6 +21,7 @@ if (typeof globalThis.Bun === 'undefined') {
  *
  *   display-case <pkgDir> [--port=N]        start the dev server
  *   display-case <pkgDir> --print-manifest  print the manifest JSON and exit
+ *   display-case render <component>/<case> [<pkgDir>] [--variant=k=v] [--tweak=k=v] [--out=file]
  *   display-case check <pkgDir> [--a11y] [--visual] [--tokens] [--structure] [--ssr] [--graph] [--update] [--strict] [--only=ids] [--changed[=ref]] [--concurrency=N] [--port=N]
  *   display-case init <pkgDir> [--agent=claude] [--with-visual] [--dry-run] [--json]
  *   display-case uninstall <pkgDir> [--agent=claude] [--dry-run] [--json]
@@ -101,6 +102,36 @@ function resolvePkgDir(arg: string | undefined): string {
 // preferred and bumps off a busy one, so this never hard-fails on a clash.
 const portArg = option('port') ?? process.env.DISPLAY_CASE_PORT
 const port = portArg ? Number(portArg) : undefined
+
+if (argv[0] === 'render') {
+  // `render <component>/<case> [pkgDir]` — print the serialized frame. No
+  // server, no browser: the substrate renders headlessly and serializes, which
+  // for a text substrate is something an agent reads directly.
+  const target = positionals()[1]
+  if (!target) {
+    fail(
+      'Usage: display-case render <component>/<case> [<pkgDir>] [--variant=k=v] [--tweak=k=v] [--out=file]',
+    )
+  }
+  const pkgDir = resolvePkgDir(positionals()[2])
+  const repeated = (name: string): string[] =>
+    argv
+      .filter((a) => a.startsWith(`--${name}=`))
+      .map((a) => a.slice(name.length + 3))
+  const { runRender } = await import('./commands/render')
+  try {
+    process.exit(
+      await runRender(pkgDir, {
+        target,
+        variants: repeated('variant'),
+        tweaks: repeated('tweak'),
+        out: option('out'),
+      }),
+    )
+  } catch (err) {
+    fail(err instanceof Error ? err.message : String(err))
+  }
+}
 
 if (argv[0] === 'init' || argv[0] === 'uninstall') {
   const pkgDir = resolve(positionals()[1] ?? '.')

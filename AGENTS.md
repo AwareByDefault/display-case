@@ -70,6 +70,9 @@ second, non-DOM substrate has been built against it.
 
 ## Display Case (for agents)
 
+Render one case straight to stdout — no server, no browser — with
+`display-case render <component>/<case> [<pkgDir>]`
+(`--variant=theme=dark`, `--tweak=k=v`, `--out=file`).
 Browse the component showcase with `bun run display-case`; `--print-manifest`
 lists every component/case as JSON (no server or browser needed).
 Snapshot one case in isolation at `/render/<component>/<case>?theme=light|dark`
