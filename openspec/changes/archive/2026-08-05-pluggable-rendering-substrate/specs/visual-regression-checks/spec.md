@@ -48,9 +48,17 @@ Display Case SHALL be able to capture each case's rendering — in the format th
 
 The mechanism that captures a case's rendering and audits its accessibility is supplied by the active substrate, which opens a variant once for both phases to read (see Rendering Substrate). The mechanism that compares two captured renderings SHALL be overridable through configuration: when a consumer supplies one the visual check SHALL use it, and when none is supplied the check SHALL use the active substrate's default — which under the default substrate SHALL produce the same results as today. A consumer-supplied comparison SHALL take precedence over the substrate's default.
 
+#### Scenario: Custom capture mechanism
+
+- GIVEN a configuration that supplies a custom capture/audit mechanism
+- WHEN the checks run
+- THEN that mechanism is used to render and audit each case
+- AND the built-in default is not invoked
+
 #### Scenario: Substrate-supplied capture and audit
 
 - GIVEN a showcase whose substrate opens variants its own way
+- AND no custom capture mechanism is configured
 - WHEN the checks run
 - THEN that substrate renders and audits each case
 - AND the default substrate's browser capture is not invoked
@@ -68,7 +76,7 @@ The mechanism that captures a case's rendering and audits its accessibility is s
 - THEN the mechanism is given that case's identity: component, case, and its rendering-selecting variant values (under the default substrate, its theme), together with the capture width where the substrate has one
 - AND a mechanism that ignores the identity still works unchanged
 
-#### Scenario: Substrate default when unconfigured
+#### Scenario: Default when unconfigured
 
 - GIVEN a configuration that supplies no custom mechanisms
 - WHEN the checks run

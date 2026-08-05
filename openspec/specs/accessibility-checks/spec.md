@@ -3,9 +3,7 @@
 ## Purpose
 
 Display Case runs automated accessibility checks against rendered cases as a gating run, and — when configured — surfaces each variant's accessibility result on the running browsing surface.
-
 ## Requirements
-
 ### Requirement: Accessibility checks
 
 Display Case SHALL be able to run automated accessibility checks against the
@@ -24,6 +22,15 @@ gating run SHALL run when invoked regardless of whether in-app accessibility
 surfacing is configured, and SHALL evaluate cases using the same scan parameters
 (such as which themes are scanned and which rules are excluded) that the in-app
 surface uses, so the two agree on what counts as a violation.
+
+The audit mechanism SHALL be supplied by the active substrate (see Rendering
+Substrate), which opens each variant once so the audit and the visual capture
+describe the same rendering: the default substrate SHALL audit rendered browser
+documents as today, and a substrate for another medium MAY supply an audit
+appropriate to that medium — such as layout overflow, truncation, or contrast
+over its own resolved colours. When the active substrate cannot open a variant
+to audit, the accessibility checks SHALL report the phase as not applicable for
+that substrate and SHALL NOT fail on that account.
 
 #### Scenario: A case with an accessibility violation
 
@@ -63,6 +70,20 @@ surface uses, so the two agree on what counts as a violation.
 - GIVEN in-app accessibility surfacing is not configured
 - WHEN the accessibility checks are run
 - THEN the checks still evaluate every case and gate on the result
+
+#### Scenario: A substrate-supplied audit evaluates the cases
+
+- GIVEN a showcase whose substrate supplies its own audit mechanism
+- WHEN the accessibility checks are run
+- THEN each case is evaluated by the substrate's audit
+- AND violations are reported per case as for the default substrate
+
+#### Scenario: No audit supplied is reported as inapplicable
+
+- GIVEN a showcase whose substrate supplies no audit mechanism
+- WHEN the accessibility checks are run
+- THEN the run reports the accessibility phase as not applicable for the substrate
+- AND the run does not fail on that account
 
 ### Requirement: In-app accessibility surfacing
 
@@ -178,3 +199,4 @@ this state no start-up population SHALL occur regardless of the configured mode.
 - WHEN Display Case starts
 - THEN no variants are evaluated at start-up
 - AND the surface indicates accessibility results are unavailable rather than reporting pass or failure
+
