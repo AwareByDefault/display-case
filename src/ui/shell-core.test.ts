@@ -41,6 +41,7 @@ function manifest(over: Partial<Manifest>): Manifest {
     groups: [],
     modes: ['primer', 'components', 'exhibits'],
     landing: 'primer',
+    substrate: { id: 'dom', variants: [] },
     ...over,
   }
 }

@@ -116,6 +116,7 @@ export const BUTTON_PLAYGROUND_TWEAKS: TweakSchema = {
  */
 export const mockManifest: Manifest = {
   title: 'Display Case',
+  substrate: { id: 'dom', variants: [] },
   modes: ['primer', 'components', 'exhibits'],
   landing: 'primer',
   groups: [],

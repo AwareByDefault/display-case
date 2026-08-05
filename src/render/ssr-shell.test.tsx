@@ -4,6 +4,7 @@ import { renderShellToHtml } from './ssr-shell'
 
 const manifest: Manifest = {
   title: 'Showcase',
+  substrate: { id: 'dom', variants: [] },
   components: [
     {
       id: 'button',

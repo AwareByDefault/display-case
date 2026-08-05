@@ -8,6 +8,7 @@ import { primerDoc, shellDoc } from '../render/documents'
 import type { PrimerHtmlResult } from '../render/ssr-primer'
 import type { CaseRenderer } from '../render/ssr-render'
 import { renderShellToHtml } from '../render/ssr-shell'
+import { renderVariants } from '../substrate/resolve'
 import type { Theme } from '../ui/shell-core'
 
 /**
@@ -167,7 +168,8 @@ async function documentFor(
 
   if (path === '/render' || path.startsWith('/render/')) {
     const rs = parseRenderState(url)
-    const variants = { theme: rs.theme }
+    // Every render-kind axis the substrate declares, defaults filled in.
+    const variants = renderVariants(url.searchParams, substrate)
     const params = renderParams(rs)
     const r = await renderCase(
       {

@@ -17,7 +17,7 @@ import {
 } from '../core/discovery'
 import { findWatchRoot, graphWatchDirs } from '../core/graph-watch'
 import { buildGroupTree, makeGroupResolver } from '../core/groups'
-import type { BrowseMode, Manifest } from '../core/manifest'
+import type { BrowseMode, Manifest, ManifestSubstrate } from '../core/manifest'
 import type { Substrate } from '../core/substrate'
 import {
   type DisplayCaseConfig,
@@ -33,7 +33,7 @@ import {
   themeRootAttrs,
   themeSignalsSeedScript,
 } from '../render/theme-signals'
-import { resolveSubstrate } from '../substrate/resolve'
+import { renderVariants, resolveSubstrate } from '../substrate/resolve'
 import type { Theme } from '../ui/shell-core'
 import {
   buildTimeoutMs,
@@ -427,8 +427,26 @@ function buildManifest(
       modes,
       landing,
       flowMarker: config.nav?.flowMarker ?? 'tag',
+      // What this showcase renders through, and what it varies over. An agent
+      // reads the axes rather than assuming light/dark: a substrate for another
+      // medium declares entirely different ones.
+      substrate: manifestSubstrate(resolveSubstrate(config)),
     },
     placardById,
+  }
+}
+
+/** Flatten a substrate's identity and declared axes into manifest data. */
+function manifestSubstrate(substrate: Substrate): ManifestSubstrate {
+  return {
+    id: substrate.id,
+    variants: substrate.variants.map((axis) => ({
+      id: axis.id,
+      label: axis.label,
+      kind: axis.kind,
+      values: axis.values.map((v) => ({ value: v.value, label: v.label })),
+      default: axis.default,
+    })),
   }
 }
 
@@ -720,11 +738,14 @@ interface RenderDoc {
 interface ParsedRenderState extends RenderDoc {
   componentId: string
   caseId: string
+  /** Values for every `render`-kind axis the substrate declares, defaults
+   *  filled in. For the DOM substrate this is `{ theme }`. */
+  variants: Record<string, string>
   width: number | null
   tweaks: Record<string, string>
 }
 
-function parseRenderState(url: URL): ParsedRenderState {
+function parseRenderState(url: URL, substrate: Substrate): ParsedRenderState {
   const parts = url.pathname.split('/').filter(Boolean) // ['render', comp, case]
   const p = url.searchParams
   const tweaks: Record<string, string> = {}
@@ -734,6 +755,7 @@ function parseRenderState(url: URL): ParsedRenderState {
     componentId: parts[1] ?? '',
     caseId: parts[2] ?? '',
     theme: p.get('theme') === 'dark' ? 'dark' : 'light',
+    variants: renderVariants(p, substrate),
     width: widthParam ? Number(widthParam) : null,
     tweaks,
     fit: p.get('fit') === '1',
@@ -778,7 +800,7 @@ function renderHtml(
     componentId: state.componentId,
     caseId: state.caseId,
     tweaks: state.tweaks,
-    variants: { theme: state.theme },
+    variants: state.variants,
     params: renderParams(state),
     config,
     scriptSrc,
@@ -1252,7 +1274,7 @@ export async function startDisplayCase(
         // The a11y scanner appends `?dcscan=1` and waits for network idle, which
         // an open live-reload SSE would never reach — so omit it for that fetch.
         const scanning = url.searchParams.has('dcscan')
-        const rs = parseRenderState(url)
+        const rs = parseRenderState(url, substrate)
         const key = `${rs.componentId}/${rs.caseId}`
         // Build this component's bundle on demand (cached). Each component is its
         // own small bundler pass, so the catalog's combined graph is never built
@@ -1290,7 +1312,7 @@ export async function startDisplayCase(
               width: rs.width,
               tweaks: rs.tweaks,
             },
-            { theme: rs.theme },
+            rs.variants,
             renderParams(rs),
           )
           if (result.browserOnly) {
@@ -1312,7 +1334,7 @@ export async function startDisplayCase(
             componentId: rs.componentId,
             caseId: rs.caseId,
             tweaks: rs.tweaks,
-            variants: { theme: rs.theme },
+            variants: rs.variants,
             params: renderParams(rs),
             clientOnly: true,
             config,

@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import type { SubstrateDocumentContext } from '../core/substrate'
 import type { DisplayCaseConfig } from '../index'
 import { type DomFrame, domSubstrate } from './dom'
-import { resolveSubstrate } from './resolve'
+import { renderVariants, resolveSubstrate } from './resolve'
 
 /**
  * The DOM substrate's document is the one the dev server, the published build,
@@ -239,6 +239,69 @@ describe('domSubstrate declaration', () => {
     // Substrate-declared rather than hard-coded in the bundler, so a substrate
     // whose stage is not React-based is not forced to carry it.
     expect(domSubstrate().alwaysShare).toContain('react')
+  })
+})
+
+describe('renderVariants', () => {
+  const decode = (query: string, substrate = domSubstrate()) =>
+    renderVariants(new URLSearchParams(query), substrate)
+
+  test('reads a declared render axis from the address', () => {
+    expect(decode('theme=dark')).toEqual({ theme: 'dark' })
+  })
+
+  test('falls back to the axis default when the address names none', () => {
+    expect(decode('')).toEqual({ theme: 'light' })
+  })
+
+  test('an undeclared value falls back rather than rendering it', () => {
+    // A hand-edited address must never select a variant the substrate does not
+    // declare — otherwise it names a rendering that has no baseline and no
+    // control in the chrome.
+    expect(decode('theme=chartreuse')).toEqual({ theme: 'light' })
+  })
+
+  test('ignores stage axes, which change presentation and not the render', () => {
+    // `viewport` constrains the embedded stage; it must not reach the renderer
+    // or key a baseline.
+    expect(decode('viewport=mobile')).toEqual({ theme: 'light' })
+  })
+
+  test("honors another substrate's axes without knowing their names", () => {
+    const terminal = {
+      ...domSubstrate(),
+      id: 'terminal',
+      variants: [
+        {
+          id: 'size',
+          label: 'Size',
+          kind: 'render' as const,
+          values: [
+            { value: '80x24', label: '80×24' },
+            { value: '120x40', label: '120×40' },
+          ],
+          default: '80x24',
+        },
+        {
+          id: 'color',
+          label: 'Color',
+          kind: 'render' as const,
+          values: [
+            { value: 'truecolor', label: 'True color' },
+            { value: 'none', label: 'NO_COLOR' },
+          ],
+          default: 'truecolor',
+        },
+      ],
+    }
+    expect(decode('size=120x40&color=none', terminal)).toEqual({
+      size: '120x40',
+      color: 'none',
+    })
+    expect(decode('', terminal)).toEqual({
+      size: '80x24',
+      color: 'truecolor',
+    })
   })
 })
 

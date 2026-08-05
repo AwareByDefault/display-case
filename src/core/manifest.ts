@@ -67,4 +67,36 @@ export interface Manifest {
   /** How flows are distinguished from pages in the Exhibits sidebar: a trailing
    *  `flow` tag (default) or a leading glyph. Resolved from `nav.flowMarker`. */
   flowMarker?: 'glyph' | 'tag'
+  /** The active rendering substrate: which one is in play and what it varies
+   *  over, so a machine client can enumerate and address every declared variant
+   *  of every case without assuming a fixed light/dark + pixel-width set. */
+  substrate: ManifestSubstrate
+}
+
+/** The active substrate, as the manifest reports it. */
+export interface ManifestSubstrate {
+  /** Stable substrate id (`'dom'` for the built-in default). Also the segment
+   *  visual baselines are keyed under, so switching substrates cannot silently
+   *  reuse another's recorded baselines. */
+  id: string
+  /** The axes this substrate's renderings vary over, in presentation order. */
+  variants: ManifestVariantAxis[]
+}
+
+/** One declared variant axis. Mirrors the substrate contract's declaration,
+ *  flattened to plain data so the manifest stays a serializable index. */
+export interface ManifestVariantAxis {
+  id: string
+  label: string
+  /**
+   * `'render'` — encoded in a case's render address and honored by the render
+   * itself (the DOM substrate's theme). Enumerate these to address every
+   * distinct rendering of a case.
+   * `'stage'` — applied around an unchanged rendering (the DOM substrate's
+   * viewport width); it changes presentation, not the delivered document.
+   */
+  kind: 'render' | 'stage'
+  values: { value: string; label: string }[]
+  /** The value used when an address names none. Always one of `values`. */
+  default: string
 }

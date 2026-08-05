@@ -22,6 +22,7 @@ const manifest: Manifest = {
   groups: [],
   modes: ['primer', 'components'],
   landing: 'primer',
+  substrate: { id: 'dom', variants: [] },
 }
 
 describe('shellDoc', () => {
