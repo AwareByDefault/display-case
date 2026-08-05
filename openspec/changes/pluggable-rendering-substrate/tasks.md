@@ -6,10 +6,10 @@ generalizations. The Carte substrate itself is out-of-tree and not in this list.
 
 ## 1. Substrate-neutral core export
 
-- [ ] 1.1 Add the `./core` subpath export exposing the authoring API plus `core/discovery`, `core/catalog`, `core/manifest`, `core/groups`, and `render/render-node` (`caseTree`, `resolveTweaks`, `encodeOverrides`), documented as experimental (design D11)
-- [ ] 1.2 Add the `Substrate` contract types (`Substrate`, `SubstrateVariantAxis`, render/document contexts) to the core export (design D1)
-- [ ] 1.3 Guard the import direction with a test: the core export's module graph pulls nothing from `server/`, `checks/`, `commands/`, or `ui/`
-- [ ] 1.4 Update `package.json` exports and the source-layout docs; `bun run lint && bun run typecheck && bun test` green
+- [x] 1.1 Add the `./core` subpath export exposing the authoring API plus `core/discovery`, `core/catalog`, `core/manifest`, `core/groups`, and `render/render-node` (`caseTree`, `resolveTweaks`, `encodeOverrides`), documented as experimental (design D11)
+- [x] 1.2 Add the `Substrate` contract types (`Substrate`, `SubstrateVariantAxis`, render/document contexts) to the core export (design D1)
+- [x] 1.3 Guard the import direction with a test: the core export's module graph pulls nothing from `server/`, `checks/`, `commands/`, or `ui/`
+- [x] 1.4 Update `package.json` exports and the source-layout docs; `bun run lint && bun run typecheck && bun test` green
 
 ## 2. Substrate interface with the DOM path as its first implementation (behavior no-op)
 

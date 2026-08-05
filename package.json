@@ -44,6 +44,7 @@
   },
   "exports": {
     ".": "./src/index.ts",
+    "./core": "./src/core/index.ts",
     "./tokens-check": "./src/checks/tokens-check.ts",
     "./prod-server": "./src/server/prod-server.ts"
   },
