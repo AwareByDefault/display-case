@@ -5,7 +5,7 @@ import createCache from '@emotion/cache'
 import { CacheProvider, css } from '@emotion/react'
 import createEmotionServer from '@emotion/server/create-instance'
 import { type DisplayCaseConfig, defineCases, type StyleEngine } from '../index'
-import { renderDoc } from './documents'
+import { type DomFrame, domSubstrate } from '../substrate/dom'
 import type { CaseTreeState } from './render-node'
 import { makeCaseRenderer } from './ssr-render'
 
@@ -50,57 +50,61 @@ const state = (over: Partial<CaseTreeState>): CaseTreeState => ({
 const Hot = () => <div css={css({ color: 'rgb(12, 34, 56)' })}>hot</div>
 const Cool = () => <div css={css({ color: 'rgb(98, 76, 54)' })}>cool</div>
 
+/** Render one case through the DOM substrate and read its frame back. */
+async function renderFrame(
+  modules: Parameters<typeof makeCaseRenderer>[0],
+  s: CaseTreeState,
+): Promise<DomFrame> {
+  const render = makeCaseRenderer(modules, config, domSubstrate())
+  return (await render(s)).frame as DomFrame
+}
+
 describe('emotion style engine (real library)', () => {
-  test('extracts render-time emotion CSS into headStyles', () => {
-    const render = makeCaseRenderer(
+  test('extracts render-time emotion CSS into headStyles', async () => {
+    const frame = await renderFrame(
       [defineCases('Box', { Default: () => <Hot /> })],
-      config,
+      state({}),
     )
-    const result = render(state({}))
 
     // The markup carries an emotion-generated class…
-    expect(result.html).toContain('hot')
-    expect(result.html).toContain('css-')
+    expect(frame.html).toContain('hot')
+    expect(frame.html).toContain('css-')
     // …and the head styling carries real <style data-emotion> tags with the rule.
-    expect(result.headStyles).toContain('data-emotion')
-    expect(result.headStyles).toContain('rgb(12, 34, 56)')
+    expect(frame.headStyles).toContain('data-emotion')
+    expect(frame.headStyles).toContain('rgb(12, 34, 56)')
   })
 
-  test('the extracted tags sit as a discrete block after the static <style>', () => {
-    const render = makeCaseRenderer(
+  test('the extracted tags sit as a discrete block after the static <style>', async () => {
+    const frame = await renderFrame(
       [defineCases('Box', { Default: () => <Hot /> })],
-      config,
+      state({}),
     )
-    const result = render(state({}))
-    const html = renderDoc({
-      globalCss: '.g{}',
-      vitrineCss: '.v{}',
-      theme: 'light',
-      signals: [],
-      transparent: false,
-      fit: false,
-      markup: result.html,
-      ssr: true,
-      headStyles: result.headStyles,
+    const html = domSubstrate().document(frame, {
+      componentId: 'box',
+      caseId: 'default',
+      tweaks: {},
+      variants: { theme: 'light' },
+      params: {},
+      config: { ...config, theme: { signals: [] } },
       scriptSrc: '/r.js',
       importmap: {}, // not under test here; empty omits the importmap
+      prerendered: true,
+      hostScripts: '',
+      resources: { globalCss: '.g{}', vitrineCss: '.v{}' },
     })
     // The real data-emotion tags land between the static block's close and </head>
     // — verbatim, not folded into the base <style> (so client adoption works).
-    expect(html).toContain(`</style>${result.headStyles}</head>`)
+    expect(html).toContain(`</style>${frame.headStyles}</head>`)
     expect(html).toContain('data-emotion')
   })
 
-  test('each render is isolated — one case never carries another’s emotion CSS', () => {
-    const render = makeCaseRenderer(
-      [
-        defineCases('Box', { Default: () => <Hot /> }),
-        defineCases('Chip', { Default: () => <Cool /> }),
-      ],
-      config,
-    )
-    const hot = render(state({ componentId: 'box' }))
-    const cool = render(state({ componentId: 'chip' }))
+  test('each render is isolated — one case never carries another’s emotion CSS', async () => {
+    const modules = [
+      defineCases('Box', { Default: () => <Hot /> }),
+      defineCases('Chip', { Default: () => <Cool /> }),
+    ]
+    const hot = await renderFrame(modules, state({ componentId: 'box' }))
+    const cool = await renderFrame(modules, state({ componentId: 'chip' }))
 
     expect(hot.headStyles).toContain('rgb(12, 34, 56)')
     expect(hot.headStyles).not.toContain('rgb(98, 76, 54)')

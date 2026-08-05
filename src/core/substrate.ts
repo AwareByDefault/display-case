@@ -4,6 +4,7 @@ import type {
   AuditOptions,
   CaseContext,
   DiffFn,
+  DisplayCaseConfig,
   HierarchyLevel,
 } from '../index'
 
@@ -184,6 +185,15 @@ export interface SubstrateCaseAddress {
   /** Remaining address parameters, for options a substrate defines itself. The
    *  DOM substrate reads `fit`, `transparent`, and `width` from here. */
   params: Record<string, string>
+  /**
+   * The showcase's resolved configuration. A substrate is configured by the
+   * showcase it renders, and needs this to honor the parts of the config that
+   * are its own concern — the DOM substrate reads `theme` (root signals),
+   * `styleEngines` (render-time CSS-in-JS), and `globalStyles` from here.
+   * A substrate for another medium reads whatever its own factory options and
+   * this config expose, and ignores the rest.
+   */
+  config: DisplayCaseConfig
 }
 
 /** What {@link Substrate.render} is told about the case it is rendering. */

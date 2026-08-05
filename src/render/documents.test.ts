@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { Manifest } from '../core/manifest'
-import { type DocAssets, primerDoc, renderDoc, shellDoc } from './documents'
+import { type DocAssets, primerDoc, shellDoc } from './documents'
 
 const importmap = {
   react: '/assets/vendor-react-xyz789.js',
@@ -106,89 +106,6 @@ describe('shellDoc', () => {
   test('carries no dev live-reload machinery', () => {
     expect(doc()).not.toContain('__livereload')
     expect(doc().toLowerCase()).not.toContain('eventsource')
-  })
-})
-
-describe('renderDoc', () => {
-  const doc = (over: Partial<Parameters<typeof renderDoc>[0]> = {}) =>
-    renderDoc({
-      globalCss: '.g{}',
-      vitrineCss: '.vit{}',
-      theme: 'light',
-      signals: [],
-      transparent: false,
-      fit: false,
-      markup: '<button>x</button>',
-      ssr: true,
-      scriptSrc: '/assets/render-case-button-def456.js',
-      importmap,
-      ...over,
-    })
-
-  test('renders the isolated case markup with both theme attributes', () => {
-    const html = doc()
-    expect(html).toContain('data-theme="light"')
-    expect(html).toContain('data-theme-pref="light"')
-    expect(html).toContain('<button>x</button>')
-    expect(html).toContain('src="/assets/render-case-button-def456.js"')
-  })
-
-  test('inlines the global and Vitrine CSS so a dogfooded case is styled pre-script', () => {
-    const html = doc()
-    expect(html).toContain('.g{}')
-    expect(html).toContain('.vit{}')
-  })
-
-  test('declares a user-agent color scheme matching the theme', () => {
-    expect(doc({ theme: 'light' })).toContain('color-scheme:light')
-    expect(doc({ theme: 'dark' })).toContain('color-scheme:dark')
-  })
-
-  test('a transparent exhibit decorates the body and clears its background', () => {
-    const html = doc({ transparent: true })
-    expect(html).toContain('data-decorated')
-    expect(html).toContain('background:transparent')
-  })
-
-  test('a fitted exhibit shrink-wraps the root to its content width', () => {
-    expect(doc({ fit: true })).toContain('width:fit-content')
-    expect(doc({ fit: false })).not.toContain('width:fit-content')
-  })
-
-  test('reflects the ssr flag on the root', () => {
-    expect(doc({ ssr: true })).toContain('data-ssr="1"')
-    expect(doc({ ssr: false })).toContain('data-ssr="0"')
-  })
-
-  test('omitting headStyles is byte-identical to passing empty (inert when unused)', () => {
-    expect(doc({})).toBe(doc({ headStyles: '' }))
-  })
-
-  test('style-engine output is a discrete tag after the static <style> block', () => {
-    const tag = '<style data-emotion="css 1ab2">.x{}</style>'
-    const html = doc({ headStyles: tag })
-    expect(html).toContain(tag)
-    // Placed right after the base block closes — not folded into the static
-    // <style> (so emotion's data-emotion adoption markers survive). The importmap
-    // follows it before the head closes.
-    expect(html).toContain(`</style>${tag}`)
-  })
-
-  test('emits an importmap resolving each shared specifier to its vendor bundle', () => {
-    const html = doc()
-    expect(html).toContain('<script type="importmap">')
-    expect(html).toContain('"react":"/assets/vendor-react-xyz789.js"')
-    expect(html).toContain(
-      '"react-dom/client":"/assets/vendor-react-dom-client-bbb222.js"',
-    )
-    // Before the module script that imports those bare specifiers.
-    expect(html.indexOf('importmap')).toBeLessThan(
-      html.indexOf('type="module"'),
-    )
-  })
-
-  test('omits the importmap when nothing is shared', () => {
-    expect(doc({ importmap: {} })).not.toContain('importmap')
   })
 })
 

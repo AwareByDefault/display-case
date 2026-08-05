@@ -7,6 +7,7 @@ import {
   codegenCaseSsrEntry,
   codegenPrimerEntry,
   codegenSsrPrimerEntry,
+  codegenSubstrateEntry,
   discoverCaseFiles,
   loadModules,
   resolveConfig,
@@ -742,6 +743,26 @@ export async function publish(
       }),
     )
   }
+  // The showcase's substrate, bundled once for the production host: it owns
+  // every isolated render document, so the host must serve through the same one
+  // the showcase configured rather than assuming the DOM.
+  ssrBuilds.push(
+    (async () => {
+      const entry = await codegenSubstrateEntry(pkgDir, configPath)
+      await runPublishBuild('the showcase substrate', {
+        pkgDir,
+        entrypoints: [entry],
+        outdir: join(out, 'server'),
+        target: 'bun',
+        minify: true,
+        publicPath: assetsPublicPath,
+        naming: { entry: 'substrate.[ext]', chunk: '[name]-[hash].[ext]' },
+        define: defines,
+        external: ssrExternal,
+        pinReact: false,
+      })
+    })(),
+  )
   for (const c of components) {
     ssrBuilds.push(
       (async () => {

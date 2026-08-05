@@ -13,11 +13,11 @@ generalizations. The Carte substrate itself is out-of-tree and not in this list.
 
 ## 2. Substrate interface with the DOM path as its first implementation (behavior no-op)
 
-- [ ] 2.1 Add the `substrate` config key to `DisplayCaseConfig`, defaulting to `domSubstrate()`; substrate-specific options arrive via the factory, existing DOM-shaped top-level keys route into the DOM substrate (design D1)
-- [ ] 2.2 Extract the DOM renderer into `domSubstrate()`: `ssr-render` behind `render()`, `renderDoc` behind `document()` (design D2), style collection moved wholly inside the DOM frame type (design D10), mount/hydration as `stage.entry`
-- [ ] 2.3 Route the dev server, prod server, render endpoint, and publish pipeline through the substrate seam; promote the render-address shape and the stage message protocol to a documented contract (design D2)
-- [ ] 2.4 Prove the no-op: default-config rendered documents byte-identical before/after the extraction; full unit and e2e suites pass unchanged; the dogfooded showcase diffed
-- [ ] 2.5 Split `SnapshotProviders`: `providers.diff` stays a consumer override that wins; `providers.driver` becomes a deprecated alias routed to `domSubstrate({ driver })` (design D4)
+- [x] 2.1 Add the `substrate` config key to `DisplayCaseConfig`, defaulting to `domSubstrate()`; substrate-specific options arrive via the factory, existing DOM-shaped top-level keys route into the DOM substrate (design D1)
+- [x] 2.2 Extract the DOM renderer into `domSubstrate()`: `ssr-render` behind `render()`, `renderDoc` behind `document()` (design D2), style collection moved wholly inside the DOM frame type (design D10), mount/hydration as `stage.entry`
+- [x] 2.3 Route the dev server, prod server, render endpoint, and publish pipeline through the substrate seam; promote the render-address shape and the stage message protocol to a documented contract (design D2)
+- [x] 2.4 Prove the no-op: default-config rendered documents byte-identical before/after the extraction; full unit and e2e suites pass unchanged; the dogfooded showcase diffed
+- [x] 2.5 Split `SnapshotProviders`: `providers.diff` stays a consumer override that wins; `providers.driver` becomes a deprecated alias routed to `domSubstrate({ driver })` (design D4)
 
 ## 3. Substrate-declared variant axes
 

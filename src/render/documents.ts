@@ -44,7 +44,7 @@ export interface DocAssets {
  * shared (no vendor bundles, e.g. the dev preview), so the documents stay valid.
  * Works under a plain static host too (it's just markup).
  */
-function importMap(imports: Record<string, string>): string {
+export function importMap(imports: Record<string, string>): string {
   if (!imports || Object.keys(imports).length === 0) return ''
   return `<script type="importmap">${JSON.stringify({ imports })}</script>`
 }
@@ -79,38 +79,13 @@ export function shellDoc(opts: {
   return `<!doctype html><html lang="en"${rootAttrs}><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>${opts.title}</title>${FONT_LINKS}<style>${opts.tokensCss}\n${opts.globalCss}\n${reset}\n${opts.vitrineCss}</style>${importMap(opts.assets.importmap)}</head><body><div id="root" data-ssr="${opts.ssr ? '1' : '0'}">${opts.markup}</div><script>window.__dcSeed=${seed}</script>${themeSignalsSeedScript(opts.signals)}<script type="module" src="${opts.assets.browser}"></script></body></html>`
 }
 
-/** The isolated case render document. `scriptSrc` is this component's own bundle
- *  URL (the catalog is split per component, so there is no single render entry). */
-export function renderDoc(opts: {
-  globalCss: string
-  vitrineCss: string
-  theme: Theme
-  /** The effective theme root signals to emit (see the `theme` config). */
-  signals: readonly ThemeSignal[]
-  transparent: boolean
-  fit: boolean
-  markup: string
-  ssr: boolean
-  /** Style-engine output, placed after the static <style> block. `''` when none. */
-  headStyles?: string
-  scriptSrc: string
-  /** Shared-runtime importmap (specifier → vendor bundle URL); `{}` omits it. */
-  importmap: Record<string, string>
-}): string {
-  const exhibitCenter =
-    'body[data-decorated] #root>*{justify-content:center;align-content:center}'
-  const bodyAttrs = opts.transparent
-    ? ' data-decorated style="background:transparent"'
-    : ''
-  const rootAttrs = `${opts.fit ? ' style="width:fit-content"' : ''} data-ssr="${opts.ssr ? '1' : '0'}"`
-  const htmlAttrs = themeRootAttrs(
-    resolveThemeSignals(opts.theme, opts.signals),
-  )
-  // The Vitrine stylesheet follows globalCss so a dogfooded design-system case
-  // paints before scripts; for a non-dogfooding consumer these are inert chrome
-  // rules in a dev-time-only preview document (see server.ts renderHtml).
-  return `<!doctype html><html lang="en"${htmlAttrs}><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Display Case render</title><style>html,body{margin:0}html{color-scheme:${opts.theme}}body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-sans, ui-sans-serif, system-ui, sans-serif)}${exhibitCenter}${opts.globalCss}\n${opts.vitrineCss}</style>${opts.headStyles ?? ''}${importMap(opts.importmap)}</head><body${bodyAttrs}><main id="root"${rootAttrs}>${opts.markup}</main>${themeSignalsSeedScript(opts.signals)}<script type="module" src="${opts.scriptSrc}"></script></body></html>`
-}
+// The isolated case render document used to live here, alongside the shell and
+// primer documents. It now belongs to the DOM substrate (`substrate/dom.ts`):
+// the document envelope is where a medium's assumptions live — the theme signals
+// on the root, the body surface, the mount, the script tag — so it is the
+// substrate's to shape, and both the dev server and this production host render
+// it through `substrate.document()`. The shell and primer documents below stay:
+// they are the browse *chrome*, which remains a DOM application by design.
 
 /** The primer reading-page document. */
 export function primerDoc(opts: {
