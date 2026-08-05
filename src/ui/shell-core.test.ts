@@ -12,16 +12,19 @@ import {
   groupPrimerSections,
   humanizeTweakKey,
   initialSelectionFor,
+  levelLabel,
   MAX_PAD,
   MIN_PAD,
   type PrimerSection,
   parseRoute,
   primerForLocation,
+  renderAxisValues,
   resolveMode,
   type Selection,
   SIDEBAR_MAX_W,
   SIDEBAR_MIN_W,
   selSignature,
+  switchableAxes,
 } from './shell-core'
 
 // `primerForLocation` reads `window.location.pathname`; stub a minimal window
@@ -41,6 +44,7 @@ function manifest(over: Partial<Manifest>): Manifest {
     groups: [],
     modes: ['primer', 'components', 'exhibits'],
     landing: 'primer',
+    substrate: { id: 'dom', variants: [] },
     ...over,
   }
 }
@@ -250,7 +254,7 @@ describe('buildRenderSrc', () => {
   test('always sets the theme and appends tweaks', () => {
     const src = buildRenderSrc(
       '/render/button/default',
-      'dark',
+      { theme: 'dark' },
       { size: 'lg' },
       false,
       false,
@@ -263,9 +267,125 @@ describe('buildRenderSrc', () => {
   })
 
   test('adds the fit and transparent stage hints when requested', () => {
-    const src = buildRenderSrc('/render/x/y', 'light', {}, true, true)
+    const src = buildRenderSrc(
+      '/render/x/y',
+      { theme: 'light' },
+      {},
+      true,
+      true,
+    )
     expect(src).toContain('fit=1')
     expect(src).toContain('transparent=1')
+  })
+})
+
+describe('renderAxisValues', () => {
+  const withAxes = (variants: Manifest['substrate']['variants']) =>
+    manifest({ substrate: { id: 'x', variants } })
+
+  const themeAxis = {
+    id: 'theme',
+    label: 'Theme',
+    kind: 'render' as const,
+    values: [
+      { value: 'light', label: 'Light' },
+      { value: 'dark', label: 'Dark' },
+    ],
+    default: 'light',
+  }
+  const colsAxis = {
+    id: 'cols',
+    label: 'Columns',
+    kind: 'render' as const,
+    values: [
+      { value: '80', label: '80' },
+      { value: '120', label: '120' },
+    ],
+    default: '80',
+  }
+  const viewportAxis = {
+    id: 'viewport',
+    label: 'Viewport',
+    kind: 'stage' as const,
+    values: [{ value: 'full', label: 'Full' }],
+    default: 'full',
+  }
+
+  test("the chrome's theme drives a declared theme axis", () => {
+    expect(renderAxisValues(withAxes([themeAxis]), 'dark')).toEqual({
+      theme: 'dark',
+    })
+  })
+
+  test('other render axes sit at their declared default until picked', () => {
+    expect(renderAxisValues(withAxes([themeAxis, colsAxis]), 'light')).toEqual({
+      theme: 'light',
+      cols: '80',
+    })
+    expect(
+      renderAxisValues(withAxes([themeAxis, colsAxis]), 'light', {
+        cols: '120',
+      }),
+    ).toEqual({ theme: 'light', cols: '120' })
+  })
+
+  test('stage axes never reach the address', () => {
+    // A stage axis constrains the embedded frame; putting it in the address
+    // would claim a distinct rendering that does not exist.
+    expect(
+      renderAxisValues(withAxes([themeAxis, viewportAxis]), 'light'),
+    ).toEqual({ theme: 'light' })
+  })
+
+  test('a substrate with no theme axis is not given one', () => {
+    // The chrome is a DOM app and keeps its own light/dark regardless; that is
+    // not the same thing as the rendering having a theme.
+    expect(renderAxisValues(withAxes([colsAxis]), 'dark')).toEqual({
+      cols: '80',
+    })
+  })
+
+  test('no declared render axes ⇒ no variant parameters at all', () => {
+    expect(renderAxisValues(withAxes([viewportAxis]), 'dark')).toEqual({})
+    expect(renderAxisValues(null, 'dark')).toEqual({})
+  })
+})
+
+describe('switchableAxes', () => {
+  test('offers render axes other than the theme the toggle already drives', () => {
+    const m = manifest({
+      substrate: {
+        id: 'terminal',
+        variants: [
+          {
+            id: 'theme',
+            label: 'Theme',
+            kind: 'render',
+            values: [{ value: 'light', label: 'Light' }],
+            default: 'light',
+          },
+          {
+            id: 'color',
+            label: 'Color',
+            kind: 'render',
+            values: [{ value: 'truecolor', label: 'True color' }],
+            default: 'truecolor',
+          },
+          {
+            id: 'viewport',
+            label: 'Viewport',
+            kind: 'stage',
+            values: [{ value: 'full', label: 'Full' }],
+            default: 'full',
+          },
+        ],
+      },
+    })
+    expect(switchableAxes(m).map((a) => a.id)).toEqual(['color'])
+  })
+
+  test('the DOM substrate offers none — the theme toggle covers it', () => {
+    expect(switchableAxes(manifest({}))).toEqual([])
   })
 })
 
@@ -273,7 +393,7 @@ describe('buildAddressUrl', () => {
   test('prefixes the origin and carries theme + tweaks but no stage hints', () => {
     const url = buildAddressUrl(
       '/render/button/default',
-      'dark',
+      { theme: 'dark' },
       { size: 'lg' },
       'https://x.dev',
     )
@@ -286,7 +406,7 @@ describe('buildAddressUrl', () => {
 
   test('stays relative with an empty origin (server / first render)', () => {
     expect(
-      buildAddressUrl('/render/x/y', 'light', {}, '').startsWith(
+      buildAddressUrl('/render/x/y', { theme: 'light' }, {}, '').startsWith(
         '/render/x/y?',
       ),
     ).toBe(true)
@@ -466,5 +586,20 @@ describe('humanizeTweakKey', () => {
   test('handles a leading acronym and empty input', () => {
     expect(humanizeTweakKey('URLPath')).toBe('URL Path')
     expect(humanizeTweakKey('')).toBe('')
+  })
+})
+
+describe('levelLabel', () => {
+  test('uses Display Case’s own label when the substrate renames nothing', () => {
+    expect(levelLabel(manifest({}), 'page')).toBe('Pages')
+  })
+
+  test('honours a substrate’s relabelling', () => {
+    // The taxonomy is fixed across substrates; only what a viewer reads moves.
+    const m = manifest({
+      substrate: { id: 'term', variants: [], levelLabels: { page: 'Screens' } },
+    })
+    expect(levelLabel(m, 'page')).toBe('Screens')
+    expect(levelLabel(m, 'atom')).toBe('Atoms')
   })
 })

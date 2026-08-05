@@ -41,8 +41,10 @@ The two entry files sit at the root, everything else lives under a named group:
 src/
   index.ts        Public authoring API (the "." export): defineCases/defineFlow/tweak/defineConfig + types
   cli.ts          The bin entry; dispatches to commands/ and checks/
-  core/           Data model + discovery: catalog, manifest, discovery, mdx-plugin
+  core/           Data model + discovery: catalog, manifest, discovery, mdx-plugin,
+                  the substrate contract, and index.ts (the "./core" export)
   render/         Server-side rendering: ssr-render/shell/primer, render-node, the HTML documents
+  substrate/      The built-in DOM substrate + resolution (the "./substrate" export)
   server/         The hosts: dev server + prod-server (the "./prod-server" export)
   checks/         `display-case check` phases: check (runner), structure/tokens/ssr/check-text,
                   a11y-scanner, and providers/ (the lazy, optional visual toolchain)
@@ -52,13 +54,26 @@ src/
   types/          Ambient module declarations (*.d.ts)
 ```
 
-The public surface is small and deliberate: only `index.ts`, `checks/tokens-check.ts`
-(`./tokens-check`), and `server/prod-server.ts` (`./prod-server`) are exported (see
-`package.json` `exports`); everything else is internal. Imports point "inward"
+The public surface is small and deliberate: only `index.ts`, `core/index.ts`
+(`./core`), `substrate/index.ts` (`./substrate`), `checks/tokens-check.ts`
+(`./tokens-check`), and `server/prod-server.ts` (`./prod-server`) are exported (see `package.json`
+`exports`); everything else is internal. Imports point "inward"
 (commands/server/checks → render/core → index); keep that direction.
+
+`./core` is the **substrate-neutral core** — the surface an out-of-tree
+rendering substrate is implemented against (authoring model, discovery,
+catalog/manifest, groups, `caseTree`, and the `Substrate` contract in
+`core/substrate.ts`). Its whole value is staying DOM-free and server-free, so
+the layering is enforced by a module-graph test (`src/core/index.test.ts`): a
+`./core` import that reaches `server/`, `checks/`, `commands/`, or `ui/` fails
+the suite. The substrate contract itself is documented **experimental** until a
+second, non-DOM substrate has been built against it.
 
 ## Display Case (for agents)
 
+Render one case straight to stdout — no server, no browser — with
+`display-case render <component>/<case> [<pkgDir>]`
+(`--variant=theme=dark`, `--tweak=k=v`, `--out=file`).
 Browse the component showcase with `bun run display-case`; `--print-manifest`
 lists every component/case as JSON (no server or browser needed).
 Snapshot one case in isolation at `/render/<component>/<case>?theme=light|dark`

@@ -15,8 +15,17 @@ export const DcTestIds = {
   app: 'dc-app',
   /** The bracketed wordmark in the header, showing the showcase title. */
   wordmark: 'dc-wordmark',
-  /** The Dark/Light theme toggle button. */
+  /** The Dark/Light theme toggle button. Under the DOM substrate this *is* the
+   *  theme axis's control; a substrate declaring no theme axis still has it,
+   *  because the browse chrome is a DOM app with its own light/dark. */
   themeToggle: 'dc-theme-toggle',
+  /**
+   * The control for a substrate-declared render axis, keyed by axis id — e.g.
+   * `variantControl('cols')` → `dc-variant-cols`. Axes are declared by the
+   * active substrate rather than fixed by Display Case, so locators are built
+   * from the axis id instead of enumerated here.
+   */
+  variantControl: (axisId: string) => `dc-variant-${axisId}`,
   /** The component-tree nav rail (`<nav>` landmark). */
   sidebar: 'dc-sidebar',
   /** The preview `<iframe>` the selected case renders inside. */

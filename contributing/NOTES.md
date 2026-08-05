@@ -343,7 +343,7 @@ never crash the tool — no divergent custom resolver). `analyzeComponentGraph`
 (`modules` 1500, `perPackage` 400 defaults — loose, since the true crash size is
 machine-dependent). Warnings advisory; `--strict` escalates. It builds every
 component, so it's **opt-in to a no-flag full `check`, excluded from the slim
-`--structure --tokens --ssr` gate** (naming those flags makes `anyExplicit` true,
+`--structure --tokens --safety` gate** (naming those flags makes `anyExplicit` true,
 so `graph` won't run) — keeps `bun run check` fast.
 
 ---
@@ -1731,3 +1731,68 @@ real Tailwind/Bootstrap/MUI/VueUse deps):
   the check driver (`playwright-driver.ts`) calls `page.emulateMedia({ colorScheme })`
   so media-query-only components snapshot/audit in the right theme. The e2e proves
   it by mirroring that emulation.
+
+## The rendering substrate
+
+**The seam is the iframe, not an element.** The chrome embeds the stage as an
+`<iframe>` at a render address and talks to it only over postMessage; it never
+reaches into the stage document. That is why the substrate owns the *whole*
+stage document (`substrate.document()`) rather than an inner element — the
+envelope (theme signals on the root, body surface, mount, script tag) is exactly
+where a medium's assumptions live.
+
+**Two render templates became one.** The dev server's `renderHtml` and the
+published build's `renderDoc` differed only by an importmap (published) and the
+error-overlay/live-reload injects (dev). Both are now parameters of one
+`substrate.document()` call (`ctx.importmap`, `ctx.hostScripts`). A golden test
+in `src/substrate/dom.test.ts` pins the exact bytes — if you change that
+template, that test is the thing that tells you whether you changed the output.
+
+**`browserOnly` skips tree *construction*, not just rendering.** A browser-only
+case can throw while its tree is being built (its thunk reads `document`). The
+MUI e2e fixture does exactly this. Getting this wrong 500s the render endpoint
+instead of falling back to a client mount; `ssr-render.test.tsx` covers it.
+
+**Capture and audit share one opened variant.** `checks.openVariant()` returns a
+session both render phases read. This is not gratuitous indirection: axe needs a
+*painted* page (so an `audit(frame)` signature cannot work for the DOM), and the
+runner deliberately opens one browser page per variant — two independent calls
+would double the browser work for the usual `--a11y --visual` run.
+
+**Capture format ≠ serialization format.** The DOM substrate serializes a frame
+to `html` but *captures* a `png`, because a visual regression is about what the
+case looks like. So `ext` lives on the session, not on `serialize()`, and the
+baseline extension follows the capture.
+
+**Baselines are substrate-keyed** (`<baselineDir>/<substrate>/<component>/…`).
+The pre-substrate flat path is still read when the keyed one is absent, with a
+one-line notice; writes always use the keyed path. Remove that fallback a
+release after it ships.
+
+**Local visual diffs are usually not regressions.** The committed baselines in
+`test/visual-baselines/` were recorded on other hardware, so `check --visual`
+reports diffs on a dev machine for components that are perfectly fine. Reproduce
+against `origin/main` in a scratch worktree before believing a visual failure.
+
+## Dependency overrides
+
+`package.json` carries an `overrides` block pinning **transitive** dev
+dependencies past known advisories, so CI’s `bun audit --audit-level=high`
+gate stays green:
+
+- `postcss` — reached via `vue → @vue/compiler-sfc` (the theme-frameworks e2e
+  fixture). Advisory GHSA-r28c-9q8g-f849 (path traversal in source-map
+  auto-loading) covers `<=8.5.17`.
+- `js-yaml` — reached via `@changesets/cli → @manypkg/get-packages →
+  read-yaml-file`. Advisory GHSA-52cp-r559-cp3m (quadratic CPU on merge-key
+  chains) covers `>=4.0.0 <4.3.0`.
+
+Both fixes sit inside the parents’ own semver ranges, so the override only
+nudges resolution — it forces nothing incompatible, and neither package becomes
+a direct dependency (`bun update <pkg>` would have *added* them to
+`dependencies`, and would have taken `js-yaml` to 5.x across a major).
+
+Drop an entry once every parent has released a version that resolves past the
+advisory on its own; re-run `bun audit --audit-level=high` to confirm. The
+block is inert for consumers — npm/Bun apply `overrides` only to the root of an
+install, never to a package pulled in as a dependency.

@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { type DisplayCaseConfig, defineCases, type StyleEngine } from '../index'
+import { type DomFrame, domSubstrate } from '../substrate/dom'
 import type { CaseTreeState } from './render-node'
 import { makeCaseRenderer } from './ssr-render'
 
@@ -28,73 +29,80 @@ function Boom(): never {
   throw new Error('needs a browser')
 }
 
+/** Build a renderer over the DOM substrate — the default a showcase gets. */
+function renderer(
+  modules: Parameters<typeof makeCaseRenderer>[0],
+  config = NO_CONFIG,
+) {
+  const render = makeCaseRenderer(modules, config, domSubstrate())
+  // The substrate's frame is opaque to the renderer, but this suite is about the
+  // DOM substrate specifically, so narrow it to read the markup back.
+  return async (s: CaseTreeState) => {
+    const result = await render(s)
+    return { ...result, frame: result.frame as DomFrame }
+  }
+}
+
 describe('makeCaseRenderer', () => {
-  test('renders an SSR-able case to inner markup', () => {
-    const render = makeCaseRenderer(
-      [
-        defineCases('Button', {
-          Default: () => <button type="button">Hi</button>,
-        }),
-      ],
-      NO_CONFIG,
-    )
-    const result = render(state({}))
+  test('renders an SSR-able case to inner markup', async () => {
+    const render = renderer([
+      defineCases('Button', {
+        Default: () => <button type="button">Hi</button>,
+      }),
+    ])
+    const result = await render(state({}))
     expect(result.browserOnly).toBe(false)
-    expect(result.html).toContain('Hi')
+    expect(result.frame.html).toContain('Hi')
     expect(result.error).toBeUndefined()
   })
 
-  test('skips server rendering for a browser-only module without attempting it', () => {
-    const render = makeCaseRenderer(
-      [
-        defineCases(
-          'Canvas',
-          { Default: () => <canvas /> },
-          { browserOnly: true },
-        ),
-      ],
-      NO_CONFIG,
-    )
-    const result = render(state({ componentId: 'canvas' }))
-    expect(result).toEqual({ html: '', browserOnly: true })
+  test('skips server rendering for a browser-only module without attempting it', async () => {
+    const render = renderer([
+      defineCases(
+        'Canvas',
+        { Default: () => <canvas /> },
+        { browserOnly: true },
+      ),
+    ])
+    const result = await render(state({ componentId: 'canvas' }))
+    expect(result.browserOnly).toBe(true)
+    expect(result.frame).toEqual({
+      html: '',
+      browserOnly: true,
+      headStyles: '',
+    })
   })
 
-  test('catches a render that needs a browser and reports it browser-only with the error', () => {
-    const render = makeCaseRenderer(
-      [defineCases('Bad', { Default: () => <Boom /> })],
-      NO_CONFIG,
-    )
-    const result = render(state({ componentId: 'bad' }))
+  test('catches a render that needs a browser and reports it browser-only with the error', async () => {
+    const render = renderer([defineCases('Bad', { Default: () => <Boom /> })])
+    const result = await render(state({ componentId: 'bad' }))
     expect(result.browserOnly).toBe(true)
-    expect(result.html).toBe('')
+    expect(result.frame.html).toBe('')
     expect(result.error).toContain('needs a browser')
   })
 
-  test('renders the not-found node for an unknown case (not a browser-only fallback)', () => {
-    const render = makeCaseRenderer([], NO_CONFIG)
-    const result = render(state({ componentId: 'ghost', caseId: 'x' }))
+  test('renders the not-found node for an unknown case (not a browser-only fallback)', async () => {
+    const render = renderer([])
+    const result = await render(state({ componentId: 'ghost', caseId: 'x' }))
     expect(result.browserOnly).toBe(false)
     // renderToString interleaves `<!-- -->` markers between text nodes, so match
     // the stable wrapper + ids rather than the contiguous sentence.
-    expect(result.html).toContain('dc-render-missing')
-    expect(result.html).toContain('No such case:')
-    expect(result.html).toContain('ghost')
+    expect(result.frame.html).toContain('dc-render-missing')
+    expect(result.frame.html).toContain('No such case:')
+    expect(result.frame.html).toContain('ghost')
   })
 
-  test('without a style engine, headStyles is empty (inert when unused)', () => {
-    const render = makeCaseRenderer(
-      [
-        defineCases('Button', {
-          Default: () => <button type="button">Hi</button>,
-        }),
-      ],
-      NO_CONFIG,
-    )
-    expect(render(state({})).headStyles).toBe('')
+  test('without a style engine, headStyles is empty (inert when unused)', async () => {
+    const render = renderer([
+      defineCases('Button', {
+        Default: () => <button type="button">Hi</button>,
+      }),
+    ])
+    expect((await render(state({}))).frame.headStyles).toBe('')
   })
 
-  test('a configured style engine collects head styling for the render', () => {
-    const render = makeCaseRenderer(
+  test('a configured style engine collects head styling for the render', async () => {
+    const render = renderer(
       [
         defineCases('Button', {
           Default: () => <button type="button">Hi</button>,
@@ -102,13 +110,13 @@ describe('makeCaseRenderer', () => {
       ],
       { ...NO_CONFIG, styleEngines: [stubEngine({ n: 0 })] },
     )
-    const result = render(state({}))
-    expect(result.html).toContain('Hi')
-    expect(result.headStyles).toContain('data-stub=')
+    const result = await render(state({}))
+    expect(result.frame.html).toContain('Hi')
+    expect(result.frame.headStyles).toContain('data-stub=')
   })
 
-  test('each render gets its own isolated collector (no cross-case bleed)', () => {
-    const render = makeCaseRenderer(
+  test('each render gets its own isolated collector (no cross-case bleed)', async () => {
+    const render = renderer(
       [
         defineCases('Button', {
           Default: () => <button type="button">Hi</button>,
@@ -117,15 +125,15 @@ describe('makeCaseRenderer', () => {
       ],
       { ...NO_CONFIG, styleEngines: [stubEngine({ n: 0 })] },
     )
-    const a = render(state({ componentId: 'button' }))
-    const b = render(state({ componentId: 'link' }))
+    const a = await render(state({ componentId: 'button' }))
+    const b = await render(state({ componentId: 'link' }))
     // Distinct per-render instance ids ⇒ a fresh store per render, not shared.
-    expect(a.headStyles).toContain('data-stub="1"')
-    expect(b.headStyles).toContain('data-stub="2"')
+    expect(a.frame.headStyles).toContain('data-stub="1"')
+    expect(b.frame.headStyles).toContain('data-stub="2"')
   })
 
-  test('a browser-only case runs no engine and emits no head styling', () => {
-    const render = makeCaseRenderer(
+  test('a browser-only case runs no engine and emits no head styling', async () => {
+    const render = renderer(
       [
         defineCases(
           'Canvas',
@@ -135,8 +143,74 @@ describe('makeCaseRenderer', () => {
       ],
       { ...NO_CONFIG, styleEngines: [stubEngine({ n: 0 })] },
     )
-    const result = render(state({ componentId: 'canvas' }))
-    expect(result).toEqual({ html: '', browserOnly: true })
-    expect(result.headStyles).toBeUndefined()
+    const result = await render(state({ componentId: 'canvas' }))
+    expect(result.browserOnly).toBe(true)
+    expect(result.frame.headStyles).toBe('')
+  })
+
+  test('a browser-only case never has its tree built, not merely never rendered', async () => {
+    // A browser-only case may touch `document` in its own thunk — reading the
+    // theme off the root to pick a provider mode, as the MUI fixture does — so
+    // even *constructing* the tree throws. The opt-out has to happen before
+    // that, or the server 500s instead of letting the client mount the case.
+    let built = false
+    const render = renderer([
+      defineCases(
+        'Themed',
+        {
+          Default: () => {
+            built = true
+            throw new ReferenceError('document is not defined')
+          },
+        },
+        { browserOnly: true },
+      ),
+    ])
+    const result = await render(state({ componentId: 'themed' }))
+    expect(built).toBe(false)
+    expect(result.browserOnly).toBe(true)
+    expect(result.frame.html).toBe('')
+  })
+
+  test('a throw while building the tree falls back like a render throw', async () => {
+    // Same fallback, but for a case that did NOT declare itself browser-only:
+    // reported browser-only with the reason, rather than escaping to the host.
+    const render = renderer([
+      defineCases('Eager', {
+        Default: () => {
+          throw new Error('needs a browser at construction')
+        },
+      }),
+    ])
+    const result = await render(state({ componentId: 'eager' }))
+    expect(result.browserOnly).toBe(true)
+    expect(result.frame.html).toBe('')
+    expect(result.error).toContain('needs a browser at construction')
+  })
+
+  test('fills render-axis defaults so an unspecified variant still renders', async () => {
+    // The DOM substrate declares theme as a render axis defaulting to light; a
+    // caller that names no variant must still get a complete, deterministic
+    // context rather than an undefined theme.
+    const render = makeCaseRenderer(
+      [
+        defineCases('Button', {
+          Default: () => <button type="button">Hi</button>,
+        }),
+      ],
+      NO_CONFIG,
+      {
+        ...domSubstrate(),
+        render(_tree, ctx) {
+          return {
+            html: `theme=${ctx.variants.theme}`,
+            browserOnly: false,
+            headStyles: '',
+          }
+        },
+      },
+    )
+    const result = await render(state({}))
+    expect((result.frame as DomFrame).html).toBe('theme=light')
   })
 })

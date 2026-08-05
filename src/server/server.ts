@@ -17,7 +17,8 @@ import {
 } from '../core/discovery'
 import { findWatchRoot, graphWatchDirs } from '../core/graph-watch'
 import { buildGroupTree, makeGroupResolver } from '../core/groups'
-import type { BrowseMode, Manifest } from '../core/manifest'
+import type { BrowseMode, Manifest, ManifestSubstrate } from '../core/manifest'
+import type { Substrate } from '../core/substrate'
 import {
   type DisplayCaseConfig,
   isSurfaceLevel,
@@ -32,6 +33,7 @@ import {
   themeRootAttrs,
   themeSignalsSeedScript,
 } from '../render/theme-signals'
+import { renderVariants, resolveSubstrate } from '../substrate/resolve'
 import type { Theme } from '../ui/shell-core'
 import {
   buildTimeoutMs,
@@ -425,8 +427,27 @@ function buildManifest(
       modes,
       landing,
       flowMarker: config.nav?.flowMarker ?? 'tag',
+      // What this showcase renders through, and what it varies over. An agent
+      // reads the axes rather than assuming light/dark: a substrate for another
+      // medium declares entirely different ones.
+      substrate: manifestSubstrate(resolveSubstrate(config)),
     },
     placardById,
+  }
+}
+
+/** Flatten a substrate's identity and declared axes into manifest data. */
+function manifestSubstrate(substrate: Substrate): ManifestSubstrate {
+  return {
+    id: substrate.id,
+    variants: substrate.variants.map((axis) => ({
+      id: axis.id,
+      label: axis.label,
+      kind: axis.kind,
+      values: axis.values.map((v) => ({ value: v.value, label: v.label })),
+      default: axis.default,
+    })),
+    levelLabels: substrate.levelLabels,
   }
 }
 
@@ -704,13 +725,12 @@ interface RenderDoc {
   transparent: boolean
   /** Shrink-wrap the mount to the case's natural width. */
   fit: boolean
-  /** Pre-rendered `#root` inner markup (`''` for a browser-only case). */
-  markup: string
-  /** Whether `markup` is present, so the client adopts instead of mounting. */
+  /** The substrate's rendered frame, handed straight back to its `document()`.
+   *  Opaque here — the server never inspects it (see the `Frame` contract). */
+  frame: unknown
+  /** Whether the frame was pre-rendered, so the client adopts the delivered
+   *  content instead of mounting fresh. */
   ssr: boolean
-  /** Render-time (CSS-in-JS) styling collected by the style engines, as `<head>`
-   *  markup placed after the static `<style>` block. `''` when none. */
-  headStyles?: string
 }
 
 /** The render state the server decodes from a `/render/...` address — the same
@@ -719,11 +739,14 @@ interface RenderDoc {
 interface ParsedRenderState extends RenderDoc {
   componentId: string
   caseId: string
+  /** Values for every `render`-kind axis the substrate declares, defaults
+   *  filled in. For the DOM substrate this is `{ theme }`. */
+  variants: Record<string, string>
   width: number | null
   tweaks: Record<string, string>
 }
 
-function parseRenderState(url: URL): ParsedRenderState {
+function parseRenderState(url: URL, substrate: Substrate): ParsedRenderState {
   const parts = url.pathname.split('/').filter(Boolean) // ['render', comp, case]
   const p = url.searchParams
   const tweaks: Record<string, string> = {}
@@ -733,55 +756,62 @@ function parseRenderState(url: URL): ParsedRenderState {
     componentId: parts[1] ?? '',
     caseId: parts[2] ?? '',
     theme: p.get('theme') === 'dark' ? 'dark' : 'light',
+    variants: renderVariants(p, substrate),
     width: widthParam ? Number(widthParam) : null,
     tweaks,
     fit: p.get('fit') === '1',
     transparent: p.get('transparent') === '1',
-    markup: '',
+    frame: undefined,
     ssr: false,
   }
 }
 
+/** The substrate-defined address options a `/render/...` request carries, in the
+ *  shape `substrate.document()` reads them back. */
+function renderParams(state: ParsedRenderState): Record<string, string> {
+  const params: Record<string, string> = {}
+  if (state.fit) params.fit = '1'
+  if (state.transparent) params.transparent = '1'
+  if (state.width !== null) params.width = String(state.width)
+  return params
+}
+
+/**
+ * The isolated render document, produced by the active substrate.
+ *
+ * The document envelope is where a medium's assumptions live — the theme
+ * signals on the root, the body surface, the mount, the script tag — so the
+ * substrate owns all of it and the server contributes only what is genuinely
+ * host-side: the resolved stylesheets, this component's bundle URL, and the
+ * dev-only injects (the error overlay and, when watching, live reload). A
+ * published build passes no host scripts and an importmap; that difference is
+ * the *only* one between the two documents, which is why both now go through
+ * this one call.
+ */
 function renderHtml(
+  substrate: Substrate,
+  config: DisplayCaseConfig,
   globalCss: string,
   vitrineCss: string,
   liveReload: boolean,
-  doc: RenderDoc,
+  state: ParsedRenderState,
   scriptSrc: string,
-  signals: readonly ThemeSignal[],
 ): string {
-  // A complete document (title, lang, single <main> landmark) so the a11y runner
-  // reports only real component issues, not isolated-harness chrome violations.
-  // The body paints the theme surface (bg + fg) so a case renders on the same
-  // background the app gives it — without this, light dark-theme text would sit
-  // on a default-white body and fail contrast checks.
-  // Decorated exhibits (atoms…templates, marked `data-decorated` by render-mount)
-  // center their content in the frame: when the exhibit wraps or is narrower than
-  // the frame, its rows sit centered rather than top-left. Inline styles on a
-  // case still win, so an author can opt back to `flex-start`. Pages/flows are
-  // excluded — they own their full-bleed layout and must not be re-centered.
-  const exhibitCenter =
-    'body[data-decorated] #root>*{justify-content:center;align-content:center}'
-  // The theme, decorated surface, and fit mount are baked in so the first paint
-  // is already correct (no flash, and the client's hydration finds a matching
-  // tree). The client still sets them on load — idempotent — and updates them on
-  // an in-place swap. `data-ssr` tells the client whether to adopt the markup
-  // (1) or mount fresh (0, a browser-only case that didn't render server-side).
-  const bodyAttrs = doc.transparent
-    ? ' data-decorated style="background:transparent"'
-    : ''
-  const rootAttrs = `${doc.fit ? ' style="width:fit-content"' : ''} data-ssr="${doc.ssr ? '1' : '0'}"`
-  const htmlAttrs = themeRootAttrs(resolveThemeSignals(doc.theme, signals))
-  // The Vitrine stylesheet follows globalCss so a dogfooded design-system case
-  // (the showcase's own `dcui-*`/`dcpl-*`/shell components) paints before
-  // scripts; its `--dc-*` tokens come from globalCss (the showcase lists the
-  // token files in globalStyles). For a non-dogfooding consumer these rules are
-  // inert chrome CSS — harmless in this dev-time-only preview document.
-  // The style engines' collected styling (if any) follows the static <style>
-  // block as its own discrete markup — emotion/styled-components tag their output
-  // with attributes the client runtime keys on to adopt it, so it must not be
-  // folded into the block above. Empty string when no engine is configured.
-  return `<!doctype html><html lang="en"${htmlAttrs}><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>Display Case render</title><style>html,body{margin:0}html{color-scheme:${doc.theme}}body{background:var(--color-bg);color:var(--color-fg);font-family:var(--font-sans, ui-sans-serif, system-ui, sans-serif)}${exhibitCenter}${globalCss}\n${vitrineCss}</style>${doc.headStyles ?? ''}</head><body${bodyAttrs}><main id="root"${rootAttrs}>${doc.markup}</main>${themeSignalsSeedScript(signals)}${ERROR_OVERLAY_SCRIPT}${liveReload ? LIVERELOAD_SCRIPT : ''}<script type="module" src="${scriptSrc}"></script></body></html>`
+  return substrate.document(state.frame, {
+    componentId: state.componentId,
+    caseId: state.caseId,
+    tweaks: state.tweaks,
+    variants: state.variants,
+    params: renderParams(state),
+    config,
+    scriptSrc,
+    // The dev server serves each bundle whole; nothing is vendored out to a
+    // shared chunk, so there is no importmap to resolve.
+    importmap: {},
+    prerendered: state.ssr,
+    hostScripts: `${ERROR_OVERLAY_SCRIPT}${liveReload ? LIVERELOAD_SCRIPT : ''}`,
+    resources: { globalCss, vitrineCss },
+  })
 }
 
 /**
@@ -901,6 +931,10 @@ export async function startDisplayCase(
   // behaviors (watch, SSE, on-demand a11y) — it does its own one-shot scan.
   const interactive = opts.port !== 0
   const { config, configPath } = await resolveConfig(pkgDir)
+  // The substrate every isolated render goes through — the DOM one unless the
+  // showcase configures otherwise. Resolved once at start-up: it is a property
+  // of the showcase, not of a request.
+  const substrate = resolveSubstrate(config)
   // The effective theme root signals emitted on every delivered document, so a
   // showcased component reading any configured convention follows the theme.
   const themeSignals = effectiveThemeSignals(config)
@@ -1241,7 +1275,7 @@ export async function startDisplayCase(
         // The a11y scanner appends `?dcscan=1` and waits for network idle, which
         // an open live-reload SSE would never reach — so omit it for that fetch.
         const scanning = url.searchParams.has('dcscan')
-        const rs = parseRenderState(url)
+        const rs = parseRenderState(url, substrate)
         const key = `${rs.componentId}/${rs.caseId}`
         // Build this component's bundle on demand (cached). Each component is its
         // own small bundler pass, so the catalog's combined graph is never built
@@ -1267,26 +1301,45 @@ export async function startDisplayCase(
             { headers: { 'content-type': 'text/html; charset=utf-8' } },
           )
         }
-        // Pre-render the case to markup, baked into the document so it's present
-        // before the page's scripts run. A browser-only case (or one already
-        // recorded as such) is served adopt-free for the client to mount.
+        // Pre-render the case into a frame, baked into the document so its
+        // content is present before the page's scripts run. A browser-only case
+        // (or one already recorded as such) is served adopt-free for the stage
+        // runtime to paint.
         if (built?.ok && rs.caseId && !browserOnly.has(key)) {
-          const result = built.renderCase({
-            componentId: rs.componentId,
-            caseId: rs.caseId,
-            width: rs.width,
-            tweaks: rs.tweaks,
-          })
+          const result = await built.renderCase(
+            {
+              componentId: rs.componentId,
+              caseId: rs.caseId,
+              width: rs.width,
+              tweaks: rs.tweaks,
+            },
+            rs.variants,
+            renderParams(rs),
+          )
           if (result.browserOnly) {
             browserOnly.add(key)
             console.warn(
               `  ⚠ ${key} can't render server-side (${result.error ?? 'threw'}); the client will render it`,
             )
           } else {
-            rs.markup = result.html
+            rs.frame = result.frame
             rs.ssr = true
-            rs.headStyles = result.headStyles
           }
+        }
+        // Nothing was pre-rendered (an unbuilt component, an unknown id, or a
+        // case that needs the client): ask the substrate for its own empty
+        // frame rather than fabricating one, so the document stays entirely the
+        // substrate's to shape.
+        if (!rs.ssr) {
+          rs.frame = await substrate.render(null, {
+            componentId: rs.componentId,
+            caseId: rs.caseId,
+            tweaks: rs.tweaks,
+            variants: rs.variants,
+            params: renderParams(rs),
+            clientOnly: true,
+            config,
+          })
         }
         // The per-component bundle (or a harmless fallback for an unknown id, which
         // renders nothing — the chrome shows a not-found state).
@@ -1295,12 +1348,13 @@ export async function startDisplayCase(
           : `/dist/render-case-${rs.componentId}.js`
         return new Response(
           renderHtml(
+            substrate,
+            config,
             state.globalCss,
             vitrineCss,
             reload && !scanning,
             rs,
             scriptSrc,
-            themeSignals,
           ),
           {
             headers: { 'content-type': 'text/html; charset=utf-8' },

@@ -12,7 +12,7 @@ import {
   DOC_MIN_W,
   type ExhibitNode,
   humanizeTweakKey,
-  LEVEL_LABEL,
+  levelLabel,
   type Mode,
   RESPONSIVE,
   SIDEBAR_MAX_W,
@@ -151,6 +151,7 @@ function ShellHeader(props: ShellViewProps) {
     setNavCollapsed,
     shownMode,
     modeFadeStyle,
+    variantAxes,
     sizeId,
     setSizeId,
     widthInputValue,
@@ -207,6 +208,25 @@ function ShellHeader(props: ShellViewProps) {
                 instantly and the trigger styling matches the tweak controls.
                 Disabled options stand in as the Responsive / Devices group
                 headers. */}
+            {/* One control per render axis the substrate declares beyond the
+                theme (which the header toggle already drives). Under the DOM
+                substrate this list is empty and the toolbar is unchanged; a
+                substrate for another medium — terminal colour depth, say —
+                gets a control here without the chrome knowing the axis. */}
+            {variantAxes.map(({ axis, value, set }) => (
+              <SelectMenu
+                key={axis.id}
+                size="sm"
+                value={value}
+                onChange={set}
+                aria-label={axis.label}
+                data-testid={DcTestIds.variantControl(axis.id)}
+                options={axis.values.map((v) => ({
+                  value: v.value,
+                  label: v.label,
+                }))}
+              />
+            ))}
             <SelectMenu
               size="sm"
               value={sizeId}
@@ -442,7 +462,9 @@ function NavContents(props: ShellViewProps) {
     if (fg.length === 0) return null
     return fg.map(({ key, components }) => (
       <div key={key} className="dc-group">
-        <Eyebrow className="dc-group-label">{LEVEL_LABEL[key]}</Eyebrow>
+        <Eyebrow className="dc-group-label">
+          {levelLabel(props.manifest, key)}
+        </Eyebrow>
         {components.map(componentRow)}
       </div>
     ))

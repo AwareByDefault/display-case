@@ -6,7 +6,7 @@ Display Case renders each case to an image and compares it against a recorded ba
 ## Requirements
 ### Requirement: Visual-regression checks
 
-Display Case SHALL be able to render each case to an image and compare it against a previously recorded baseline for that case, reporting any case whose rendering differs beyond an allowed threshold. When no baseline exists for a case, the run SHALL be able to record one. A comparison run SHALL exit non-zero when any case differs from its baseline. The location where baselines are stored SHALL be configurable; absent configuration, a default location SHALL be used.
+Display Case SHALL be able to capture each case's rendering — in the format the active substrate captures: an image under the default substrate, a textual frame under a substrate that serializes to text — and compare it against a previously recorded baseline for that case, reporting any case whose rendering differs beyond an allowed threshold. When no baseline exists for a case, the run SHALL be able to record one. A comparison run SHALL exit non-zero when any case differs from its baseline. The location where baselines are stored SHALL be configurable; absent configuration, a default location SHALL be used. Within that location, baselines SHALL be keyed by the active substrate and by the case's rendering-selecting variant values, and SHALL be stored in the format the substrate captures, under that format's file extension — so switching substrates cannot silently reuse or invalidate another substrate's baselines, and a textual substrate's baselines are stored as reviewable text.
 
 #### Scenario: A case differs from its baseline
 
@@ -19,7 +19,7 @@ Display Case SHALL be able to render each case to an image and compare it agains
 
 - GIVEN a case that has no recorded visual baseline
 - WHEN the run is invoked in baseline-recording mode
-- THEN a baseline image is recorded for that case
+- THEN a baseline is recorded for that case in the format the substrate captures
 
 #### Scenario: All cases match their baselines
 
@@ -34,9 +34,23 @@ Display Case SHALL be able to render each case to an image and compare it agains
 - THEN they are written to the configured location
 - AND a comparison run reads baselines from that same location
 
+#### Scenario: Baselines are keyed by substrate
+
+- GIVEN baselines recorded under one substrate
+- WHEN the showcase switches to a different substrate and records baselines
+- THEN the new baselines are stored keyed to the new substrate
+- AND the previous substrate's baselines are neither reused nor overwritten
+
+#### Scenario: A textual substrate's baselines are reviewable text
+
+- GIVEN a showcase whose substrate serializes frames to text
+- WHEN a baseline is recorded and a later run differs from it
+- THEN the baseline is stored as text under that format's extension
+- AND the difference is reviewable as a readable text difference rather than an opaque binary
+
 ### Requirement: Configurable snapshot pipeline
 
-The mechanism that captures a case's rendering and audits its accessibility, and the mechanism that compares two renderings, SHALL each be overridable through configuration. When a consumer supplies a custom mechanism, the checks SHALL use it; when none is supplied, the checks SHALL use a built-in default that produces the same results as today.
+The mechanism that captures a case's rendering and audits its accessibility is supplied by the active substrate, which opens a variant once for both phases to read (see Rendering Substrate). The mechanism that compares two captured renderings SHALL be overridable through configuration: when a consumer supplies one the visual check SHALL use it, and when none is supplied the check SHALL use the active substrate's default — which under the default substrate SHALL produce the same results as today. A consumer-supplied comparison SHALL take precedence over the substrate's default.
 
 #### Scenario: Custom capture mechanism
 
@@ -45,24 +59,33 @@ The mechanism that captures a case's rendering and audits its accessibility, and
 - THEN that mechanism is used to render and audit each case
 - AND the built-in default is not invoked
 
+#### Scenario: Substrate-supplied capture and audit
+
+- GIVEN a showcase whose substrate opens variants its own way
+- AND no custom capture mechanism is configured
+- WHEN the checks run
+- THEN that substrate renders and audits each case
+- AND the default substrate's browser capture is not invoked
+
 #### Scenario: Custom comparison mechanism
 
-- GIVEN a configuration that supplies a custom image-comparison mechanism
+- GIVEN a configuration that supplies a custom comparison mechanism
 - WHEN the visual check runs
 - THEN that mechanism decides whether each case differs from its baseline
 
 #### Scenario: Provider receives the case identity
 
 - GIVEN a configuration that supplies a custom mechanism
-- WHEN the checks run a given case in a given theme
-- THEN the mechanism is given that case's identity (component, case, theme, width)
+- WHEN the checks run a given case under given variant values
+- THEN the mechanism is given that case's identity: component, case, and its rendering-selecting variant values (under the default substrate, its theme), together with the capture width where the substrate has one
 - AND a mechanism that ignores the identity still works unchanged
 
 #### Scenario: Default when unconfigured
 
 - GIVEN a configuration that supplies no custom mechanisms
 - WHEN the checks run
-- THEN the built-in default capture/audit and comparison are used
+- THEN the active substrate's default capture/audit and comparison are used
+- AND under the default substrate they produce the same results as today
 
 ### Requirement: Optional default backend
 

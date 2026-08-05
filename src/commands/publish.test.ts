@@ -3,8 +3,13 @@ import { mkdir, mkdtemp, readdir, rm } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import type { Manifest } from '../core/manifest'
 import { startProdServer } from '../server/prod-server'
+import { domSubstrate } from '../substrate/dom'
 import { makeTempDir } from '../testing/test-helpers'
-import { type BuildDescriptor, publish } from './publish'
+import {
+  type BuildDescriptor,
+  publish,
+  substrateSharedSpecifiers,
+} from './publish'
 
 /**
  * A build dir anchored INSIDE the repo. The published server/static SSR bundle
@@ -396,5 +401,36 @@ describe('publish: duplicate-runtime reporting', () => {
     const report = logs.join('\n')
     expect(report).toContain('add to `share` to deliver once')
     expect(report).toMatch(/markdown-to-jsx — in 2 components/)
+  })
+})
+
+describe('substrate-declared sharing', () => {
+  test('the DOM substrate declares the React runtime, JSX runtime included', () => {
+    // Substrate-declared rather than hard-coded in the bundler, so a substrate
+    // whose stage is not React-based is not forced to carry React.
+    const specs = substrateSharedSpecifiers(domSubstrate())
+    expect(specs).toContain('react')
+    expect(specs).toContain('react/jsx-runtime')
+    expect(specs).toContain('react-dom/client')
+  })
+
+  test('a stage runtime’s own dependencies are shared without the author naming them', () => {
+    // The stage runtime is bundled into every per-component bundle, so a
+    // library it imports is exactly the N-copies case sharing exists to fix.
+    const specs = substrateSharedSpecifiers({
+      ...domSubstrate(),
+      alwaysShare: [],
+      stage: { entry: '/x/stage.ts', share: ['xterm'] },
+    })
+    expect(specs).toEqual(['xterm'])
+  })
+
+  test('a substrate with no runtime of its own shares nothing', () => {
+    const specs = substrateSharedSpecifiers({
+      ...domSubstrate(),
+      alwaysShare: undefined,
+      stage: undefined,
+    })
+    expect(specs).toEqual([])
   })
 })

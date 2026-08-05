@@ -36,6 +36,46 @@ test.describe('Display Case server contract', () => {
     }
   })
 
+  test('the manifest declares the substrate and the axes a case varies over', async ({
+    request,
+  }) => {
+    // An agent enumerates a case's addressable variants from these axes rather
+    // than assuming light/dark, so this is a contract, not an implementation
+    // detail. The default (DOM) substrate declares theme and viewport.
+    const m = await fetchManifest(request)
+    expect(m.substrate.id).toBe('dom')
+
+    const byId = Object.fromEntries(
+      m.substrate.variants.map((a: { id: string }) => [a.id, a]),
+    )
+    // `theme` selects a different rendering, so it goes in the address…
+    expect(byId.theme.kind).toBe('render')
+    expect(byId.theme.default).toBe('light')
+    expect(byId.theme.values.map((v: { value: string }) => v.value)).toEqual([
+      'light',
+      'dark',
+    ])
+    // …while `viewport` only constrains the embedded stage around an unchanged
+    // rendering, so it must never key a baseline or an address.
+    expect(byId.viewport.kind).toBe('stage')
+  })
+
+  test('every render-axis value the manifest declares is addressable', async ({
+    request,
+  }) => {
+    const m = await fetchManifest(request)
+    const theme = m.substrate.variants.find(
+      (a: { id: string }) => a.id === 'theme',
+    )
+    const first = m.components[0]
+    const renderUrl = first.cases[0].renderUrl
+    for (const { value } of theme.values) {
+      const res = await request.get(`${renderUrl}?theme=${value}`)
+      expect(res.status(), `${renderUrl}?theme=${value}`).toBe(200)
+      expect(await res.text()).toContain(`data-theme="${value}"`)
+    }
+  })
+
   test('the isolated /render endpoint serves a chrome-free document', async ({
     page,
     request,

@@ -116,6 +116,7 @@ export const BUTTON_PLAYGROUND_TWEAKS: TweakSchema = {
  */
 export const mockManifest: Manifest = {
   title: 'Display Case',
+  substrate: { id: 'dom', variants: [] },
   modes: ['primer', 'components', 'exhibits'],
   landing: 'primer',
   groups: [],
@@ -501,6 +502,7 @@ export function makeModel(
     setMode: noop,
     shownMode: 'components',
     modeFadeStyle: { opacity: 1 },
+    variantAxes: [],
     sizeId: 'full',
     setSizeId: noop,
     manualZoom: 1,

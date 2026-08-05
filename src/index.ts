@@ -1,4 +1,7 @@
 import type { ComponentType, ReactNode } from 'react'
+// Type-only, so this stays a compile-time cycle that erases at runtime: the
+// substrate contract describes config, and config names the contract.
+import type { Substrate } from './core/substrate'
 
 /**
  * Public authoring API for Display Case.
@@ -292,7 +295,23 @@ export function flowStep<T extends TweakSchema = Record<never, never>>(
 export interface CaseContext {
   componentId: string
   caseId: string
+  /**
+   * The light/dark theme this rendering was produced under.
+   *
+   * Predates substrate-declared variant axes and is kept so providers written
+   * before them keep working. It is meaningful only when the active substrate
+   * declares a `theme` axis (the built-in DOM one does); a substrate that
+   * declares none reports `'light'` here rather than inventing a theme — read
+   * {@link variants} instead.
+   */
   theme: 'light' | 'dark'
+  /**
+   * Values for every `render`-kind axis the active substrate declares — the
+   * full identity of *which* rendering this is. `{ theme: 'dark' }` under the
+   * DOM substrate; another medium declares its own axes (terminal size, colour
+   * depth), and a substrate declaring none yields `{}`.
+   */
+  variants: Record<string, string>
   width: number
 }
 
@@ -382,9 +401,26 @@ export type DiffFn = (
 ) => DiffResult | Promise<DiffResult>
 
 export interface SnapshotProviders {
-  /** Render-driver factory; default = built-in Playwright + axe driver. */
+  /**
+   * Render-driver factory; default = built-in Playwright + axe driver.
+   *
+   * @deprecated Prefer `substrate: domSubstrate({ driver })`. A render driver
+   * opens a URL in a browser, paints it, and screenshots it — that is a
+   * property of the *DOM* substrate, not of Display Case, and a substrate that
+   * serializes frames directly has no driver at all. This key is still honored:
+   * it is routed into the DOM substrate unchanged, so existing configurations
+   * keep working. `diff` below is not deprecated — a comparison is
+   * substrate-neutral and remains overridable on its own.
+   */
   driver?: () => RenderDriver | Promise<RenderDriver>
-  /** Image comparison; default = built-in pixelmatch/pngjs diff. */
+  /**
+   * Comparison of a captured rendering against its baseline; default = the
+   * active substrate's own (the DOM substrate's built-in pixelmatch/pngjs
+   * diff). Supplying one here overrides the substrate's default, because a diff
+   * is bytes-in/changed-out regardless of what produced the bytes — a consumer
+   * may legitimately want a hosted service or per-case tolerance without
+   * replacing the substrate.
+   */
   diff?: DiffFn
 }
 
@@ -440,12 +476,20 @@ export interface StructureRuleOptions {
   thresholds?: Partial<Record<HierarchyLevel, number>>
 }
 
-/** Phases selectable by `display-case check`. */
+/**
+ * Phases selectable by `display-case check`.
+ *
+ * `safety` and `ssr` are the same phase under two names: it verifies every case
+ * renders headlessly through the active substrate. `safety` is the canonical,
+ * substrate-neutral name; `ssr` remains permanently supported — it is accurate
+ * under the DOM substrate and it is already in consumers scripts and hooks.
+ */
 export type CheckPhase =
   | 'tokens'
   | 'a11y'
   | 'visual'
   | 'structure'
+  | 'safety'
   | 'ssr'
   | 'graph'
 
@@ -616,6 +660,37 @@ export interface DisplayCaseConfig {
   title: string
   /** Globs (relative to the consumer package) that locate `*.case.tsx` files. */
   roots: string[]
+  /**
+   * The rendering substrate: the replaceable part of the pipeline that turns a
+   * case into something viewable — headless frame production, serialization,
+   * the stage document the chrome embeds, the optional client stage runtime,
+   * the variant axes the showcase varies over, and the render-dependent check
+   * phases.
+   *
+   * Absent ⇒ the built-in DOM substrate (React → HTML → a hydrated browser
+   * document), which is what Display Case has always done; a showcase that sets
+   * nothing here behaves identically to before substrates existed. Set it to
+   * target another medium entirely — a terminal renderer, say — while keeping
+   * the browse chrome, tweaks, flows, manifest, checks, and publish pipeline.
+   *
+   * A showcase targets exactly one substrate: cases are not portable across
+   * them (a substrate for another medium will reject DOM intrinsics like
+   * `div`). What is shared is the format, discovery, chrome, checks, publishing,
+   * and agent skills — not the case files.
+   *
+   * Import the contract from `@awarebydefault/display-case/core`. It is
+   * **experimental**: expect it to change until a second, non-DOM substrate has
+   * been built against it.
+   *
+   * @example
+   * import { carteSubstrate } from '@awarebydefault/carte/display-case'
+   * export default defineConfig({
+   *   title: 'Carte',
+   *   roots: ['**\/*.case.tsx'],
+   *   substrate: carteSubstrate({ viewport: { cols: 80, rows: 24 } }),
+   * })
+   */
+  substrate?: Substrate
   /**
    * Path (relative to the consumer package) to an `.mdx` document rendered as
    * the Primer — a long-form "wall text" reading page with embedded live

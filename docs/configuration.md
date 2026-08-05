@@ -29,6 +29,7 @@ The CLI looks for `display-case.config.ts` then `display-case.config.tsx` in the
 | `primer` | `string` | no | none | Path (relative to the package) to an `.mdx` document rendered as the Primer reading page. When set, a **Primer** tab joins the mode switch. See [`primer`](#primer). |
 | `landing` | `'primer' \| 'components' \| 'exhibits'` | no | first present mode | Which browse mode the chrome lands on at `/`. Honored only when that mode is present; otherwise the first present mode (primer → components → exhibits). See [`landing`](#landing). |
 | `nav` | `NavConfig` | no | none | Information-architecture configuration for the **Exhibits** mode: folder-derivation toggle, surface→group mapping, and group order/labels/default-collapsed. See [`nav`](#nav). |
+| `substrate` | `Substrate` | no | DOM | What a case renders *into*. Absent ⇒ React → HTML → a hydrated browser document (unchanged behavior). Set it to target another medium while keeping the chrome, tweaks, flows, manifest, checks, and publish. See [`substrate`](#substrate). |
 | `globalStyles` | `string[]` | no | none | CSS entrypoints (relative to the package) injected into previews. |
 | `theme` | `{ signals?: ThemeSignal[] }` | no | `{ signals: ['class'] }` | Which root theme signals Display Case emits so components following common dark/light conventions re-theme with the toggle. `data-theme` + `color-scheme` are always emitted; the default adds a `dark` class. See [`theme`](#theme) and [Theming](theming.md#following-your-frameworks-convention-theme-config). |
 | `decorator` | `ComponentType<{ children, level?, sourcePath?, area? }>` | no | none | Wrapper rendered around every case; also receives the active case's `level`, `sourcePath`, and `area` so it can wrap page/flow cases in app chrome. |
@@ -51,6 +52,37 @@ One or more glob patterns, resolved relative to the package directory, that sele
 ```ts
 roots: ['src/components/**/*.case.tsx']
 ```
+
+### `substrate`
+
+The **rendering substrate**: the replaceable part of the pipeline that turns a case into something viewable. It owns headless frame production, the stage document the chrome embeds, the optional client runtime that paints it, the variant axes the showcase varies over, and the render-dependent check phases.
+
+Omit it and you get the built-in **DOM substrate** — React → HTML → a hydrated browser document — which is what Display Case has always done. A showcase that sets nothing here behaves identically to before substrates existed, down to the bytes of every delivered document.
+
+Set it to target another medium entirely while keeping the browse chrome, tweaks, flows, placards, manifest, checks, and publish pipeline:
+
+```ts
+import { carteSubstrate } from '@awarebydefault/carte/display-case'
+
+export default defineConfig({
+  title: 'Carte',
+  roots: ['src/**/*.case.tsx'],
+  substrate: carteSubstrate({ viewport: { cols: 80, rows: 24 } }),
+})
+```
+
+A showcase targets **exactly one** substrate. Cases are not portable across them — a substrate for another medium will reject DOM intrinsics like `div` — so what is shared is the format, discovery, chrome, checks, publishing, and agent skills, not the case files.
+
+To configure the DOM substrate itself (rather than replace it), pass it explicitly:
+
+```ts
+import { domSubstrate } from '@awarebydefault/display-case/substrate'
+substrate: domSubstrate({ driver: () => myDriver() })
+```
+
+Write your own against the contract exported from `@awarebydefault/display-case/core`. It is **experimental**: expect it to change until a second, non-DOM substrate has been built against it.
+
+**What a substrate declares.** Its `id` (which keys visual baselines on disk), its variant axes — split into `render` axes that are encoded in a case's address and change the rendering, and `stage` axes that only adjust presentation around an unchanged frame — its stage runtime and that runtime's shared dependencies, and which check phases apply. A phase the substrate does not supply is reported as *not applicable* rather than failing the run. The active substrate and its axes appear in `/manifest.json` under `substrate`, so an agent enumerates a case's addressable variants instead of assuming light/dark.
 
 ### `globalStyles`
 
@@ -316,9 +348,22 @@ baselineDir: 'baselines'          // committed, relative to the package
 baselineDir: '/abs/path/to/baselines'
 ```
 
+Within that directory, baselines are keyed by the active [substrate](#substrate) and stored under the extension of whatever that substrate captures:
+
+```
+<baselineDir>/<substrate>/<component>/<case>.<variant>.<ext>
+baselines/dom/button/primary.dark.png
+```
+
+The substrate segment is what stops one substrate's recordings from silently standing in for another's after a switch, and the extension follows the *capture* — so a substrate that captures text frames records reviewable text rather than opaque images.
+
+**Migrating.** Baselines used to live at `<component>/<case>.<theme>.png`. Display Case still *reads* that flat layout when the keyed path is absent — printing a one-line notice — so a committed baseline directory is not invalidated wholesale. It always writes the keyed path; re-record with `check --visual --update` to move them, since the fallback goes away in a future release. The default cache is gitignored, so most showcases regenerate without noticing.
+
 ### `providers`
 
 The visual-regression backend is pluggable. `providers` lets you replace either half of it — the **driver** that opens a case render URL and captures it, the **diff** that compares a capture against its baseline, or both.
+
+> **`driver` is deprecated** in favour of [`substrate: domSubstrate({ driver })`](#substrate). A render driver opens a URL in a browser, paints it, and screenshots it — that is a property of the *DOM* substrate, not of Display Case, and a substrate that serializes frames directly has no driver at all. The key is still honored: it is routed into the DOM substrate unchanged, so existing configurations keep working. `diff` is **not** deprecated — a comparison is bytes-in/changed-out regardless of what produced the bytes, so it stays independently overridable and wins over whatever the substrate supplies.
 
 ```ts
 export default defineConfig({
@@ -473,7 +518,7 @@ check: {
 }
 ```
 
-- **`defaultPhases`** — a `Partial<Record<'tokens' | 'a11y' | 'visual' | 'structure' | 'ssr' | 'graph', boolean>>`. Drop a phase from the bare `check` run (e.g. `visual` when no baselines are committed) while keeping it available via its flag.
+- **`defaultPhases`** — a `Partial<Record<'tokens' | 'a11y' | 'visual' | 'structure' | 'safety' (alias `'ssr'`) | 'graph', boolean>>`. Drop a phase from the bare `check` run (e.g. `visual` when no baselines are committed) while keeping it available via its flag.
 - **`concurrency`** — how many variants the render phases (a11y/visual) scan at once, each on its own page from a shared browser. Default `4`; override per run with `--concurrency=N`. A custom `providers.driver` must tolerate concurrent `open()` calls (set `1` if it can't). See [Testing → Reporting and concurrency](testing.md#reporting-and-concurrency).
 - **`structure.rules[id]`** — `false` disables the rule; `'warn'`/`'error'` enables it at that severity; an options object (`{ severity?, ignore?, thresholds? }`) enables it with overrides. Unset ⇒ the rule's default. The rule ids, defaults, and escape-hatch markers are listed in [Testing → Structure checks](testing.md#structure-checks).
 - **`structure.strict`** — escalate all structure warnings to errors (the config equivalent of `check --strict`).

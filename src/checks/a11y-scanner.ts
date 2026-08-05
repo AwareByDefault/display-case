@@ -303,6 +303,7 @@ export function createA11yScanner(opts: A11yScannerOptions): A11yScanner {
         componentId: job.componentId,
         caseId: job.caseId,
         theme: job.theme,
+        variants: { theme: job.theme },
         width: 1024,
       })
       try {

@@ -4,6 +4,7 @@ import { Glob } from 'bun'
 import { componentClosures } from '../core/affected'
 import { baselineDir, cacheDir, resolveConfig } from '../core/discovery'
 import type { ManifestComponent } from '../core/manifest'
+import type { Substrate, SubstrateVariantAxis } from '../core/substrate'
 import type {
   A11yViolation,
   CaseContext,
@@ -12,6 +13,7 @@ import type {
   RenderDriver,
 } from '../index'
 import { startDisplayCase } from '../server/server'
+import { resolveSubstrate } from '../substrate/resolve'
 import {
   emptyTally,
   type PhaseTally,
@@ -21,7 +23,6 @@ import {
 import { checkGraph } from './graph-check'
 import { checkSsr } from './ssr-check'
 import { checkStructure } from './structure-check'
-import { checkTokens } from './tokens-check'
 
 /**
  * Headless a11y + visual-regression runner. The capture/audit driver and the
@@ -97,8 +98,44 @@ async function mapPool<T>(
 interface Target {
   componentId: string
   caseId: string
-  theme: (typeof THEMES)[number]
+  /** Values for every `render`-kind axis the substrate declares. Under the DOM
+   *  substrate this is `{ theme }`; another medium declares its own. */
+  variants: Record<string, string>
+  /** Deterministic join over `variants`, used in output and in baseline paths
+   *  (`light`, `dark`, `80x24.truecolor`). */
+  variantKey: string
   renderUrl: string
+}
+
+/**
+ * Every combination of the substrate's `render`-kind axis values — the distinct
+ * renderings a case actually has.
+ *
+ * Enumerating the declared axes rather than a fixed light/dark pair is what lets
+ * a substrate for another medium be checked at all: it might vary over terminal
+ * size and colour depth and have no theme whatsoever. A substrate that declares
+ * no render axes yields one unnamed variant, which is correct — there is only
+ * one rendering to check.
+ */
+export function renderVariantCombos(
+  axes: SubstrateVariantAxis[],
+): { variants: Record<string, string>; key: string }[] {
+  let combos: Record<string, string>[] = [{}]
+  for (const axis of axes) {
+    if (axis.kind !== 'render') continue
+    combos = combos.flatMap((base) =>
+      axis.values.map((v: { value: string }) => ({
+        ...base,
+        [axis.id]: v.value,
+      })),
+    )
+  }
+  return combos.map((variants) => ({
+    variants,
+    // Axis order follows the declaration, so the key is stable across runs —
+    // a baseline recorded today is found again tomorrow.
+    key: Object.values(variants).join('.') || 'default',
+  }))
 }
 
 /** One scanned variant in the written a11y report (only failing variants). */
@@ -153,8 +190,22 @@ async function resolveDriver(config: DisplayCaseConfig): Promise<RenderDriver> {
   }
 }
 
-async function resolveDiff(config: DisplayCaseConfig): Promise<DiffFn> {
+/**
+ * The comparison the visual phase uses, in precedence order: the consumer's
+ * explicit override, then the substrate's own default, then the built-in
+ * pixel diff.
+ *
+ * The substrate's default matters beyond tidiness: a substrate that captures
+ * text supplies a text comparison, and falling straight through to the
+ * pixelmatch PNG differ would either mis-compare its frames or fail for want of
+ * an image toolchain it never needed.
+ */
+async function resolveDiff(
+  config: DisplayCaseConfig,
+  substrate: Substrate,
+): Promise<DiffFn> {
   if (config.providers?.diff) return config.providers.diff
+  if (substrate.checks?.diff) return substrate.checks.diff
   try {
     const { pixelmatchDiff } = await import('./providers/pixelmatch-diff')
     return pixelmatchDiff
@@ -163,6 +214,47 @@ async function resolveDiff(config: DisplayCaseConfig): Promise<DiffFn> {
       `${INSTALL_HINT}\n  (${err instanceof Error ? err.message : String(err)})`,
     )
   }
+}
+
+/**
+ * Where a variant's baseline lives.
+ *
+ * `<baselineDir>/<substrate>/<component>/<case>.<variantKey>.<ext>` — keyed by
+ * substrate so switching one cannot silently reuse or invalidate another's
+ * recordings, and carrying the substrate's own extension so a text-serializing
+ * substrate's baselines are reviewable in a diff instead of landing as opaque
+ * `.png` blobs.
+ *
+ * The DOM substrate additionally *reads* the legacy flat path
+ * (`<component>/<case>.<theme>.png`) when the keyed path is absent, so a
+ * showcase with a committed baseline directory is not invalidated wholesale by
+ * this change. It always writes the keyed path — one release of tolerance, then
+ * the legacy read goes away.
+ */
+export function baselinePathFor(
+  baselines: string,
+  substrate: { id: string },
+  target: { componentId: string; caseId: string; variantKey: string },
+  ext = 'png',
+): string {
+  return join(
+    baselines,
+    substrate.id,
+    target.componentId,
+    `${target.caseId}.${target.variantKey}.${ext}`,
+  )
+}
+
+/** The pre-substrate baseline path, read (never written) for one release. */
+export function legacyBaselinePath(
+  baselines: string,
+  target: { componentId: string; caseId: string; variantKey: string },
+): string {
+  return join(
+    baselines,
+    target.componentId,
+    `${target.caseId}.${target.variantKey}.png`,
+  )
 }
 
 /**
@@ -253,20 +345,30 @@ export async function runChecks(
   opts: CheckOptions,
 ): Promise<boolean> {
   const { config } = await resolveConfig(pkgDir)
+  // The showcase renders — and is checked — through this.
+  const substrate = resolveSubstrate(config)
+  // The legacy-baseline notice is printed once per run, not once per variant.
+  let warnedLegacyBaselines = false
   const baselines = baselineDir(pkgDir, config)
 
   // Token conformance is a static parse — run it first, with no browser/server.
+  // It is delegated to the substrate, because "the vocabulary a showcase may
+  // reference" is a property of the medium: the DOM substrate checks CSS custom
+  // properties, another medium checks its own (or declares the phase moot).
   let tokenViolations = 0
   if (opts.tokens) {
-    const { violations } = await checkTokens(pkgDir)
-    tokenViolations = violations.length
-    for (const v of violations) {
-      const rel = v.file.startsWith(`${pkgDir}/`)
-        ? v.file.slice(pkgDir.length + 1)
-        : v.file
-      console.error(
-        `  tokens ✗ ${rel}:${v.line}:${v.column} unknown token ${v.token}${v.hadFallback ? ' (fallback does not excuse it)' : ''}`,
+    const tokensPhase = substrate.checks?.tokens
+    if (!tokensPhase) {
+      console.log(
+        `  tokens: not applicable for the "${substrate.id}" substrate`,
       )
+    } else {
+      const findings = await tokensPhase({
+        pkgDir,
+        allow: config.tokens?.allow ?? [],
+      })
+      tokenViolations = findings.length
+      for (const f of findings) console.error(`  tokens ✗ ${f.message}`)
     }
   }
 
@@ -426,16 +528,21 @@ export async function runChecks(
     }
   }
 
+  // One target per case per declared rendering, with each axis value written
+  // into the address under its own id.
+  const combos = renderVariantCombos(substrate.variants)
   const targets: Target[] = []
   for (const c of manifest.components) {
     if (scope && !scope.has(c.id)) continue
     for (const cs of c.cases) {
-      for (const theme of THEMES) {
+      for (const combo of combos) {
+        const query = new URLSearchParams(combo.variants).toString()
         targets.push({
           componentId: c.id,
           caseId: cs.id,
-          theme,
-          renderUrl: `${base}${cs.renderUrl}?theme=${theme}`,
+          variants: combo.variants,
+          variantKey: combo.key,
+          renderUrl: `${base}${cs.renderUrl}${query ? `?${query}` : ''}`,
         })
       }
     }
@@ -444,11 +551,25 @@ export async function runChecks(
   // Shared scan parameters (also honored by the live in-app surface) so the
   // panel and this gate agree on what counts as a violation. `enabled` is NOT
   // consulted here — the gate runs whenever invoked.
+  // `a11y.themes` narrows the theme axis specifically; a target with no theme
+  // (a substrate that declares none) is always in scope.
   const a11yThemes = config.a11y?.themes ?? THEMES
+  const inA11yScope = (t: Target): boolean =>
+    t.variants.theme === undefined ||
+    (a11yThemes as readonly string[]).includes(t.variants.theme)
   const a11yExclude = config.a11y?.exclude
 
   const driver = await resolveDriver(config)
-  const diff = opts.visual ? await resolveDiff(config) : null
+  const diff = opts.visual ? await resolveDiff(config, substrate) : null
+  // Both render phases go through the substrate. A substrate that supplies no
+  // session cannot be captured or audited by this runner — report that rather
+  // than failing the run over a phase that does not apply to the medium.
+  const openVariant = substrate.checks?.openVariant
+  if (!openVariant) {
+    console.log(
+      `  a11y/visual: not applicable for the "${substrate.id}" substrate`,
+    )
+  }
   const requested =
     opts.concurrency ?? config.check?.concurrency ?? DEFAULT_CONCURRENCY
   const concurrency =
@@ -471,26 +592,44 @@ export async function runChecks(
   // browser-I/O-bound. A variant's lines are buffered and flushed as one block so
   // concurrent variants never interleave mid-test.
   async function scan(t: Target): Promise<void> {
+    if (!openVariant) return
     const ctx: CaseContext = {
       componentId: t.componentId,
       caseId: t.caseId,
-      theme: t.theme,
+      // Kept for providers written before axes were substrate-declared; a
+      // substrate with no theme axis reports the default rather than lying.
+      theme: t.variants.theme === 'dark' ? 'dark' : 'light',
+      variants: t.variants,
       width: VIEWPORT_WIDTH,
     }
-    const name = `${t.componentId}/${t.caseId} [${t.theme}]`
+    const name = `${t.componentId}/${t.caseId} [${t.variantKey}]`
     const out: string[] = []
-    const page = await driver.open(t.renderUrl, ctx)
+    // One session per variant, shared by both phases: the audit and the capture
+    // must describe the same rendering, and for the DOM substrate that means
+    // one painted page rather than two.
+    const session = await openVariant({
+      componentId: t.componentId,
+      caseId: t.caseId,
+      tweaks: {},
+      variants: t.variants,
+      params: {},
+      clientOnly: false,
+      config,
+      case: ctx,
+      renderUrl: t.renderUrl,
+      driver,
+    })
     try {
-      if (opts.a11y && a11yThemes.includes(t.theme)) {
+      if (opts.a11y && inA11yScope(t)) {
         const t0 = Bun.nanoseconds()
-        const violations = await page.audit({ exclude: a11yExclude })
+        const violations = await session.audit({ exclude: a11yExclude })
         const dur = Bun.nanoseconds() - t0
         if (violations.length) {
           a11yTally.fail++
           a11yReport.push({
             component: t.componentId,
             case: t.caseId,
-            theme: t.theme,
+            theme: t.variantKey,
             violations,
           })
           out.push(testLine('a11y', name, 'fail', dur))
@@ -508,19 +647,39 @@ export async function runChecks(
 
       if (opts.visual && diff) {
         const t0 = Bun.nanoseconds()
-        const shot = await page.screenshot()
-        const file = join(
-          baselines,
-          t.componentId,
-          `${t.caseId}.${t.theme}.png`,
-        )
-        if (opts.update || !(await Bun.file(file).exists())) {
+        const shot = await session.capture()
+        // Baselines are keyed by substrate, then by the variant values that
+        // selected this rendering, and stored under the substrate's own
+        // extension — so switching substrates cannot silently reuse another's
+        // baselines, and a text-serializing substrate's baselines land as
+        // reviewable text rather than as an opaque `.png`.
+        const file = baselinePathFor(baselines, substrate, t, session.ext)
+        // One release of tolerance for the pre-substrate flat layout: read it
+        // when the keyed path is missing, always write the keyed one, and say
+        // so once so the migration is visible rather than silent.
+        let readFrom = file
+        if (!(await Bun.file(file).exists())) {
+          const legacy = legacyBaselinePath(baselines, t)
+          if (await Bun.file(legacy).exists()) {
+            readFrom = legacy
+            if (!warnedLegacyBaselines) {
+              warnedLegacyBaselines = true
+              console.log(
+                `  visual: reading baselines from the pre-substrate layout; ` +
+                  `re-record with --update to move them under ${substrate.id}/`,
+              )
+            }
+          }
+        }
+        if (opts.update || !(await Bun.file(readFrom).exists())) {
           await mkdir(dirname(file), { recursive: true })
           await Bun.write(file, shot)
           visualTally.record++
           out.push(testLine('visual', name, 'record', Bun.nanoseconds() - t0))
         } else {
-          const baseline = new Uint8Array(await Bun.file(file).arrayBuffer())
+          const baseline = new Uint8Array(
+            await Bun.file(readFrom).arrayBuffer(),
+          )
           const res = await diff(
             { baseline, actual: shot },
             { ...ctx, baselinePath: file },
@@ -531,7 +690,7 @@ export async function runChecks(
             visualTally.fail++
             let where = ''
             if (res.diffImage) {
-              const diffPath = file.replace(/\.png$/, '.diff.png')
+              const diffPath = file.replace(/\.[^.]+$/, (e) => `.diff${e}`)
               await Bun.write(diffPath, res.diffImage)
               where = ` → ${rel(diffPath)}`
             }
@@ -544,7 +703,7 @@ export async function runChecks(
         }
       }
     } finally {
-      await page.dispose()
+      await session.dispose()
     }
     if (out.length) console.log(out.join('\n'))
   }

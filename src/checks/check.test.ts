@@ -3,7 +3,13 @@ import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { A11yViolation } from '../index'
 import { makeTempDir, writeFiles } from '../testing/test-helpers'
-import { a11yDetailLines, runChecks } from './check'
+import {
+  a11yDetailLines,
+  baselinePathFor,
+  legacyBaselinePath,
+  renderVariantCombos,
+  runChecks,
+} from './check'
 
 const CLI = join(import.meta.dir, '..', 'cli.ts')
 
@@ -191,5 +197,72 @@ describe('check: structure phase wiring', () => {
     expect(bare).not.toContain('structure ✗')
     const explicit = await cli(dir, ['--structure'])
     expect(explicit).toContain('structure ✗')
+  })
+})
+
+describe('baseline paths', () => {
+  const substrate = { id: 'dom' }
+  const target = {
+    componentId: 'button',
+    caseId: 'primary',
+    variantKey: 'dark',
+  }
+
+  test('keys a baseline by substrate, component, case, and variant', () => {
+    // The substrate segment is what stops one substrate’s recordings from
+    // silently standing in for another’s after a switch.
+    expect(baselinePathFor('/b', substrate, target, 'png')).toBe(
+      '/b/dom/button/primary.dark.png',
+    )
+  })
+
+  test('stores under the captured format extension', () => {
+    // A text-serializing substrate’s baselines must land as reviewable text.
+    expect(
+      baselinePathFor('/b', { ...substrate, id: 'term' }, target, 'txt'),
+    ).toBe('/b/term/button/primary.dark.txt')
+  })
+
+  test('the legacy path is the pre-substrate flat layout', () => {
+    // Read for one release so a committed baseline dir is not invalidated.
+    expect(legacyBaselinePath('/b', target)).toBe('/b/button/primary.dark.png')
+  })
+})
+
+describe('renderVariantCombos', () => {
+  const axis = (id: string, values: string[], kind: 'render' | 'stage') => ({
+    id,
+    label: id,
+    kind,
+    values: values.map((v) => ({ value: v, label: v })),
+    default: values[0] as string,
+  })
+
+  test('enumerates every combination of the declared render axes', () => {
+    // A substrate varying over two axes has one rendering per pair — checking
+    // only one axis would leave the others unverified.
+    const combos = renderVariantCombos([
+      axis('size', ['80x24', '120x40'], 'render'),
+      axis('color', ['truecolor', 'none'], 'render'),
+    ])
+    expect(combos.map((c) => c.key)).toEqual([
+      '80x24.truecolor',
+      '80x24.none',
+      '120x40.truecolor',
+      '120x40.none',
+    ])
+  })
+
+  test('ignores stage axes, which do not change the rendering', () => {
+    const combos = renderVariantCombos([
+      axis('theme', ['light', 'dark'], 'render'),
+      axis('viewport', ['full', 'mobile'], 'stage'),
+    ])
+    expect(combos.map((c) => c.key)).toEqual(['light', 'dark'])
+  })
+
+  test('a substrate with no render axes yields one rendering', () => {
+    // Not zero: there is still exactly one thing to check.
+    expect(renderVariantCombos([])).toEqual([{ variants: {}, key: 'default' }])
   })
 })

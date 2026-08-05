@@ -12,10 +12,17 @@ Capture one component case as an image, deterministically, via Display Case.
 
 ## Steps
 
-1. **Ensure the server is running.** Start it if needed: `bun run display-case` (serves at `http://localhost:3100`). It needs no database or app — just the showcase.
-2. **Enumerate.** `GET http://localhost:3100/manifest.json` (or `bunx @awarebydefault/display-case <pkgDir> --print-manifest`, no server needed) to find the component and its cases. Each case has a `renderUrl` like `/render/tweak-control/playground` and an optional `tweaks` schema.
+1. **Enumerate.** `bunx @awarebydefault/display-case <pkgDir> --print-manifest` (no server needed) to find the component and its cases. Each case has a `renderUrl` like `/render/tweak-control/playground` and an optional `tweaks` schema. The manifest's `substrate.variants` lists the axes a case varies over — read them rather than assuming `theme`.
+2. **Decide whether you need a browser at all.** If you only need the *rendering* (to read it, diff it, or save it), skip the server:
+
+   ```
+   bunx @awarebydefault/display-case render <component>/<case> <pkgDir> \
+     --variant=theme=dark --tweak=<name>=<value> --out=frame.html
+   ```
+
+   That prints the same rendering the endpoint serves, with no server and no browser. For an **image**, you still need to rasterize — continue below. Start the server if so: `bun run display-case` (serves at `http://localhost:3100`); it needs no database or app.
 3. **Build the render URL.** Append query params to pin the exact state:
-   - `theme=light|dark`
+   - one per declared render axis, e.g. `theme=light|dark` for the default (DOM) substrate
    - `width=<px>` (optional, constrains to a centered max-width)
    - `t.<name>=<value>` per tweak (`boolean`→`1`/`0`; `number`→numeric; text/choice verbatim)
    - e.g. `http://localhost:3100/render/tweak-control/playground?theme=dark&t.kind=choice`

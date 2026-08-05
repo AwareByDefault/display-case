@@ -10,6 +10,8 @@ const DC = join(import.meta.dir, '..', 'index.ts')
 const caseFile = (body: string) =>
   `import { defineCases } from '${DC}'\nexport default ${body}\n`
 
+const SUB = join(import.meta.dir, '..', 'substrate', 'dom.ts')
+
 const CONFIG = `export default { title: 'F', roots: ['**/*.case.tsx'] }\n`
 
 describe('checkSsr', () => {
@@ -69,5 +71,31 @@ describe('checkSsr', () => {
     expect(findings).toHaveLength(0)
     expect(rendered).toBe(0)
     expect(declared).toBe(1)
+  })
+
+  test('a substrate-supplied safety phase replaces the default render', async () => {
+    // The phase is the substrate's to define: a medium can fail in ways a
+    // plain render never surfaces. A case that renders fine must still be
+    // reported when the substrate's own safety check objects.
+    const dir = await makeTempDir()
+    dirs.push(dir)
+    await writeFiles(dir, {
+      'display-case.config.ts': [
+        `import { domSubstrate } from '${SUB}'`,
+        `const base = domSubstrate()`,
+        `export default { title: 'F', roots: ['**/*.case.tsx'], substrate: {`,
+        `  ...base,`,
+        `  checks: { ...base.checks, safety: () => [{ componentId: 'plain', severity: 'error', message: 'too wide for 80 columns' }] },`,
+        `} }`,
+        ``,
+      ].join('\n'),
+      'Plain.case.tsx': caseFile(
+        `defineCases('Plain', { Default: () => 'hi' }, { level: 'atom' })`,
+      ),
+    })
+    const { findings, rendered } = await checkSsr(dir)
+    expect(rendered).toBe(0)
+    expect(findings).toHaveLength(1)
+    expect(findings[0]!.error).toBe('too wide for 80 columns')
   })
 })

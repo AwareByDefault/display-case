@@ -9,6 +9,7 @@ const CTX: CaseContext & { baselinePath: string } = {
   componentId: 'button',
   caseId: 'default',
   theme: 'light',
+  variants: { theme: 'light' },
   width: 320,
   baselinePath: 'baseline.png',
 }

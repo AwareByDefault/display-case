@@ -18,6 +18,7 @@ The specification is split into discrete, per-capability files. Each describes t
 - **Accessibility Checks** — gating accessibility checks plus optional in-app surfacing of each variant's result. [accessibility-checks/spec.md](./accessibility-checks/spec.md)
 - **Visual-Regression Checks** — renders each case to an image and compares against a baseline, with an overridable, optional-backend pipeline. [visual-regression-checks/spec.md](./visual-regression-checks/spec.md)
 - **Structure Checks** — static best-practice checks over a showcase's authored material and configuration, with configurable phases, severities, and exemptions. [structure-checks/spec.md](./structure-checks/spec.md)
+- **Rendering Substrate** — the replaceable unit that turns a case into something viewable: headless frame production, the stage document, the variant axes a showcase varies over, and the render-dependent check phases. [rendering-substrate/spec.md](./rendering-substrate/spec.md)
 - **Server Rendering** — delivers every surface rendered before scripting, plus a server-render safety check. [server-rendering/spec.md](./server-rendering/spec.md)
 - **Agent Init** — installs and removes Display Case's AI-agent integration into a target repository, idempotently. [agent-init/spec.md](./agent-init/spec.md)
 - **Publishing** — keeps Display Case out of consuming applications while producing a standalone, deployable showcase build. [publishing/spec.md](./publishing/spec.md)

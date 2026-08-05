@@ -1,11 +1,12 @@
-import { renderToString } from 'react-dom/server'
 import { buildCatalog } from '../core/catalog'
 import {
   discoverCaseFiles,
   loadModules,
   resolveConfig,
 } from '../core/discovery'
+import type { SubstrateRenderContext } from '../core/substrate'
 import { caseTree, NOOP_GOTO } from '../render/render-node'
+import { resolveSubstrate } from '../substrate/resolve'
 import {
   diagnoseReactEnvironment,
   faultFromSymptom,
@@ -113,26 +114,79 @@ export async function checkSsr(pkgDir: string): Promise<SsrCheckResult> {
   const findings: SsrFinding[] = []
   let rendered = 0
 
+  // The phase runs through the active substrate, so it verifies what the
+  // showcase actually delivers rather than assuming HTML. A substrate may
+  // supply its own `safety` (a medium can have failure modes a plain render
+  // won't surface); absent that, the check *is* "does a headless render of this
+  // case succeed" — which is the real intent the `ssr` name only approximated.
+  const substrate = resolveSubstrate(config)
+  const axisDefaults: Record<string, string> = {}
+  for (const axis of substrate.variants) {
+    if (axis.kind === 'render') axisDefaults[axis.id] = axis.default
+  }
+
   for (const component of catalog) {
     const loaded = byName.get(component.name)
     if (!loaded) continue
     if (loaded.module.browserOnly) continue
     for (const cs of component.cases) {
+      const ctx: SubstrateRenderContext = {
+        componentId: component.id,
+        caseId: cs.id,
+        tweaks: {},
+        variants: axisDefaults,
+        params: {},
+        clientOnly: false,
+        config,
+      }
       try {
-        renderToString(
-          caseTree(
-            caseModules,
-            config,
-            {
-              componentId: component.id,
-              caseId: cs.id,
-              width: null,
-              tweaks: {},
-            },
-            NOOP_GOTO,
-          ),
+        // Tree construction is inside the try because a case can throw right
+        // there — reading `document` in its own thunk to pick a provider mode —
+        // and that is exactly the render impurity this phase exists to catch.
+        const tree = caseTree(
+          caseModules,
+          config,
+          {
+            componentId: component.id,
+            caseId: cs.id,
+            width: null,
+            tweaks: {},
+          },
+          NOOP_GOTO,
         )
-        rendered++
+        if (substrate.checks?.safety) {
+          const reported = await substrate.checks.safety(tree, ctx)
+          if (reported.length === 0) {
+            rendered++
+          } else {
+            for (const f of reported) {
+              findings.push({
+                file: loaded.file,
+                component: component.name,
+                case: cs.name,
+                error: f.message,
+              })
+            }
+          }
+          continue
+        }
+        // A substrate reports a case it could not render headlessly on its own
+        // frame rather than by throwing (the DOM substrate catches the throw so
+        // one bad case never fails a whole document), so read that back.
+        const frame = (await substrate.render(tree, ctx)) as {
+          browserOnly?: boolean
+          error?: string
+        }
+        if (frame?.browserOnly) {
+          findings.push({
+            file: loaded.file,
+            component: component.name,
+            case: cs.name,
+            error: frame.error ?? 'could not render headlessly',
+          })
+        } else {
+          rendered++
+        }
       } catch (err) {
         findings.push({
           file: loaded.file,

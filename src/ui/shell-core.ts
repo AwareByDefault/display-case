@@ -3,6 +3,7 @@ import type {
   Manifest,
   ManifestComponent,
   ManifestGroup,
+  ManifestVariantAxis,
 } from '../core/manifest'
 import type { HierarchyLevel } from '../index'
 import { HIERARCHY_LEVELS, isSurfaceLevel } from '../index'
@@ -55,6 +56,22 @@ export const LEVEL_LABEL: Record<HierarchyLevel | 'unclassified', string> = {
   page: 'Pages',
   flow: 'Flows',
   unclassified: 'Unclassified',
+}
+
+/**
+ * The display label for a hierarchy level, honoring a substrate's relabelling.
+ *
+ * The level *taxonomy* is fixed across substrates — classification, manifest
+ * grouping, the browse-mode split, and four structure rules all operate on it —
+ * but its vocabulary is presentational, so a substrate may rename what a viewer
+ * reads (a terminal showcase presenting "Pages" as "Screens"). Anything the
+ * substrate doesn't rename falls back to Display Case's own label.
+ */
+export function levelLabel(
+  manifest: Manifest | null,
+  key: HierarchyLevel | 'unclassified',
+): string {
+  return manifest?.substrate?.levelLabels?.[key] ?? LEVEL_LABEL[key]
 }
 
 export const GROUP_ORDER: (HierarchyLevel | 'unclassified')[] = [
@@ -258,15 +275,20 @@ export function buildUrl(
 
 export function buildRenderSrc(
   renderUrl: string,
-  theme: Theme,
+  variants: Record<string, string>,
   tweaks: Record<string, string>,
   fit: boolean,
   transparent: boolean,
 ): string {
   const params = new URLSearchParams()
-  params.set('theme', theme)
+  // Every render-kind axis the active substrate declares, by its own id. Under
+  // the DOM substrate this is `theme=…`, exactly as before; a substrate for
+  // another medium declares different axes and they are written here without
+  // the chrome knowing their names.
+  for (const [id, value] of Object.entries(variants)) params.set(id, value)
   // The preview's pixel size is controlled by the iframe element, not an inner
-  // max-width, so the frame always renders "full".
+  // max-width, so the frame always renders "full" — the viewport axis is a
+  // `stage` axis and never reaches the address.
   for (const [k, v] of Object.entries(tweaks)) params.set(`t.${k}`, v)
   // `fit` asks the render frame to shrink-wrap the case to its natural width so
   // a small component (e.g. a square button) doesn't stretch to fill the frame.
@@ -289,14 +311,50 @@ export function buildRenderSrc(
 // client fills the real origin in after hydration — no hydration mismatch.
 export function buildAddressUrl(
   renderUrl: string,
-  theme: Theme,
+  variants: Record<string, string>,
   tweaks: Record<string, string>,
   origin: string,
 ): string {
   const params = new URLSearchParams()
-  params.set('theme', theme)
+  for (const [id, value] of Object.entries(variants)) params.set(id, value)
   for (const [k, v] of Object.entries(tweaks)) params.set(`t.${k}`, v)
   return `${origin}${renderUrl}?${params.toString()}`
+}
+
+/**
+ * The render-axis values the chrome addresses a case under.
+ *
+ * The chrome's own light/dark is a property of the *chrome* — it is a DOM
+ * application whichever substrate is in play — so it is kept separately and
+ * folded in here only when the substrate actually declares a `theme` axis.
+ * Every other declared render axis contributes its selected value, or its
+ * declared default until the viewer picks one. A substrate that declares no
+ * render axes yields `{}`, and the address carries no variant parameters at
+ * all — which is correct: there is only one rendering to address.
+ */
+export function renderAxisValues(
+  manifest: Manifest | null,
+  theme: Theme,
+  selected: Record<string, string> = {},
+): Record<string, string> {
+  const values: Record<string, string> = {}
+  for (const axis of manifest?.substrate?.variants ?? []) {
+    if (axis.kind !== 'render') continue
+    values[axis.id] = selected[axis.id] ?? axis.default
+  }
+  // The chrome's theme drives the preview's theme when the substrate has one.
+  if ('theme' in values) values.theme = theme
+  return values
+}
+
+/** The render-kind axes a viewer can switch, beyond the chrome's own theme
+ *  toggle — what a generic variant control is rendered for. */
+export function switchableAxes(
+  manifest: Manifest | null,
+): ManifestVariantAxis[] {
+  return (manifest?.substrate?.variants ?? []).filter(
+    (axis) => axis.kind === 'render' && axis.id !== 'theme',
+  )
 }
 
 // Components mode: group the building-block kit by level (atom → template, then

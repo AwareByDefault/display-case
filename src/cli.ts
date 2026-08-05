@@ -21,7 +21,8 @@ if (typeof globalThis.Bun === 'undefined') {
  *
  *   display-case <pkgDir> [--port=N]        start the dev server
  *   display-case <pkgDir> --print-manifest  print the manifest JSON and exit
- *   display-case check <pkgDir> [--a11y] [--visual] [--tokens] [--structure] [--ssr] [--graph] [--update] [--strict] [--only=ids] [--changed[=ref]] [--concurrency=N] [--port=N]
+ *   display-case render <component>/<case> [<pkgDir>] [--variant=k=v] [--tweak=k=v] [--out=file]
+ *   display-case check <pkgDir> [--a11y] [--visual] [--tokens] [--structure] [--safety|--ssr] [--graph] [--update] [--strict] [--only=ids] [--changed[=ref]] [--concurrency=N] [--port=N]
  *   display-case init <pkgDir> [--agent=claude] [--with-visual] [--dry-run] [--json]
  *   display-case uninstall <pkgDir> [--agent=claude] [--dry-run] [--json]
  *
@@ -102,6 +103,36 @@ function resolvePkgDir(arg: string | undefined): string {
 const portArg = option('port') ?? process.env.DISPLAY_CASE_PORT
 const port = portArg ? Number(portArg) : undefined
 
+if (argv[0] === 'render') {
+  // `render <component>/<case> [pkgDir]` — print the serialized frame. No
+  // server, no browser: the substrate renders headlessly and serializes, which
+  // for a text substrate is something an agent reads directly.
+  const target = positionals()[1]
+  if (!target) {
+    fail(
+      'Usage: display-case render <component>/<case> [<pkgDir>] [--variant=k=v] [--tweak=k=v] [--out=file]',
+    )
+  }
+  const pkgDir = resolvePkgDir(positionals()[2])
+  const repeated = (name: string): string[] =>
+    argv
+      .filter((a) => a.startsWith(`--${name}=`))
+      .map((a) => a.slice(name.length + 3))
+  const { runRender } = await import('./commands/render')
+  try {
+    process.exit(
+      await runRender(pkgDir, {
+        target,
+        variants: repeated('variant'),
+        tweaks: repeated('tweak'),
+        out: option('out'),
+      }),
+    )
+  } catch (err) {
+    fail(err instanceof Error ? err.message : String(err))
+  }
+}
+
 if (argv[0] === 'init' || argv[0] === 'uninstall') {
   const pkgDir = resolve(positionals()[1] ?? '.')
   const agent = option('agent') ?? DEFAULT_AGENT
@@ -150,7 +181,10 @@ if (argv[0] === 'init' || argv[0] === 'uninstall') {
     a11y: flag('a11y'),
     visual: flag('visual'),
     structure: flag('structure'),
-    ssr: flag('ssr'),
+    // `--safety` is the canonical, substrate-neutral name; `--ssr` stays a
+    // permanent alias (it is accurate under the DOM substrate, and it is in
+    // consumers scripts and hooks).
+    ssr: flag('safety') || flag('ssr'),
     graph: flag('graph'),
   }
   const anyExplicit =
@@ -161,8 +195,14 @@ if (argv[0] === 'init' || argv[0] === 'uninstall') {
     explicit.ssr ||
     explicit.graph
   const defaults = config.check?.defaultPhases ?? {}
-  const runs = (phase: keyof typeof explicit): boolean =>
-    explicit[phase] || (!anyExplicit && defaults[phase] !== false)
+  const runs = (phase: keyof typeof explicit): boolean => {
+    // The render-safety phase answers to both names, so a config opting out
+    // under either spelling is honored.
+    const optedOut =
+      defaults[phase] === false ||
+      (phase === 'ssr' && defaults.safety === false)
+    return explicit[phase] || (!anyExplicit && !optedOut)
+  }
   // Change-scoping for the render phases (a11y/visual): `--only=<ids/globs>`
   // restricts to named components; `--changed[=<ref>]` restricts to components
   // whose import closure touches a file changed since <ref> (default the base
