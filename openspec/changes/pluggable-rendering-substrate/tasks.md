@@ -22,10 +22,10 @@ generalizations. The Carte substrate itself is out-of-tree and not in this list.
 ## 3. Substrate-declared variant axes
 
 - [x] 3.1 Implement axis declarations with the render/stage kind split; `domSubstrate()` declares the theme axis (render) and the viewport-width axis (stage) with today's ids and values (design D6)
-- [ ] 3.2 Generalize `shell-core` routing/URL building and the chrome's variant controls to render the declared axes; keep `src/ui/test-ids.ts` as the locator vocabulary, keyed by axis id + value (design D9)
+- [x] 3.2 Generalize `shell-core` routing/URL building and the chrome's variant controls to render the declared axes; keep `src/ui/test-ids.ts` as the locator vocabulary, keyed by axis id + value (design D9)
 - [x] 3.3 Carry the substrate id and declared axes in the manifest; update manifest tests
 - [x] 3.4 Accept declared render-axis parameters at the render endpoint (the theme parameter stays valid for the DOM substrate); shell and primer documents follow
-- [ ] 3.5 Update the e2e chrome suite against the DOM substrate's declared axes; `bun run e2e` green
+- [x] 3.5 Update the e2e chrome suite against the DOM substrate's declared axes; `bun run e2e` green
 
 ## 4. Check-phase delegation, baselines, and the render subcommand
 

@@ -502,6 +502,7 @@ export function makeModel(
     setMode: noop,
     shownMode: 'components',
     modeFadeStyle: { opacity: 1 },
+    variantAxes: [],
     sizeId: 'full',
     setSizeId: noop,
     manualZoom: 1,

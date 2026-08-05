@@ -5,7 +5,11 @@ import type {
   RefCallback,
 } from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { Manifest, ManifestComponent } from '../core/manifest'
+import type {
+  Manifest,
+  ManifestComponent,
+  ManifestVariantAxis,
+} from '../core/manifest'
 import type { A11yViolation } from '../index'
 import { isSurfaceLevel } from '../index'
 import {
@@ -39,12 +43,14 @@ import {
   type PrimerSection,
   parseLocation,
   RESPONSIVE,
+  renderAxisValues,
   resolveMode,
   type Selection,
   SIDEBAR_MIN_W,
   SIDEBAR_STORAGE_KEY,
   STAGE_FADE_MS,
   selSignature,
+  switchableAxes,
   type Theme,
 } from './shell-core'
 import { DcTestIds } from './test-ids'
@@ -96,6 +102,19 @@ export interface ShellViewModel {
   setMode: (m: Mode) => void
   shownMode: Mode
   modeFadeStyle: CSSProperties
+
+  /**
+   * Render axes the active substrate declares beyond the theme the toggle
+   * already drives, with the viewer's current pick for each. Empty under the
+   * DOM substrate (theme is its only render axis), so the toolbar is unchanged;
+   * a substrate declaring e.g. terminal colour support gets a control per axis
+   * without the chrome knowing what those axes mean.
+   */
+  variantAxes: {
+    axis: ManifestVariantAxis
+    value: string
+    set: (value: string) => void
+  }[]
 
   // Device toolbar / zoom / grid.
   sizeId: string
@@ -235,6 +254,11 @@ export function useShell(seed: ShellSeed): ShellViewModel | { manifest: null } {
   }, [])
   const [sel, setSel] = useState<Selection | null>(seedSel)
   const [theme, setTheme] = useState<Theme>(seed.theme)
+  // Selected values for the substrate's render axes beyond the chrome's own
+  // theme toggle. Empty until a viewer picks one, so each axis sits at its
+  // declared default — and under the DOM substrate (theme only) this stays
+  // empty and contributes nothing.
+  const [axisValues, setAxisValues] = useState<Record<string, string>>({})
   // Page origin for absolute shareable addresses. Empty during the server render
   // and the client's first render (so they match); filled in after hydration.
   const [origin, setOrigin] = useState('')
@@ -894,7 +918,7 @@ export function useShell(seed: ShellSeed): ShellViewModel | { manifest: null } {
   const addressUrl = activeCase
     ? buildAddressUrl(
         activeCase.renderUrl,
-        theme,
+        renderAxisValues(manifest, theme, axisValues),
         shownSel?.tweaks ?? {},
         origin,
       )
@@ -1244,7 +1268,7 @@ export function useShell(seed: ShellSeed): ShellViewModel | { manifest: null } {
     setFrameSrc(
       buildRenderSrc(
         activeCase.renderUrl,
-        theme,
+        renderAxisValues(manifest, theme, axisValues),
         shownSel?.tweaks ?? {},
         fitWidth,
         stageDecor,
@@ -1440,6 +1464,14 @@ export function useShell(seed: ShellSeed): ShellViewModel | { manifest: null } {
     setMode: changeMode,
     shownMode,
     modeFadeStyle,
+    // One entry per declared render axis other than theme; the chrome renders a
+    // control for each without knowing what the axis means.
+    variantAxes: switchableAxes(manifest).map((axis) => ({
+      axis,
+      value: axisValues[axis.id] ?? axis.default,
+      set: (value: string) =>
+        setAxisValues((prev) => ({ ...prev, [axis.id]: value })),
+    })),
     sizeId,
     setSizeId,
     manualZoom,
