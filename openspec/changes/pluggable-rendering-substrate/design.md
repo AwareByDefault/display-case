@@ -98,18 +98,14 @@ export interface Substrate<Frame = unknown> {
    *  Omitted ⇒ the frame is static and needs no client script. */
   stage?: { entry: string; share?: string[] }
 
-  /** Substrate-appropriate check phases (see D4, D8). Each omitted member
+  /** Substrate-appropriate check phases (see D4, D8, D13). Each omitted member
    *  marks that phase inapplicable for this substrate. */
   checks?: {
     /** Generalizes the ssr check: "renders headlessly without throwing". */
     safety?(tree: ReactNode, ctx: CaseContext): Promise<CheckFinding[]>
-    /** Generalizes axe: layout overflow / truncation / SGR contrast for a
-     *  terminal substrate. */
-    audit?(frame: Frame, ctx: CaseContext): Promise<A11yViolation[]>
-    /** Capture bytes for the visual phase. Default: `serialize(render(...))`
-     *  — headless, no server, no browser. The DOM substrate overrides it with
-     *  the browser-driver flow (see D4). */
-    capture?(target: CaptureTarget, ctx: CaseContext): Promise<Uint8Array>
+    /** Open one variant for inspection; the visual and a11y phases both read
+     *  the returned session, so they describe the same rendering (see D13). */
+    openVariant?(ctx: SubstrateCaptureContext): Promise<VariantSession>
     /** Default diff for captured bytes; `config.providers.diff` wins (D4). */
     diff?: DiffFn
     /** Token-vocabulary conformance for this substrate's style system. */
@@ -334,6 +330,46 @@ the chrome-free pre-rendered document (the render endpoint's document, minus
 the server). The bundled skills (`display-case-snapshot`,
 `display-case-review`) get their capture step redirected through this and the
 manifest needs no change.
+
+### D13 — Capture and audit share one opened variant, not two calls
+
+**Revised during implementation.** D4 originally split the two render phases
+into independent `checks.capture(ctx)` and `checks.audit(frame, ctx)` calls.
+That did not survive contact with the DOM path, for two reasons:
+
+- `audit(frame, …)` cannot work for the DOM substrate at all. axe runs against
+  a *painted* page; the frame holds markup, not a rendered page.
+- `check.ts` deliberately opens **one browser page per variant** and runs the
+  screenshot and the axe pass against it ("the a11y and visual phases run
+  together on one shared page per variant"). Two independent substrate calls
+  would either double the browser work for the common `--a11y --visual` run, or
+  force the substrate to cache live pages behind the contract.
+
+So the two collapse into one opened session:
+
+```ts
+checks.openVariant?(ctx: SubstrateCaptureContext): Promise<VariantSession>
+
+interface VariantSession {
+  /** Extension of what `capture()` returns — the *capture* format. */
+  ext: string
+  capture(): Promise<Uint8Array>
+  audit(opts?: AuditOptions): Promise<A11yViolation[]>
+  dispose(): Promise<void>
+}
+```
+
+The DOM substrate's session wraps one `driver.open()` page and delegates both
+methods to it; a text substrate renders once and answers both from that frame,
+so the session costs it nothing. Omitting `openVariant` marks *both* phases
+inapplicable. The browser driver is passed in on the context rather than held
+by the substrate, so the optional Playwright/axe toolchain stays lazily loaded
+and out of the substrate module's import graph.
+
+`ext` lives on the session, not on `serialize()`: the capture format is not the
+serialization format. The DOM substrate serializes a frame to `html` but
+captures a painted `png` — a visual regression is about what the case *looks*
+like, so the baseline extension has to follow the capture.
 
 ## Risks / Trade-offs
 

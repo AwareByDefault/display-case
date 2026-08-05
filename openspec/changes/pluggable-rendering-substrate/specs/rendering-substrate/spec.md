@@ -105,9 +105,16 @@ visual capture and comparison, and token conformance — SHALL be supplied by
 the active substrate, and the default substrate SHALL supply the existing
 behaviors for each. A phase the active substrate does not supply SHALL be
 reported as not applicable for that substrate and SHALL NOT fail the run on
-that account. A consumer-configured override of the capture or comparison
-mechanism SHALL take precedence over the substrate's default (see
-Visual-Regression Checks).
+that account. A consumer-configured override of the comparison mechanism SHALL
+take precedence over the substrate's default (see Visual-Regression Checks).
+
+The accessibility and visual phases SHALL both read a single opened variant,
+so that the audit and the capture describe the same rendering, and so that
+evaluating a variant under both phases costs one rendering rather than two.
+Opening a variant SHALL yield the captured bytes, the accessibility result, and
+the format the captured bytes are in; whatever the opened variant holds SHALL
+be released once both phases have read it. A substrate that cannot open a
+variant SHALL have both phases reported as not applicable.
 
 #### Scenario: A substrate-supplied phase is used
 
@@ -115,6 +122,19 @@ Visual-Regression Checks).
 - WHEN the accessibility checks run
 - THEN the substrate's audit evaluates each variant
 - AND the default substrate's audit is not invoked
+
+#### Scenario: Both render phases read one opened variant
+
+- GIVEN a run that requests both the accessibility and the visual phase
+- WHEN a variant is evaluated
+- THEN the variant is opened once and both phases read that same rendering
+- AND what the opened variant held is released afterwards
+
+#### Scenario: The capture format follows the capture, not the serialization
+
+- GIVEN a substrate whose captured bytes are in a different format from its serialized frames
+- WHEN a baseline is recorded for a variant
+- THEN the baseline is stored in the captured format under that format's extension
 
 #### Scenario: An unsupplied phase is reported inapplicable
 

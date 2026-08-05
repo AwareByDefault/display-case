@@ -219,6 +219,44 @@ export function domSubstrate(opts: DomSubstrateOptions = {}): DomSubstrate {
 
     checks: {
       /**
+       * One painted browser page per variant, shared by the visual and
+       * accessibility phases.
+       *
+       * Both must see the same paint — a screenshot and an axe run that
+       * disagreed about which render they described would make a finding
+       * unattributable — and opening a page each would double the browser work
+       * for a run that asks for both, which is the usual CI shape.
+       *
+       * The driver is resolved by the caller and handed in, so the lazily
+       * loaded Playwright/axe toolchain stays out of this module's graph.
+       */
+      async openVariant(ctx) {
+        const driver = ctx.driver
+        if (!driver) {
+          throw new Error(
+            'The DOM substrate needs a render driver to capture and audit. ' +
+              'Install the default toolchain, or supply one with ' +
+              'domSubstrate({ driver }).',
+          )
+        }
+        if (!ctx.renderUrl) {
+          throw new Error(
+            'The DOM substrate captures by painting a served document, so it ' +
+              'needs the case‘s render address.',
+          )
+        }
+        const page = await driver.open(ctx.renderUrl, ctx.case)
+        return {
+          // A painted screenshot, not this substrate's serialized document:
+          // a visual regression is about what the case *looks* like.
+          ext: 'png',
+          capture: () => page.screenshot(),
+          audit: (opts) => page.audit(opts),
+          dispose: () => page.dispose(),
+        }
+      },
+
+      /**
        * Design-token conformance for this medium: CSS custom properties.
        *
        * Imported lazily so the token checker — and the file-walking it does —

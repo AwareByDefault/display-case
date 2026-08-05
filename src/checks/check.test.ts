@@ -3,7 +3,12 @@ import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { A11yViolation } from '../index'
 import { makeTempDir, writeFiles } from '../testing/test-helpers'
-import { a11yDetailLines, runChecks } from './check'
+import {
+  a11yDetailLines,
+  baselinePathFor,
+  legacyBaselinePath,
+  runChecks,
+} from './check'
 
 const CLI = join(import.meta.dir, '..', 'cli.ts')
 
@@ -191,5 +196,30 @@ describe('check: structure phase wiring', () => {
     expect(bare).not.toContain('structure ✗')
     const explicit = await cli(dir, ['--structure'])
     expect(explicit).toContain('structure ✗')
+  })
+})
+
+describe('baseline paths', () => {
+  const substrate = { id: 'dom', serialize: () => ({ ext: 'html' }) }
+  const target = { componentId: 'button', caseId: 'primary', theme: 'dark' }
+
+  test('keys a baseline by substrate, component, case, and variant', () => {
+    // The substrate segment is what stops one substrate’s recordings from
+    // silently standing in for another’s after a switch.
+    expect(baselinePathFor('/b', substrate, target, 'png')).toBe(
+      '/b/dom/button/primary.dark.png',
+    )
+  })
+
+  test('stores under the captured format extension', () => {
+    // A text-serializing substrate’s baselines must land as reviewable text.
+    expect(
+      baselinePathFor('/b', { ...substrate, id: 'term' }, target, 'txt'),
+    ).toBe('/b/term/button/primary.dark.txt')
+  })
+
+  test('the legacy path is the pre-substrate flat layout', () => {
+    // Read for one release so a committed baseline dir is not invalidated.
+    expect(legacyBaselinePath('/b', target)).toBe('/b/button/primary.dark.png')
   })
 })

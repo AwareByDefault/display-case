@@ -252,6 +252,92 @@ describe('domSubstrate check phases', () => {
   test('a substrate may supply none, marking the phase inapplicable', () => {
     const bare: Substrate = { ...domSubstrate(), id: 'bare', checks: undefined }
     expect(bare.checks?.tokens).toBeUndefined()
+    expect(bare.checks?.openVariant).toBeUndefined()
+  })
+
+  test('one opened variant serves both the capture and the audit', async () => {
+    // The two phases must describe the same rendering, and opening a page each
+    // would double the browser work for a run that asks for both.
+    let opened = 0
+    let disposed = 0
+    const page = {
+      screenshot: async () => new Uint8Array([1, 2, 3]),
+      audit: async () => [],
+      dispose: async () => {
+        disposed++
+      },
+    }
+    const session = await domSubstrate().checks?.openVariant?.({
+      componentId: 'button',
+      caseId: 'default',
+      tweaks: {},
+      variants: { theme: 'light' },
+      params: {},
+      clientOnly: false,
+      config: NO_CONFIG,
+      case: {
+        componentId: 'button',
+        caseId: 'default',
+        theme: 'light',
+        width: 1024,
+      },
+      renderUrl: 'http://localhost/render/button/default',
+      driver: {
+        open: async () => {
+          opened++
+          return page
+        },
+        close: async () => {},
+      },
+    })
+    expect(session).toBeDefined()
+    await session?.capture()
+    await session?.audit()
+    await session?.dispose()
+    expect(opened).toBe(1)
+    expect(disposed).toBe(1)
+  })
+
+  test('captures png, even though it serializes frames to html', async () => {
+    // The baseline extension follows the *capture*: a visual regression is
+    // about what the case looks like, not about its markup.
+    const session = await domSubstrate().checks?.openVariant?.({
+      componentId: 'b',
+      caseId: 'd',
+      tweaks: {},
+      variants: {},
+      params: {},
+      clientOnly: false,
+      config: NO_CONFIG,
+      case: { componentId: 'b', caseId: 'd', theme: 'light', width: 1024 },
+      renderUrl: 'http://localhost/render/b/d',
+      driver: {
+        open: async () => ({
+          screenshot: async () => new Uint8Array(),
+          audit: async () => [],
+          dispose: async () => {},
+        }),
+        close: async () => {},
+      },
+    })
+    expect(session?.ext).toBe('png')
+    expect(domSubstrate().serialize(frame()).ext).toBe('html')
+  })
+
+  test('explains itself when asked to capture with no driver', async () => {
+    expect(
+      domSubstrate().checks?.openVariant?.({
+        componentId: 'b',
+        caseId: 'd',
+        tweaks: {},
+        variants: {},
+        params: {},
+        clientOnly: false,
+        config: NO_CONFIG,
+        case: { componentId: 'b', caseId: 'd', theme: 'light', width: 1024 },
+        renderUrl: '/render/b/d',
+      }),
+    ).rejects.toThrow(/needs a render driver/)
   })
 })
 

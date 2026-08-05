@@ -166,6 +166,47 @@ async function resolveDiff(config: DisplayCaseConfig): Promise<DiffFn> {
 }
 
 /**
+ * Where a variant's baseline lives.
+ *
+ * `<baselineDir>/<substrate>/<component>/<case>.<variantKey>.<ext>` — keyed by
+ * substrate so switching one cannot silently reuse or invalidate another's
+ * recordings, and carrying the substrate's own extension so a text-serializing
+ * substrate's baselines are reviewable in a diff instead of landing as opaque
+ * `.png` blobs.
+ *
+ * The DOM substrate additionally *reads* the legacy flat path
+ * (`<component>/<case>.<theme>.png`) when the keyed path is absent, so a
+ * showcase with a committed baseline directory is not invalidated wholesale by
+ * this change. It always writes the keyed path — one release of tolerance, then
+ * the legacy read goes away.
+ */
+export function baselinePathFor(
+  baselines: string,
+  substrate: { id: string; serialize: (frame: never) => { ext: string } },
+  target: { componentId: string; caseId: string; theme: string },
+  ext = 'png',
+): string {
+  return join(
+    baselines,
+    substrate.id,
+    target.componentId,
+    `${target.caseId}.${target.theme}.${ext}`,
+  )
+}
+
+/** The pre-substrate baseline path, read (never written) for one release. */
+export function legacyBaselinePath(
+  baselines: string,
+  target: { componentId: string; caseId: string; theme: string },
+): string {
+  return join(
+    baselines,
+    target.componentId,
+    `${target.caseId}.${target.theme}.png`,
+  )
+}
+
+/**
  * Absolute paths of files changed since `ref`, for `--changed` scoping. Unions
  * the committed diff since the merge-base (`ref...HEAD`) with the working tree
  * (`HEAD`), so a local run also sees staged/unstaged edits and CI sees the PR's
@@ -255,6 +296,8 @@ export async function runChecks(
   const { config } = await resolveConfig(pkgDir)
   // The showcase renders — and is checked — through this.
   const substrate = resolveSubstrate(config)
+  // The legacy-baseline notice is printed once per run, not once per variant.
+  let warnedLegacyBaselines = false
   const baselines = baselineDir(pkgDir, config)
 
   // Token conformance is a static parse — run it first, with no browser/server.
@@ -457,6 +500,15 @@ export async function runChecks(
 
   const driver = await resolveDriver(config)
   const diff = opts.visual ? await resolveDiff(config) : null
+  // Both render phases go through the substrate. A substrate that supplies no
+  // session cannot be captured or audited by this runner — report that rather
+  // than failing the run over a phase that does not apply to the medium.
+  const openVariant = substrate.checks?.openVariant
+  if (!openVariant) {
+    console.log(
+      `  a11y/visual: not applicable for the "${substrate.id}" substrate`,
+    )
+  }
   const requested =
     opts.concurrency ?? config.check?.concurrency ?? DEFAULT_CONCURRENCY
   const concurrency =
@@ -479,6 +531,7 @@ export async function runChecks(
   // browser-I/O-bound. A variant's lines are buffered and flushed as one block so
   // concurrent variants never interleave mid-test.
   async function scan(t: Target): Promise<void> {
+    if (!openVariant) return
     const ctx: CaseContext = {
       componentId: t.componentId,
       caseId: t.caseId,
@@ -487,11 +540,25 @@ export async function runChecks(
     }
     const name = `${t.componentId}/${t.caseId} [${t.theme}]`
     const out: string[] = []
-    const page = await driver.open(t.renderUrl, ctx)
+    // One session per variant, shared by both phases: the audit and the capture
+    // must describe the same rendering, and for the DOM substrate that means
+    // one painted page rather than two.
+    const session = await openVariant({
+      componentId: t.componentId,
+      caseId: t.caseId,
+      tweaks: {},
+      variants: { theme: t.theme },
+      params: {},
+      clientOnly: false,
+      config,
+      case: ctx,
+      renderUrl: t.renderUrl,
+      driver,
+    })
     try {
       if (opts.a11y && a11yThemes.includes(t.theme)) {
         const t0 = Bun.nanoseconds()
-        const violations = await page.audit({ exclude: a11yExclude })
+        const violations = await session.audit({ exclude: a11yExclude })
         const dur = Bun.nanoseconds() - t0
         if (violations.length) {
           a11yTally.fail++
@@ -516,19 +583,39 @@ export async function runChecks(
 
       if (opts.visual && diff) {
         const t0 = Bun.nanoseconds()
-        const shot = await page.screenshot()
-        const file = join(
-          baselines,
-          t.componentId,
-          `${t.caseId}.${t.theme}.png`,
-        )
-        if (opts.update || !(await Bun.file(file).exists())) {
+        const shot = await session.capture()
+        // Baselines are keyed by substrate, then by the variant values that
+        // selected this rendering, and stored under the substrate's own
+        // extension — so switching substrates cannot silently reuse another's
+        // baselines, and a text-serializing substrate's baselines land as
+        // reviewable text rather than as an opaque `.png`.
+        const file = baselinePathFor(baselines, substrate, t, session.ext)
+        // One release of tolerance for the pre-substrate flat layout: read it
+        // when the keyed path is missing, always write the keyed one, and say
+        // so once so the migration is visible rather than silent.
+        let readFrom = file
+        if (!(await Bun.file(file).exists())) {
+          const legacy = legacyBaselinePath(baselines, t)
+          if (await Bun.file(legacy).exists()) {
+            readFrom = legacy
+            if (!warnedLegacyBaselines) {
+              warnedLegacyBaselines = true
+              console.log(
+                `  visual: reading baselines from the pre-substrate layout; ` +
+                  `re-record with --update to move them under ${substrate.id}/`,
+              )
+            }
+          }
+        }
+        if (opts.update || !(await Bun.file(readFrom).exists())) {
           await mkdir(dirname(file), { recursive: true })
           await Bun.write(file, shot)
           visualTally.record++
           out.push(testLine('visual', name, 'record', Bun.nanoseconds() - t0))
         } else {
-          const baseline = new Uint8Array(await Bun.file(file).arrayBuffer())
+          const baseline = new Uint8Array(
+            await Bun.file(readFrom).arrayBuffer(),
+          )
           const res = await diff(
             { baseline, actual: shot },
             { ...ctx, baselinePath: file },
@@ -539,7 +626,7 @@ export async function runChecks(
             visualTally.fail++
             let where = ''
             if (res.diffImage) {
-              const diffPath = file.replace(/\.png$/, '.diff.png')
+              const diffPath = file.replace(/\.[^.]+$/, (e) => `.diff${e}`)
               await Bun.write(diffPath, res.diffImage)
               where = ` → ${rel(diffPath)}`
             }
@@ -552,7 +639,7 @@ export async function runChecks(
         }
       }
     } finally {
-      await page.dispose()
+      await session.dispose()
     }
     if (out.length) console.log(out.join('\n'))
   }

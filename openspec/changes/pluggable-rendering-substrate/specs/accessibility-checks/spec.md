@@ -20,12 +20,13 @@ surfacing is configured, and SHALL evaluate cases using the same scan parameters
 surface uses, so the two agree on what counts as a violation.
 
 The audit mechanism SHALL be supplied by the active substrate (see Rendering
-Substrate): the default substrate SHALL audit rendered browser documents as
-today, and a substrate for another medium MAY supply an audit appropriate to
-that medium — such as layout overflow, truncation, or contrast over its own
-resolved colours. When the active substrate supplies no audit, the
-accessibility checks SHALL report the phase as not applicable for that
-substrate and SHALL NOT fail on that account.
+Substrate), which opens each variant once so the audit and the visual capture
+describe the same rendering: the default substrate SHALL audit rendered browser
+documents as today, and a substrate for another medium MAY supply an audit
+appropriate to that medium — such as layout overflow, truncation, or contrast
+over its own resolved colours. When the active substrate cannot open a variant
+to audit, the accessibility checks SHALL report the phase as not applicable for
+that substrate and SHALL NOT fail on that account.
 
 #### Scenario: A case with an accessibility violation
 

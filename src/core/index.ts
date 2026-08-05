@@ -136,4 +136,5 @@ export type {
   SubstrateTokensContext,
   SubstrateVariantAxis,
   SubstrateVariantValue,
+  VariantSession,
 } from './substrate'

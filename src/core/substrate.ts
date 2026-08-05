@@ -6,6 +6,7 @@ import type {
   DiffFn,
   DisplayCaseConfig,
   HierarchyLevel,
+  RenderDriver,
 } from '../index'
 
 /**
@@ -94,7 +95,7 @@ export interface Substrate<Frame = unknown> {
    * failing. A consumer-configured `providers` override still wins over
    * whatever is supplied here.
    */
-  checks?: SubstrateChecks<Frame>
+  checks?: SubstrateChecks
 
   /**
    * Display labels for the fixed design-hierarchy levels — e.g. presenting
@@ -238,7 +239,7 @@ export interface SubstrateDocumentResources {
 }
 
 /** Render-dependent check phases a substrate supplies. */
-export interface SubstrateChecks<Frame = unknown> {
+export interface SubstrateChecks {
   /**
    * The render-safety phase (surfaced as `--safety`, historically `--ssr`):
    * "this case renders headlessly without throwing". Report a finding per case
@@ -250,24 +251,20 @@ export interface SubstrateChecks<Frame = unknown> {
   ): Promise<CheckFinding[]> | CheckFinding[]
 
   /**
-   * The accessibility phase. The DOM substrate runs axe over the rendered
-   * document; another medium audits what is meaningful there — for a terminal,
-   * layout overflow, truncation, grapheme and wide-character handling, and
-   * contrast over resolved colors.
+   * Open one variant of one case for inspection, yielding a session the visual
+   * and accessibility phases both read.
+   *
+   * The two phases share a session rather than each getting their own call
+   * because for some media producing the rendering is the expensive part and
+   * both answers come from it. The DOM substrate's session wraps one painted
+   * browser page — axe and the screenshot must see the *same* paint, and
+   * opening two pages per variant would double the browser work for the common
+   * run that asks for both. A substrate that serializes directly renders once
+   * and answers both from that frame, so the session costs it nothing.
+   *
+   * Omit it and both phases report as not applicable for this substrate.
    */
-  audit?(
-    frame: Frame,
-    ctx: CaseContext,
-    opts?: AuditOptions,
-  ): Promise<A11yViolation[]>
-
-  /**
-   * Capture the bytes the visual phase compares against a baseline. Defaults to
-   * `serialize(render(...))` — headless, needing neither a server nor a
-   * browser. The DOM substrate overrides it, because a faithful browser
-   * screenshot requires actually painting the document.
-   */
-  capture?(ctx: SubstrateCaptureContext): Promise<Uint8Array>
+  openVariant?(ctx: SubstrateCaptureContext): Promise<VariantSession>
 
   /** Default comparison for captured bytes. A consumer's `providers.diff`
    *  overrides it. */
@@ -281,6 +278,38 @@ export interface SubstrateChecks<Frame = unknown> {
   tokens?(ctx: SubstrateTokensContext): Promise<CheckFinding[]>
 }
 
+/**
+ * One opened variant, held only as long as both phases need it.
+ *
+ * Whoever opens a session MUST dispose it — the DOM substrate's session holds a
+ * live browser page, and leaking one leaks a page per variant across the run.
+ */
+export interface VariantSession {
+  /**
+   * File extension of what {@link capture} returns, without a leading dot, and
+   * the extension its baselines are stored under.
+   *
+   * This is the *capture* format, which is not always the substrate's
+   * `serialize()` format: the DOM substrate serializes a frame to `html` but
+   * captures a painted `png`, because a screenshot is what a visual regression
+   * is actually about. A text substrate captures `txt` — which diffs better:
+   * deterministic, and readable in a pull request.
+   */
+  ext: string
+  /** Bytes for the visual phase to compare against a baseline. */
+  capture(): Promise<Uint8Array>
+  /**
+   * Accessibility violations for this rendering. The DOM substrate runs axe
+   * over the painted page; another medium audits what is meaningful there — for
+   * a terminal, layout overflow, truncation, grapheme and wide-character
+   * handling, and contrast over resolved colors. Return `[]` when the substrate
+   * renders fine but has nothing to audit.
+   */
+  audit(opts?: AuditOptions): Promise<A11yViolation[]>
+  /** Release whatever the session holds (a browser page, a pty, a buffer). */
+  dispose(): Promise<void>
+}
+
 /** What a capture is told about the case it is capturing. */
 export interface SubstrateCaptureContext extends SubstrateRenderContext {
   /** Case identity in the shape snapshot providers already receive. */
@@ -292,6 +321,13 @@ export interface SubstrateCaptureContext extends SubstrateRenderContext {
    * — and lets the run skip starting a server at all.
    */
   renderUrl?: string
+  /**
+   * The browser driver, when the run resolved one. Supplied by the caller
+   * rather than held by the substrate so the optional Playwright/axe toolchain
+   * stays lazily loaded and out of the substrate module's own graph. A
+   * substrate that captures headlessly ignores it.
+   */
+  driver?: RenderDriver
 }
 
 /** What the token-conformance phase is given. */
