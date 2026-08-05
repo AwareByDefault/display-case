@@ -29,12 +29,12 @@ generalizations. The Carte substrate itself is out-of-tree and not in this list.
 
 ## 4. Check-phase delegation, baselines, and the render subcommand
 
-- [ ] 4.1 Delegate the render-safety phase to `substrate.checks.safety`; add the `--safety` canonical flag with `--ssr` as a permanent alias; migrate this repo's scripts, hooks, and docs to `--safety` (design D8)
+- [x] 4.1 Delegate the render-safety phase to `substrate.checks.safety`; add the `--safety` canonical flag with `--ssr` as a permanent alias; migrate this repo's scripts, hooks, and docs to `--safety` (design D8)
 - [ ] 4.2 Delegate the a11y audit to `substrate.checks.audit` with not-applicable reporting for substrates that supply none
 - [ ] 4.3 Delegate capture to `substrate.checks.capture` (default `serialize(render(...))`); the DOM substrate implements capture via its browser driver; substrate `diff` is the default under consumer overrides (design D4)
 - [ ] 4.4 Re-key baselines to `<baselineDir>/<substrate.id>/<component>/<case>.<variantKey>.<ext>` with the DOM substrate reading the legacy flat path for one release and printing a migration hint (design D6)
 - [x] 4.5 Add `display-case render <component>/<case>` printing the serialized frame to stdout (`--variant k=v` repeatable, `--out` optional), no server or browser required (design D12)
-- [ ] 4.6 Delegate token conformance through the substrate with the DOM substrate supplying today's tokens check; unsupplied ⇒ reported not applicable
+- [x] 4.6 Delegate token conformance through the substrate with the DOM substrate supplying today's tokens check; unsupplied ⇒ reported not applicable
 
 ## 5. Publish pipeline
 

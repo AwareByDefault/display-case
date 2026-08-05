@@ -12,6 +12,7 @@ import type {
   RenderDriver,
 } from '../index'
 import { startDisplayCase } from '../server/server'
+import { resolveSubstrate } from '../substrate/resolve'
 import {
   emptyTally,
   type PhaseTally,
@@ -21,7 +22,6 @@ import {
 import { checkGraph } from './graph-check'
 import { checkSsr } from './ssr-check'
 import { checkStructure } from './structure-check'
-import { checkTokens } from './tokens-check'
 
 /**
  * Headless a11y + visual-regression runner. The capture/audit driver and the
@@ -253,20 +253,28 @@ export async function runChecks(
   opts: CheckOptions,
 ): Promise<boolean> {
   const { config } = await resolveConfig(pkgDir)
+  // The showcase renders — and is checked — through this.
+  const substrate = resolveSubstrate(config)
   const baselines = baselineDir(pkgDir, config)
 
   // Token conformance is a static parse — run it first, with no browser/server.
+  // It is delegated to the substrate, because "the vocabulary a showcase may
+  // reference" is a property of the medium: the DOM substrate checks CSS custom
+  // properties, another medium checks its own (or declares the phase moot).
   let tokenViolations = 0
   if (opts.tokens) {
-    const { violations } = await checkTokens(pkgDir)
-    tokenViolations = violations.length
-    for (const v of violations) {
-      const rel = v.file.startsWith(`${pkgDir}/`)
-        ? v.file.slice(pkgDir.length + 1)
-        : v.file
-      console.error(
-        `  tokens ✗ ${rel}:${v.line}:${v.column} unknown token ${v.token}${v.hadFallback ? ' (fallback does not excuse it)' : ''}`,
+    const tokensPhase = substrate.checks?.tokens
+    if (!tokensPhase) {
+      console.log(
+        `  tokens: not applicable for the "${substrate.id}" substrate`,
       )
+    } else {
+      const findings = await tokensPhase({
+        pkgDir,
+        allow: config.tokens?.allow ?? [],
+      })
+      tokenViolations = findings.length
+      for (const f of findings) console.error(`  tokens ✗ ${f.message}`)
     }
   }
 

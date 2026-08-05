@@ -6,7 +6,7 @@ than restating it.
 
 This is a single-package repo (`display-case`). The quality gate is **Biome**
 (format + lint), **`tsc --noEmit`** (types), this project's **own static checks**
-via `display-case check --structure --tokens --ssr`, and a small set of
+via `display-case check --structure --tokens --safety`, and a small set of
 **project-specific custom checks** under [`tools/lint/`](../tools/lint/) for rules
 Biome and `tsc` can't express (run together via `bun run lint:checks`). The
 sprawling multi-package lint runner of the monorepo this came from is gone; what
@@ -24,7 +24,7 @@ Quality gates run through **git hooks (husky)** locally, backstopped by a
   ```bash
   bun run lint:fix     # biome (format+lint, auto-fix) + custom checks (tools/lint)
   bun run typecheck    # tsc --noEmit
-  bun run check        # display-case --structure --tokens --ssr (this project's own checks)
+  bun run check        # display-case --structure --tokens --safety (this project's own checks)
   bun test             # unit tests
   ```
   Unfixable Biome errors, a failing custom check, type errors, a non-zero
@@ -65,13 +65,13 @@ bun run lint                                        # biome (check) + custom che
 bun run lint:fix                                   # biome (--write) + custom checks (--fix); matches pre-commit
 bun run lint:checks                                # just the custom checks (tools/lint)
 bun run typecheck                                  # tsc --noEmit (one tsconfig)
-bun run check                                      # display-case --structure --tokens --ssr (no browser)
+bun run check                                      # display-case --structure --tokens --safety (no browser)
 display-case check .                               # everything, including a11y + visual (needs Chromium)
 ```
 
 - **`biome check --write` fixes by default** — it matches `pre-commit`, which
   auto-fixes and re-stages. Drop `--write` to verify without touching files.
-- **`--structure --tokens --ssr` is the browser-free subset.** Naming those three
+- **`--structure --tokens --safety` is the browser-free subset.** Naming those three
   phases runs only them; with no phase flag, `display-case check` also runs the
   a11y and visual phases, which need the Playwright/axe toolchain. See
   [../docs/testing.md](../docs/testing.md).

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { SubstrateDocumentContext } from '../core/substrate'
+import type { Substrate, SubstrateDocumentContext } from '../core/substrate'
 import type { DisplayCaseConfig } from '../index'
 import { type DomFrame, domSubstrate } from './dom'
 import { renderVariants, resolveSubstrate } from './resolve'
@@ -239,6 +239,19 @@ describe('domSubstrate declaration', () => {
     // Substrate-declared rather than hard-coded in the bundler, so a substrate
     // whose stage is not React-based is not forced to carry it.
     expect(domSubstrate().alwaysShare).toContain('react')
+  })
+})
+
+describe('domSubstrate check phases', () => {
+  test('supplies token conformance for its own style vocabulary', () => {
+    // CSS custom properties are the DOM medium's vocabulary; a substrate for
+    // another medium supplies its own, or none.
+    expect(typeof domSubstrate().checks?.tokens).toBe('function')
+  })
+
+  test('a substrate may supply none, marking the phase inapplicable', () => {
+    const bare: Substrate = { ...domSubstrate(), id: 'bare', checks: undefined }
+    expect(bare.checks?.tokens).toBeUndefined()
   })
 })
 

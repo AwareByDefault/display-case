@@ -473,7 +473,7 @@ check: {
 }
 ```
 
-- **`defaultPhases`** — a `Partial<Record<'tokens' | 'a11y' | 'visual' | 'structure' | 'ssr' | 'graph', boolean>>`. Drop a phase from the bare `check` run (e.g. `visual` when no baselines are committed) while keeping it available via its flag.
+- **`defaultPhases`** — a `Partial<Record<'tokens' | 'a11y' | 'visual' | 'structure' | 'safety' (alias `'ssr'`) | 'graph', boolean>>`. Drop a phase from the bare `check` run (e.g. `visual` when no baselines are committed) while keeping it available via its flag.
 - **`concurrency`** — how many variants the render phases (a11y/visual) scan at once, each on its own page from a shared browser. Default `4`; override per run with `--concurrency=N`. A custom `providers.driver` must tolerate concurrent `open()` calls (set `1` if it can't). See [Testing → Reporting and concurrency](testing.md#reporting-and-concurrency).
 - **`structure.rules[id]`** — `false` disables the rule; `'warn'`/`'error'` enables it at that severity; an options object (`{ severity?, ignore?, thresholds? }`) enables it with overrides. Unset ⇒ the rule's default. The rule ids, defaults, and escape-hatch markers are listed in [Testing → Structure checks](testing.md#structure-checks).
 - **`structure.strict`** — escalate all structure warnings to errors (the config equivalent of `check --strict`).

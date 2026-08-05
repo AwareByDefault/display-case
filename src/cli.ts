@@ -22,7 +22,7 @@ if (typeof globalThis.Bun === 'undefined') {
  *   display-case <pkgDir> [--port=N]        start the dev server
  *   display-case <pkgDir> --print-manifest  print the manifest JSON and exit
  *   display-case render <component>/<case> [<pkgDir>] [--variant=k=v] [--tweak=k=v] [--out=file]
- *   display-case check <pkgDir> [--a11y] [--visual] [--tokens] [--structure] [--ssr] [--graph] [--update] [--strict] [--only=ids] [--changed[=ref]] [--concurrency=N] [--port=N]
+ *   display-case check <pkgDir> [--a11y] [--visual] [--tokens] [--structure] [--safety|--ssr] [--graph] [--update] [--strict] [--only=ids] [--changed[=ref]] [--concurrency=N] [--port=N]
  *   display-case init <pkgDir> [--agent=claude] [--with-visual] [--dry-run] [--json]
  *   display-case uninstall <pkgDir> [--agent=claude] [--dry-run] [--json]
  *
@@ -181,7 +181,10 @@ if (argv[0] === 'init' || argv[0] === 'uninstall') {
     a11y: flag('a11y'),
     visual: flag('visual'),
     structure: flag('structure'),
-    ssr: flag('ssr'),
+    // `--safety` is the canonical, substrate-neutral name; `--ssr` stays a
+    // permanent alias (it is accurate under the DOM substrate, and it is in
+    // consumers scripts and hooks).
+    ssr: flag('safety') || flag('ssr'),
     graph: flag('graph'),
   }
   const anyExplicit =
@@ -192,8 +195,14 @@ if (argv[0] === 'init' || argv[0] === 'uninstall') {
     explicit.ssr ||
     explicit.graph
   const defaults = config.check?.defaultPhases ?? {}
-  const runs = (phase: keyof typeof explicit): boolean =>
-    explicit[phase] || (!anyExplicit && defaults[phase] !== false)
+  const runs = (phase: keyof typeof explicit): boolean => {
+    // The render-safety phase answers to both names, so a config opting out
+    // under either spelling is honored.
+    const optedOut =
+      defaults[phase] === false ||
+      (phase === 'ssr' && defaults.safety === false)
+    return explicit[phase] || (!anyExplicit && !optedOut)
+  }
   // Change-scoping for the render phases (a11y/visual): `--only=<ids/globs>`
   // restricts to named components; `--changed[=<ref>]` restricts to components
   // whose import closure touches a file changed since <ref> (default the base

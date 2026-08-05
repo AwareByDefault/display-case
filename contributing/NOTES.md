@@ -343,7 +343,7 @@ never crash the tool — no divergent custom resolver). `analyzeComponentGraph`
 (`modules` 1500, `perPackage` 400 defaults — loose, since the true crash size is
 machine-dependent). Warnings advisory; `--strict` escalates. It builds every
 component, so it's **opt-in to a no-flag full `check`, excluded from the slim
-`--structure --tokens --ssr` gate** (naming those flags makes `anyExplicit` true,
+`--structure --tokens --safety` gate** (naming those flags makes `anyExplicit` true,
 so `graph` won't run) — keeps `bun run check` fast.
 
 ---

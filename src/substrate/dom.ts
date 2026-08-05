@@ -217,6 +217,32 @@ export function domSubstrate(opts: DomSubstrateOptions = {}): DomSubstrate {
     // forced to carry it.
     alwaysShare: ['react', 'react-dom', 'react-dom/client'],
 
+    checks: {
+      /**
+       * Design-token conformance for this medium: CSS custom properties.
+       *
+       * Imported lazily so the token checker — and the file-walking it does —
+       * is only loaded when the phase actually runs, matching how the rest of
+       * the optional check toolchain is loaded. A substrate for another medium
+       * has an entirely different style vocabulary (or none), which is why this
+       * belongs to the substrate rather than to the check runner.
+       */
+      async tokens(ctx) {
+        const { checkTokens } = await import('../checks/tokens-check')
+        // `checkTokens` reads the showcase's `tokens.allow` from its own config
+        // resolution, so the allow-list on the context is already honored.
+        const { violations } = await checkTokens(ctx.pkgDir)
+        return violations.map((v) => ({
+          componentId: '',
+          sourcePath: v.file,
+          severity: 'error' as const,
+          message: `${relativeTo(ctx.pkgDir, v.file)}:${v.line}:${v.column} unknown token ${v.token}${
+            v.hadFallback ? ' (fallback does not excuse it)' : ''
+          }`,
+        }))
+      },
+    },
+
     // Capture needs a real browser paint, so this substrate captures through the
     // driver rather than the contract's headless `serialize(render(...))`
     // default: a screenshot of an unpainted document is not the case's
@@ -224,4 +250,9 @@ export function domSubstrate(opts: DomSubstrateOptions = {}): DomSubstrate {
     // it uses is carried here.
     driver: opts.driver,
   }
+}
+
+/** Package-relative path for a finding, so output stays navigable. */
+function relativeTo(pkgDir: string, file: string): string {
+  return file.startsWith(`${pkgDir}/`) ? file.slice(pkgDir.length + 1) : file
 }

@@ -75,7 +75,7 @@
     "lint:checks": "bun tools/lint/index.ts",
     "typecheck": "tsc --noEmit",
     "openspec": "openspec",
-    "check": "bun src/cli.ts check . --structure --tokens --ssr",
+    "check": "bun src/cli.ts check . --structure --tokens --safety",
     "check:openspec-merge": "bun tools/openspec-merge-guard.ts",
     "wiki:build": "bun tools/wiki/generate.ts",
     "baselines:record": "bun scripts/record-baselines.ts",

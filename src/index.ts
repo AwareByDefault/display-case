@@ -460,12 +460,20 @@ export interface StructureRuleOptions {
   thresholds?: Partial<Record<HierarchyLevel, number>>
 }
 
-/** Phases selectable by `display-case check`. */
+/**
+ * Phases selectable by `display-case check`.
+ *
+ * `safety` and `ssr` are the same phase under two names: it verifies every case
+ * renders headlessly through the active substrate. `safety` is the canonical,
+ * substrate-neutral name; `ssr` remains permanently supported — it is accurate
+ * under the DOM substrate and it is already in consumers scripts and hooks.
+ */
 export type CheckPhase =
   | 'tokens'
   | 'a11y'
   | 'visual'
   | 'structure'
+  | 'safety'
   | 'ssr'
   | 'graph'
 
